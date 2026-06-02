@@ -1,34 +1,22 @@
-// تولید همه‌ی آیکون‌ها از روی لوگوی برند (src/assets/logo.svg)
+// تولید همه‌ی آیکون‌ها از روی لوگوی اصلیِ کاربر (public/pwa-512-NEW.png)
 // نیازمندِ sharp (فقط برای تولید آیکون، جزو وابستگی‌های برنامه نیست):
 //   npm install --no-save sharp
 // اجرا: node scripts/generate-icons.mjs
-// خروجی‌ها از قبل ساخته و کامیت شده‌اند؛ این اسکریپت فقط برای بازتولید است.
 import sharp from 'sharp';
 import { mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const SRC = resolve(root, 'src/assets/logo.svg');
-
-const WHITE = { r: 255, g: 255, b: 255, alpha: 1 };
+const SRC = resolve(root, 'public/pwa-512-NEW.png');
 
 function load() {
-  return sharp(SRC, { density: 220, limitInputPixels: false });
+  return sharp(SRC, { limitInputPixels: false });
 }
 
-async function squareOnWhite(size, outPath) {
+async function square(size, outPath) {
   mkdirSync(dirname(outPath), { recursive: true });
-  const buf = await load().resize(size, size, { fit: 'contain', background: WHITE }).png().toBuffer();
-  await sharp(buf).flatten({ background: WHITE }).png().toFile(outPath);
-}
-
-async function transparent(size, outPath) {
-  mkdirSync(dirname(outPath), { recursive: true });
-  await load()
-    .resize(size, size, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
-    .png()
-    .toFile(outPath);
+  await load().resize(size, size, { fit: 'cover' }).png().toFile(outPath);
 }
 
 // چگالی‌های اندروید: legacy launcher و foreground آیکون تطبیقی
@@ -44,15 +32,19 @@ const androidRes = resolve(root, 'android/app/src/main/res');
 
 for (const d of densities) {
   const base = `${androidRes}/mipmap-${d.dir}`;
-  await squareOnWhite(d.launcher, `${base}/ic_launcher.png`);
-  await squareOnWhite(d.launcher, `${base}/ic_launcher_round.png`);
-  await transparent(d.foreground, `${base}/ic_launcher_foreground.png`);
+  await square(d.launcher, `${base}/ic_launcher.png`);
+  await square(d.launcher, `${base}/ic_launcher_round.png`);
+  await square(d.foreground, `${base}/ic_launcher_foreground.png`);
 }
 
 // آیکون‌های وب / PWA
 const pub = resolve(root, 'public');
-await squareOnWhite(192, `${pub}/pwa-192.png`);
-await squareOnWhite(512, `${pub}/pwa-512.png`);
-await squareOnWhite(180, `${pub}/apple-touch-icon.png`);
+await square(192, `${pub}/pwa-192.png`);
+await square(512, `${pub}/pwa-512.png`);
+await square(180, `${pub}/apple-touch-icon.png`);
+await square(64, `${pub}/favicon.png`);
 
-console.log('✅ همه‌ی آیکون‌ها از روی logo.svg ساخته شدند');
+// لوگوی هدر برنامه (کوچک برای کاهش حجم باندل)
+await square(128, resolve(root, 'src/assets/logo.png'));
+
+console.log('✅ همه‌ی آیکون‌ها از روی pwa-512-NEW.png ساخته شدند');

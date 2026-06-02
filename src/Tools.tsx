@@ -12,9 +12,16 @@ import {
   convertAll,
   ageBetween,
   biorhythm,
+  shiftMonth,
+  dateKey,
 } from './calendar';
 
 const formatNumber = (n: number): string => n.toLocaleString('en-US');
+const onlyDigits = (s: string): string => s.replace(/[^0-9]/g, '');
+const withSeparators = (s: string): string => {
+  const d = onlyDigits(s);
+  return d ? parseInt(d, 10).toLocaleString('en-US') : '';
+};
 
 type CalData = { [key: string]: { transactions: { amount: number; isPaid: boolean }[] } };
 
@@ -92,24 +99,32 @@ function CalendarDateInput({ value, onChange }: { value: DateValue; onChange: (v
   );
 }
 
+export interface InstallmentEntry {
+  key: string;
+  title: string;
+  amount: number;
+}
+
 interface ToolsPanelProps {
   calendarData: CalData;
   currentSystem: CalendarSystem;
   currentYear: number;
   currentMonth: number;
   onClose: () => void;
+  onAddTransactions: (entries: InstallmentEntry[]) => void;
 }
 
 const SECTIONS = [
   { id: 'report', title: '📊 گزارش مالی بازه‌ای' },
   { id: 'bom', title: '📅 گزارش اول ماه (BOM)' },
+  { id: 'loan', title: '💳 وام و اقساط' },
   { id: 'convert', title: '🔄 تبدیل تاریخ' },
   { id: 'age', title: '🎂 محاسبه سن' },
   { id: 'bio', title: '🌀 بیوریتم' },
   { id: 'bmi', title: '⚖️ شاخص توده بدنی (BMI)' },
 ] as const;
 
-export default function ToolsPanel({ calendarData, currentSystem, currentYear, currentMonth, onClose }: ToolsPanelProps) {
+export default function ToolsPanel({ calendarData, currentSystem, currentYear, currentMonth, onClose, onAddTransactions }: ToolsPanelProps) {
   const [open, setOpen] = useState<string | null>('report');
 
   // گزارش مالی بازه‌ای
@@ -128,6 +143,15 @@ export default function ToolsPanel({ calendarData, currentSystem, currentYear, c
   // BMI
   const [height, setHeight] = useState<string>('');
   const [weight, setWeight] = useState<string>('');
+
+  // وام و اقساط
+  const [loanAmount, setLoanAmount] = useState<string>('');
+  const [loanRate, setLoanRate] = useState<string>('');
+  const [loanCount, setLoanCount] = useState<string>('12');
+  const [loanPeriod, setLoanPeriod] = useState<'monthly' | 'yearly'>('monthly');
+  const [loanMethod, setLoanMethod] = useState<'simple' | 'compound'>('simple');
+  const [loanFirstDue, setLoanFirstDue] = useState<DateValue>(() => todayValue(currentSystem));
+  const [loanSaved, setLoanSaved] = useState<number>(0);
 
   const report = useMemo(() => {
     const startTs = toDate(reportStart.system, reportStart.year, reportStart.month, reportStart.day).getTime();
@@ -196,6 +220,44 @@ export default function ToolsPanel({ calendarData, currentSystem, currentYear, c
     else { category = 'چاق'; cls = 'bmi-obese'; }
     return { value: value.toFixed(1), category, cls };
   }, [height, weight]);
+
+  const loan = useMemo(() => {
+    const P = parseFloat(onlyDigits(loanAmount));
+    const r = parseFloat(loanRate);
+    const n = parseInt(loanCount, 10);
+    if (!P || P <= 0 || isNaN(r) || r < 0 || !n || n <= 0 || n > 600) return null;
+
+    const periodMonths = loanPeriod === 'monthly' ? 1 : 12;
+    let installment: number;
+    if (loanMethod === 'simple') {
+      const totalInterest = P * (r / 100) * ((n * periodMonths) / 12);
+      installment = (P + totalInterest) / n;
+    } else {
+      const i = (r / 100) * (periodMonths / 12); // نرخ هر دوره
+      installment = i === 0 ? P / n : (P * i * Math.pow(1 + i, n)) / (Math.pow(1 + i, n) - 1);
+    }
+
+    const perRounded = Math.round(installment);
+    const totalPaid = perRounded * n;
+    const totalInterest = totalPaid - P;
+
+    // ساخت اقساط با سررسیدِ خودکار
+    const entries: InstallmentEntry[] = [];
+    for (let k = 0; k < n; k++) {
+      const sh = shiftMonth(loanFirstDue.system, loanFirstDue.year, loanFirstDue.month, k * periodMonths);
+      const md = getMonthDays(loanFirstDue.system, sh.year, sh.month);
+      const day = Math.min(loanFirstDue.day, md);
+      const key = dateKey(loanFirstDue.system, sh.year, sh.month, day);
+      entries.push({ key, title: `قسط ${k + 1} از ${n} - وام`, amount: perRounded });
+    }
+    return { per: perRounded, totalPaid, totalInterest, principal: P, entries };
+  }, [loanAmount, loanRate, loanCount, loanPeriod, loanMethod, loanFirstDue]);
+
+  const submitLoan = () => {
+    if (!loan) return;
+    onAddTransactions(loan.entries);
+    setLoanSaved(loan.entries.length);
+  };
 
   const monthNames = getMonthNames(currentSystem);
 
@@ -269,6 +331,78 @@ export default function ToolsPanel({ calendarData, currentSystem, currentYear, c
                         <div className="tool-result-row debt"><span>بدهی جدید این ماه</span><strong>{formatNumber(bom.unpaidThis)} تومان</strong></div>
                         <div className="tool-result-row closing"><span>مانده پایان ماه</span><strong>{formatNumber(bom.closing)} تومان</strong></div>
                       </div>
+                    </>
+                  )}
+
+                  {sec.id === 'loan' && (
+                    <>
+                      <label className="field-label">مبلغ وام (تومان)</label>
+                      <input
+                        className="tool-text-input"
+                        type="text"
+                        inputMode="numeric"
+                        dir="ltr"
+                        placeholder="مثلاً 100,000,000"
+                        value={loanAmount}
+                        onChange={(e) => setLoanAmount(withSeparators(e.target.value))}
+                      />
+                      <div className="loan-grid">
+                        <div>
+                          <label className="field-label">نرخ سود سالانه ٪</label>
+                          <input className="tool-text-input" type="number" inputMode="decimal" dir="ltr" placeholder="23" value={loanRate} onChange={(e) => setLoanRate(e.target.value)} />
+                        </div>
+                        <div>
+                          <label className="field-label">تعداد اقساط</label>
+                          <input className="tool-text-input" type="number" inputMode="numeric" dir="ltr" placeholder="12" value={loanCount} onChange={(e) => setLoanCount(onlyDigits(e.target.value))} />
+                        </div>
+                      </div>
+
+                      <label className="field-label">دوره‌ی پرداخت</label>
+                      <div className="mini-toggle">
+                        <button type="button" className={`mini-toggle-btn ${loanPeriod === 'monthly' ? 'active' : ''}`} onClick={() => setLoanPeriod('monthly')}>ماهانه</button>
+                        <button type="button" className={`mini-toggle-btn ${loanPeriod === 'yearly' ? 'active' : ''}`} onClick={() => setLoanPeriod('yearly')}>سالانه</button>
+                      </div>
+
+                      <label className="field-label">روش محاسبه‌ی سود</label>
+                      <div className="mini-toggle">
+                        <button type="button" className={`mini-toggle-btn ${loanMethod === 'simple' ? 'active' : ''}`} onClick={() => setLoanMethod('simple')}>سود ساده (آخر دوره)</button>
+                        <button type="button" className={`mini-toggle-btn ${loanMethod === 'compound' ? 'active' : ''}`} onClick={() => setLoanMethod('compound')}>سود مرکب (اول و آخر)</button>
+                      </div>
+
+                      <label className="field-label">سررسید اولین قسط</label>
+                      <CalendarDateInput value={loanFirstDue} onChange={(v) => { setLoanFirstDue(v); setLoanSaved(0); }} />
+
+                      {!loan ? (
+                        <div className="tool-note">مبلغ، نرخ و تعداد اقساط را وارد کنید</div>
+                      ) : (
+                        <>
+                          <div className="tool-result">
+                            <div className="tool-result-row big"><span>مبلغ هر قسط</span><strong>{formatNumber(loan.per)} تومان</strong></div>
+                            <div className="tool-result-row debt"><span>مجموع سود</span><strong>{formatNumber(loan.totalInterest)} تومان</strong></div>
+                            <div className="tool-result-row closing"><span>مجموع بازپرداخت</span><strong>{formatNumber(loan.totalPaid)} تومان</strong></div>
+                          </div>
+                          <div className="loan-preview">
+                            <div className="loan-preview-title">چند قسط اول:</div>
+                            {loan.entries.slice(0, 3).map((e, idx) => {
+                              const [yy, mm, dd] = e.key.split('-').map(Number);
+                              const c = fromDate(loanFirstDue.system, new Date(yy, mm - 1, dd));
+                              return (
+                                <div key={idx} className="loan-preview-row">
+                                  <span>قسط {idx + 1}</span>
+                                  <span>{c.day} {getMonthNames(loanFirstDue.system)[c.month]} {c.year}</span>
+                                  <strong>{formatNumber(e.amount)}</strong>
+                                </div>
+                              );
+                            })}
+                            {loan.entries.length > 3 && <div className="tool-note">... و {loan.entries.length - 3} قسط دیگر</div>}
+                          </div>
+                          {loanSaved > 0 ? (
+                            <div className="loan-success">✅ {loanSaved} قسط در تقویم ثبت شد</div>
+                          ) : (
+                            <button className="loan-submit" onClick={submitLoan}>ثبت {loan.entries.length} قسط در تقویم</button>
+                          )}
+                        </>
+                      )}
                     </>
                   )}
 

@@ -14,11 +14,12 @@ import {
   dateKey,
   shiftMonth,
   convertMonth,
+  convertAll,
   yearRange,
   migrateKey,
 } from './calendar';
 
-import logoUrl from './assets/logo.svg';
+import logoUrl from './assets/logo.png';
 import ToolsPanel from './Tools';
 
 const getPrayerTimes = (day: number): any => {
@@ -142,6 +143,22 @@ function App() {
   const saveData = (data: any) => {
     localStorage.setItem('calendarData', JSON.stringify(data));
     setCalendarData(data);
+  };
+
+  // درج خودکار اقساط وام روی تاریخ سررسید هر قسط در تقویم
+  const addInstallments = (entries: { key: string; title: string; amount: number }[]) => {
+    const next: { [key: string]: DayData } = { ...calendarData };
+    entries.forEach(({ key, title, amount }, idx) => {
+      const existing = next[key]?.transactions || [];
+      const tx: Transaction = {
+        id: `${Date.now()}-${idx}-${Math.random().toString(36).slice(2, 7)}`,
+        title,
+        amount,
+        isPaid: false,
+      };
+      next[key] = { transactions: [...existing, tx] };
+    });
+    saveData(next);
   };
 
   const getKey = (y: number, m: number, d: number): string => dateKey(calendarSystem, y, m, d);
@@ -373,11 +390,12 @@ function App() {
     for (let d = 1; d <= daysInMonth; d++) {
       const debt = getDayDebt(currentYear, currentMonth, d);
       const dayIsToday = isToday(calendarSystem, currentYear, currentMonth, d);
+      const isFriday = (startOffset + d - 1) % 7 === 6;
 
       days.push(
         <div
           key={d}
-          className={`day ${debt > 0 ? 'has-debt' : ''} ${dayIsToday ? 'today' : ''}`}
+          className={`day ${debt > 0 ? 'has-debt' : ''} ${dayIsToday ? 'today' : ''} ${isFriday ? 'friday' : ''}`}
           onClick={() => openDayDetails(currentYear, currentMonth, d)}
         >
           <span className="day-num">{d}</span>
@@ -393,22 +411,41 @@ function App() {
   };
 
   const selectedDayData = selectedDate ? calendarData[selectedDate] : null;
-  const selectedDayDebt = selectedDate && selectedDayNum ? 
+  const selectedDayDebt = selectedDate && selectedDayNum ?
     getDayDebt(currentYear, currentMonth, selectedDayNum) : 0;
+
+  // اطلاعات امروز در هر سه تقویم برای بنر بالای صفحه
+  const todayG = getToday('gregorian');
+  const today3 = convertAll('gregorian', todayG.year, todayG.month, todayG.day);
+  const fmtDate = (sys: CalendarSystem, c: { year: number; month: number; day: number }) =>
+    `${c.day} ${getMonthNames(sys)[c.month]} ${c.year}`;
+  const todayBySystem: Record<CalendarSystem, { year: number; month: number; day: number }> = {
+    jalali: today3.jalali,
+    gregorian: today3.gregorian,
+    hijri: today3.hijri,
+  };
+  const otherSystems = CALENDAR_SYSTEMS.filter((s) => s !== calendarSystem);
 
   return (
     <div className="app">
       <div className="header">
-        <div className="header-left">
-          <button className="today-btn" onClick={goToToday} title="برو به امروز">
-            📅 امروز
-          </button>
-        </div>
         <h1 className="brand">
           <img className="brand-logo" src={logoUrl} alt="simorgh-ledger" />
           <span className="brand-name">simorgh-ledger</span>
         </h1>
         <button className="menu-btn" onClick={() => setShowToolsModal(true)} title="ابزارها و گزارش‌ها">⋮</button>
+      </div>
+
+      {/* بنر امروز با هر سه تقویم */}
+      <div className="date-banner">
+        <button className="today-pill" onClick={goToToday}>برو به امروز</button>
+        <div className="db-weekday">{today3.weekday}</div>
+        <div className="db-primary">{fmtDate(calendarSystem, todayBySystem[calendarSystem])}</div>
+        <div className="db-secondary">
+          {otherSystems.map((s) => (
+            <span key={s}>{SYSTEM_LABELS[s]}: {fmtDate(s, todayBySystem[s])}</span>
+          ))}
+        </div>
       </div>
 
       {/* سوییچ سه‌وضعیتی تقویم: شمسی / میلادی / قمری */}
@@ -447,7 +484,9 @@ function App() {
       </div>
 
       <div className="weekdays">
-        {weekDays.map((d: string) => <div key={d} className="weekday">{d}</div>)}
+        {weekDays.map((d: string, i: number) => (
+          <div key={d} className={`weekday ${i === 6 ? 'friday' : ''}`}>{d}</div>
+        ))}
       </div>
 
       <div className="calendar">
@@ -623,6 +662,7 @@ function App() {
           currentYear={currentYear}
           currentMonth={currentMonth}
           onClose={() => setShowToolsModal(false)}
+          onAddTransactions={addInstallments}
         />
       )}
 

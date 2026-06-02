@@ -5,19 +5,20 @@
 }
 
 body {
-  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-  background: #e8eef2;
+  font-family: 'Vazirmatn', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  background: linear-gradient(160deg, #e9eef5 0%, #dde6f0 100%);
   direction: rtl;
   padding: 12px;
+  -webkit-font-smoothing: antialiased;
 }
 
 .app {
   max-width: 500px;
   margin: 0 auto;
-  background: white;
-  border-radius: 24px;
+  background: #fff;
+  border-radius: 28px;
   overflow: hidden;
-  box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+  box-shadow: 0 10px 40px rgba(20, 33, 61, 0.18);
 }
 
 /* هدر */
@@ -87,9 +88,13 @@ body {
 .weekday {
   text-align: center;
   font-size: 12px;
-  font-weight: 600;
-  color: #888;
-  padding: 6px 0;
+  font-weight: 700;
+  color: #8893a7;
+  padding: 8px 0;
+}
+
+.weekday.friday {
+  color: #e0556a;
 }
 
 /* تقویم */
@@ -123,23 +128,36 @@ body {
 }
 
 .day:hover {
-  background: #f0f0f0;
-  transform: scale(1.02);
+  background: #eef2f8;
+  transform: scale(1.03);
 }
 
 .day.has-debt {
-  background: #fff8e7;
+  background: #fff6e3;
 }
 
 .day.today {
-  background: #e8f0fe;
-  border: 1px solid #4a90e2;
+  background: linear-gradient(135deg, #1f2b4a, #2e3f6b);
+  box-shadow: 0 4px 12px rgba(31, 43, 74, 0.35);
+}
+
+.day.today .day-num {
+  color: #fff;
+  font-weight: 800;
+}
+
+.day.friday .day-num {
+  color: #e0556a;
+}
+
+.day.today.friday .day-num {
+  color: #ffd0d7;
 }
 
 .day-num {
-  font-size: 14px;
-  font-weight: 500;
-  color: #333;
+  font-size: 15px;
+  font-weight: 600;
+  color: #2c3550;
 }
 
 .debt-badge {
@@ -475,54 +493,74 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 12px 16px;
-  background: #fff;
-  border-bottom: 1px solid #eee;
+  padding: 14px 18px 10px;
+  background: linear-gradient(135deg, #1b2540 0%, #161d2d 100%);
   position: relative;
 }
 
-.header-left {
-  width: 70px;
-}
-
-.today-btn {
-  background: linear-gradient(135deg, #4a90e2, #357abd);
-  border: none;
-  padding: 6px 12px;
-  border-radius: 20px;
-  color: white;
-  font-size: 11px;
-  font-weight: 500;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  transition: all 0.2s;
-}
-
-.today-btn:hover {
-  transform: scale(1.02);
-  background: linear-gradient(135deg, #357abd, #2a6da8);
-}
-
 .header h1 {
-  font-size: 16px;
-  font-weight: 600;
-  color: #1a1a2e;
   margin: 0;
-  text-align: center;
 }
 
 .menu-btn {
-  background: none;
+  background: rgba(255, 255, 255, 0.12);
   border: none;
-  font-size: 22px;
+  font-size: 20px;
   font-weight: bold;
-  color: #666;
+  color: #fff;
   cursor: pointer;
   padding: 0;
-  width: 40px;
-  text-align: left;
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  line-height: 1;
+}
+
+/* بنر امروز با سه تقویم */
+.date-banner {
+  position: relative;
+  background: linear-gradient(135deg, #161d2d 0%, #1f2b4a 100%);
+  color: #fff;
+  padding: 6px 20px 20px;
+  text-align: center;
+}
+
+.today-pill {
+  position: absolute;
+  top: 8px;
+  left: 16px;
+  background: rgba(212, 175, 55, 0.18);
+  color: #f0c75e;
+  border: 1px solid rgba(212, 175, 55, 0.45);
+  border-radius: 16px;
+  padding: 5px 12px;
+  font-size: 11px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.db-weekday {
+  font-size: 15px;
+  color: #c7d0e0;
+  margin-bottom: 2px;
+}
+
+.db-primary {
+  font-size: 26px;
+  font-weight: 800;
+  color: #fff;
+  letter-spacing: 0.5px;
+}
+
+.db-secondary {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  margin-top: 6px;
+  font-size: 12px;
+  color: #a9b4c9;
+  flex-wrap: wrap;
 }
 /* ==================== فوتر ==================== */
 .app-footer {
@@ -644,24 +682,23 @@ body {
 .brand {
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 8px;
+  gap: 10px;
   margin: 0;
-  flex: 1;
   min-width: 0;
 }
 
 .brand-logo {
-  width: 26px;
-  height: 26px;
-  border-radius: 6px;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
   flex-shrink: 0;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 
 .brand-name {
-  font-size: 16px;
+  font-size: 17px;
   font-weight: 700;
-  color: #1a1a2e;
+  color: #fff;
   direction: ltr;
   letter-spacing: 0.3px;
   white-space: nowrap;
@@ -945,6 +982,85 @@ body {
 .bmi-normal { background: #e8f5e9; color: #2e7d32; }
 .bmi-over { background: #fff3e0; color: #e65100; }
 .bmi-obese { background: #fdecea; color: #c0392b; }
+
+/* وام و اقساط */
+.tool-text-input {
+  width: 100%;
+  padding: 11px;
+  border: 1px solid #ddd;
+  border-radius: 10px;
+  font-size: 14px;
+  font-family: inherit;
+  text-align: center;
+  margin-bottom: 4px;
+}
+
+.loan-grid {
+  display: flex;
+  gap: 10px;
+}
+
+.loan-grid > div {
+  flex: 1;
+}
+
+.loan-preview {
+  margin-top: 10px;
+  background: #f7f9fc;
+  border: 1px solid #eef0f4;
+  border-radius: 12px;
+  padding: 10px 12px;
+}
+
+.loan-preview-title {
+  font-size: 12px;
+  color: #777;
+  margin-bottom: 6px;
+  font-weight: 600;
+}
+
+.loan-preview-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+  padding: 5px 0;
+  border-bottom: 1px dashed #e6e9ef;
+  gap: 8px;
+}
+
+.loan-preview-row:last-child {
+  border-bottom: none;
+}
+
+.loan-preview-row strong {
+  color: #2c6fc0;
+}
+
+.loan-submit {
+  width: 100%;
+  margin-top: 12px;
+  padding: 13px;
+  border: none;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #2e9e5b, #1f8a4c);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 700;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.loan-success {
+  margin-top: 12px;
+  text-align: center;
+  background: #e8f5e9;
+  color: #2e7d32;
+  border-radius: 12px;
+  padding: 12px;
+  font-weight: 700;
+  font-size: 14px;
+}
 
 /* سوییچ سه‌وضعیتی تقویم: شمسی / میلادی / قمری */
 .calendar-toggle {
