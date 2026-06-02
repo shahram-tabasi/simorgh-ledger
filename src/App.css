@@ -667,6 +667,285 @@ body {
   white-space: nowrap;
 }
 
+/* ==================== پنل ابزارها (آکاردیون) ==================== */
+.tools-box {
+  max-width: 460px;
+}
+
+.accordion {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.acc-item {
+  border: 1px solid #e6e6e6;
+  border-radius: 14px;
+  overflow: hidden;
+  background: #fafafa;
+}
+
+.acc-item.open {
+  border-color: #4a90e2;
+  box-shadow: 0 2px 10px rgba(74, 144, 226, 0.12);
+}
+
+.acc-head {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 16px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 700;
+  color: #1a1a2e;
+  font-family: inherit;
+}
+
+.acc-item.open .acc-head {
+  background: #eef5fe;
+  color: #2c6fc0;
+}
+
+.acc-arrow {
+  font-size: 10px;
+  color: #999;
+}
+
+.acc-body {
+  padding: 14px 16px 16px;
+  border-top: 1px solid #eee;
+  animation: accReveal 0.18s ease;
+}
+
+@keyframes accReveal {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.field-label {
+  display: block;
+  font-size: 12px;
+  color: #777;
+  margin: 6px 0 4px;
+  font-weight: 600;
+}
+
+/* ورودی تاریخِ چندتقویمی */
+.date-input {
+  margin-bottom: 10px;
+}
+
+.mini-toggle {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 6px;
+}
+
+.mini-toggle-btn {
+  flex: 1;
+  padding: 5px 0;
+  border: 1px solid #e0e0e0;
+  border-radius: 14px;
+  background: #fff;
+  color: #666;
+  font-size: 12px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.mini-toggle-btn.active {
+  background: #4a90e2;
+  border-color: #357abd;
+  color: #fff;
+}
+
+.date-selects {
+  display: flex;
+  gap: 6px;
+}
+
+.date-selects select {
+  flex: 1;
+  padding: 9px 6px;
+  border: 1px solid #ddd;
+  border-radius: 10px;
+  font-size: 13px;
+  background: #fff;
+  font-family: inherit;
+  text-align: center;
+}
+
+/* نتایجِ ابزارها */
+.tool-result {
+  margin-top: 10px;
+  background: #fff;
+  border: 1px solid #eee;
+  border-radius: 12px;
+  padding: 4px 12px;
+}
+
+.tool-result-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 9px 0;
+  border-bottom: 1px solid #f2f2f2;
+  font-size: 13px;
+}
+
+.tool-result-row:last-child {
+  border-bottom: none;
+}
+
+.tool-result-row span {
+  color: #666;
+}
+
+.tool-result-row strong {
+  color: #1a1a2e;
+  font-weight: 700;
+}
+
+.tool-result-row.big strong {
+  font-size: 16px;
+  color: #2c6fc0;
+}
+
+.tool-result-row.paid strong {
+  color: #2e9e5b;
+}
+
+.tool-result-row.debt strong {
+  color: #e67e22;
+}
+
+.tool-result-row.closing {
+  background: #fff8e7;
+  margin: 0 -12px;
+  padding: 9px 12px;
+  border-radius: 0 0 12px 12px;
+}
+
+.tool-result-row.closing strong {
+  color: #e67e22;
+  font-size: 15px;
+}
+
+.tool-note {
+  font-size: 12px;
+  color: #888;
+  margin: 6px 0;
+  text-align: center;
+}
+
+.tool-warn {
+  font-size: 13px;
+  color: #c0392b;
+  background: #fdecea;
+  border-radius: 10px;
+  padding: 10px;
+  text-align: center;
+  margin-top: 8px;
+}
+
+/* بیوریتم */
+.bio-result {
+  padding: 12px;
+}
+
+.bio-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.bio-label {
+  width: 48px;
+  font-size: 12px;
+  color: #555;
+  font-weight: 600;
+}
+
+.bio-track {
+  position: relative;
+  flex: 1;
+  height: 10px;
+  background: #eef0f3;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.bio-mid {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: #c4c9d0;
+}
+
+.bio-fill {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+}
+
+.bio-fill.pos {
+  background: linear-gradient(90deg, #4caf50, #2e9e5b);
+}
+
+.bio-fill.neg {
+  background: linear-gradient(90deg, #e67e22, #d35400);
+}
+
+.bio-val {
+  width: 44px;
+  text-align: left;
+  font-size: 12px;
+  font-weight: 700;
+  direction: ltr;
+}
+
+.bio-val.pos { color: #2e9e5b; }
+.bio-val.neg { color: #d35400; }
+
+/* BMI */
+.bmi-inputs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.bmi-inputs input {
+  flex: 1;
+  padding: 11px;
+  border: 1px solid #ddd;
+  border-radius: 10px;
+  font-size: 14px;
+  font-family: inherit;
+  text-align: center;
+}
+
+.bmi-badge {
+  text-align: center;
+  padding: 8px;
+  border-radius: 10px;
+  font-weight: 700;
+  font-size: 14px;
+  margin: 8px 0 2px;
+}
+
+.bmi-low { background: #e3f2fd; color: #1565c0; }
+.bmi-normal { background: #e8f5e9; color: #2e7d32; }
+.bmi-over { background: #fff3e0; color: #e65100; }
+.bmi-obese { background: #fdecea; color: #c0392b; }
+
 /* سوییچ سه‌وضعیتی تقویم: شمسی / میلادی / قمری */
 .calendar-toggle {
   display: flex;

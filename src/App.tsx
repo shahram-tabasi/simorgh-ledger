@@ -19,6 +19,7 @@ import {
 } from './calendar';
 
 import logoUrl from './assets/logo.svg';
+import ToolsPanel from './Tools';
 
 const getPrayerTimes = (day: number): any => {
   const times = {
@@ -81,14 +82,12 @@ function App() {
   const [showDayModal, setShowDayModal] = useState<boolean>(false);
   const [showAddModal, setShowAddModal] = useState<boolean>(false);
   const [showPrayerModal, setShowPrayerModal] = useState<boolean>(false);
-  const [showReportModal, setShowReportModal] = useState<boolean>(false);
+  const [showToolsModal, setShowToolsModal] = useState<boolean>(false);
   const [showYearMonthModal, setShowYearMonthModal] = useState<boolean>(false);
   const [showReminderModal, setShowReminderModal] = useState<boolean>(false);
   const [title, setTitle] = useState<string>('');
   const [amount, setAmount] = useState<string>('');
   const [calendarData, setCalendarData] = useState<{ [key: string]: DayData }>({});
-  const [reportStart, setReportStart] = useState<string>('');
-  const [reportEnd, setReportEnd] = useState<string>('');
   const [prayerTimes, setPrayerTimes] = useState<any>(null);
   const [tempYear, setTempYear] = useState<number>(currentYear);
   const [tempMonth, setTempMonth] = useState<number>(currentMonth);
@@ -335,29 +334,6 @@ function App() {
     setShowYearMonthModal(false);
   };
 
-  const getReport = () => {
-    if (!reportStart || !reportEnd) return alert('محدوده تاریخ را انتخاب کنید');
-    // کلیدها به‌صورت میلادیِ بدون صفرِ پیشوند ذخیره می‌شوند؛ برای مقایسه به عدد روز تبدیل می‌کنیم
-    const toTs = (s: string): number => {
-      const [y, m, d] = s.split('-').map(Number);
-      return new Date(y, (m || 1) - 1, d || 1).getTime();
-    };
-    const startTs = toTs(reportStart);
-    const endTs = toTs(reportEnd);
-    let total = 0, count = 0, paid = 0;
-    Object.entries(calendarData).forEach(([date, data]) => {
-      const ts = toTs(date);
-      if (ts >= startTs && ts <= endTs) {
-        data.transactions.forEach(t => {
-          count++;
-          if (!t.isPaid) total += t.amount;
-          else paid += t.amount;
-        });
-      }
-    });
-    alert(`📊 گزارش مالی\n\nاز ${reportStart} تا ${reportEnd}\n\n💰 مجموع بدهی: ${formatNumber(total)} تومان\n📝 کل تراکنش‌ها: ${count}\n✅ مبلغ پرداخت شده: ${formatNumber(paid)} تومان\n⏳ باقی‌مانده: ${formatNumber(total)} تومان`);
-  };
-
   const goToToday = () => {
     const today = getToday(calendarSystem);
     setCurrentYear(today.year);
@@ -365,7 +341,7 @@ function App() {
     setShowDayModal(false);
     setShowAddModal(false);
     setShowPrayerModal(false);
-    setShowReportModal(false);
+    setShowToolsModal(false);
     setShowYearMonthModal(false);
     setSelectedDate(null);
     setSelectedDayNum(null);
@@ -432,7 +408,7 @@ function App() {
           <img className="brand-logo" src={logoUrl} alt="simorgh-ledger" />
           <span className="brand-name">simorgh-ledger</span>
         </h1>
-        <button className="menu-btn" onClick={() => setShowReportModal(true)}>⋮</button>
+        <button className="menu-btn" onClick={() => setShowToolsModal(true)} title="ابزارها و گزارش‌ها">⋮</button>
       </div>
 
       {/* سوییچ سه‌وضعیتی تقویم: شمسی / میلادی / قمری */}
@@ -640,28 +616,14 @@ function App() {
         </div>
       )}
 
-      {showReportModal && (
-        <div className="modal" onClick={() => setShowReportModal(false)}>
-          <div className="modal-box" onClick={e => e.stopPropagation()}>
-            <h3>📊 گزارش مالی</h3>
-            <input 
-              type="date" 
-              placeholder="تاریخ شروع" 
-              value={reportStart} 
-              onChange={e => setReportStart(e.target.value)} 
-            />
-            <input 
-              type="date" 
-              placeholder="تاریخ پایان" 
-              value={reportEnd} 
-              onChange={e => setReportEnd(e.target.value)} 
-            />
-            <div className="modal-btns">
-              <button className="submit" onClick={getReport}>مشاهده گزارش</button>
-              <button className="cancel" onClick={() => setShowReportModal(false)}>بستن</button>
-            </div>
-          </div>
-        </div>
+      {showToolsModal && (
+        <ToolsPanel
+          calendarData={calendarData}
+          currentSystem={calendarSystem}
+          currentYear={currentYear}
+          currentMonth={currentMonth}
+          onClose={() => setShowToolsModal(false)}
+        />
       )}
 
       {/* مودال یادآوری */}

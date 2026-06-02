@@ -130,3 +130,119 @@ export function migrateKey(key: string): string {
   }
   return key;
 }
+
+// ===== کمک‌توابعِ ابزارها (تبدیل تاریخ، سن، بیوریتم) =====
+
+// تبدیل تاریخِ یک تقویم به آبجکت Date میلادیِ نیمه‌شب
+export function toDate(system: CalendarSystem, year: number, month: number, day: number): Date {
+  return toGregorian(system, year, month, day).toDate();
+}
+
+// خواندن مولفه‌های یک تقویم از روی Date میلادی
+export function fromDate(system: CalendarSystem, date: Date): CalendarDate {
+  if (system === 'jalali') {
+    const m = moment(date);
+    return { year: m.jYear(), month: m.jMonth(), day: m.jDate() };
+  }
+  if (system === 'hijri') {
+    const m = momentHijri(date);
+    return { year: m.iYear(), month: m.iMonth(), day: m.iDate() };
+  }
+  const m = moment(date);
+  return { year: m.year(), month: m.month(), day: m.date() };
+}
+
+// نام روز هفته از روی Date (۰=یکشنبه ... ۶=شنبه در getDay)
+const WEEKDAY_NAMES = ['یکشنبه', 'دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنجشنبه', 'جمعه', 'شنبه'];
+export function getWeekdayName(date: Date): string {
+  return WEEKDAY_NAMES[date.getDay()];
+}
+
+export interface AllCalendars {
+  jalali: CalendarDate;
+  gregorian: CalendarDate;
+  hijri: CalendarDate;
+  weekday: string;
+}
+
+// تبدیل همزمانِ یک تاریخ به هر سه تقویم
+export function convertAll(system: CalendarSystem, year: number, month: number, day: number): AllCalendars {
+  const date = toDate(system, year, month, day);
+  return {
+    jalali: fromDate('jalali', date),
+    gregorian: fromDate('gregorian', date),
+    hijri: fromDate('hijri', date),
+    weekday: getWeekdayName(date),
+  };
+}
+
+// بازه‌ی سال برای تاریخِ تولد (تا ۱۲۰ سال قبل)
+export function birthYearRange(system: CalendarSystem): number[] {
+  const { year } = getToday(system);
+  const arr: number[] = [];
+  for (let y = year; y >= year - 120; y--) arr.push(y);
+  return arr;
+}
+
+export interface AgeResult {
+  years: number;
+  months: number;
+  days: number;
+  totalDays: number;
+  totalWeeks: number;
+  totalMonths: number;
+  nextBirthdayInDays: number;
+}
+
+// محاسبه‌ی سن و مدت‌زمانِ سپری‌شده بین دو تاریخ (بر مبنای میلادی، نتیجه برای شمسی هم یکسان است)
+export function ageBetween(birth: Date, now: Date): AgeResult {
+  let years = now.getFullYear() - birth.getFullYear();
+  let months = now.getMonth() - birth.getMonth();
+  let days = now.getDate() - birth.getDate();
+  if (days < 0) {
+    months -= 1;
+    days += new Date(now.getFullYear(), now.getMonth(), 0).getDate();
+  }
+  if (months < 0) {
+    years -= 1;
+    months += 12;
+  }
+  const msPerDay = 86400000;
+  const totalDays = Math.floor((now.getTime() - birth.getTime()) / msPerDay);
+
+  // تولدِ بعدی
+  let nextBday = new Date(now.getFullYear(), birth.getMonth(), birth.getDate());
+  if (nextBday.getTime() < now.getTime()) {
+    nextBday = new Date(now.getFullYear() + 1, birth.getMonth(), birth.getDate());
+  }
+  const nextBirthdayInDays = Math.ceil((nextBday.getTime() - now.getTime()) / msPerDay);
+
+  return {
+    years,
+    months,
+    days,
+    totalDays,
+    totalWeeks: Math.floor(totalDays / 7),
+    totalMonths: years * 12 + months,
+    nextBirthdayInDays,
+  };
+}
+
+export interface Biorhythm {
+  physical: number;    // ۲۳ روزه
+  emotional: number;   // ۲۸ روزه
+  intellectual: number; // ۳۳ روزه
+  days: number;
+}
+
+// محاسبه‌ی بیوریتم برای امروز بر اساس تعداد روزهای زندگی
+export function biorhythm(birth: Date, now: Date): Biorhythm {
+  const days = Math.floor((now.getTime() - birth.getTime()) / 86400000);
+  const pct = (period: number) => Math.round(Math.sin((2 * Math.PI * days) / period) * 100);
+  return {
+    physical: pct(23),
+    emotional: pct(28),
+    intellectual: pct(33),
+    days,
+  };
+}

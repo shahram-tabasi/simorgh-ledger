@@ -9,7 +9,7 @@ declare module 'moment-hijri' {
   }
 
   interface MomentHijri {
-    (input?: string, format?: string): HijriMoment;
+    (input?: string | number | Date, format?: string): HijriMoment;
     iDaysInMonth(year: number, month: number): number;
   }
 
