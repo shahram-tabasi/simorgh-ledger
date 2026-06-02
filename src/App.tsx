@@ -1,29 +1,24 @@
 import { useState, useEffect } from 'react';
 import './App.css';
-import moment from 'moment-jalaali';
 import { LocalNotifications } from '@capacitor/local-notifications';
+import {
+  type CalendarSystem,
+  CALENDAR_SYSTEMS,
+  SYSTEM_LABELS,
+  weekDays,
+  getMonthNames,
+  getToday,
+  getMonthDays,
+  getFirstWeekdayOffset,
+  isToday,
+  dateKey,
+  shiftMonth,
+  convertMonth,
+  yearRange,
+  migrateKey,
+} from './calendar';
 
-moment.loadPersian({ dialect: 'persian-modern' });
-
-const persianMonths: string[] = [
-  'فروردین', 'اردیبهشت', 'خرداد', 'تیر', 'مرداد', 'شهریور',
-  'مهر', 'آبان', 'آذر', 'دی', 'بهمن', 'اسفند'
-];
-
-const weekDays: string[] = ['شنبه', 'یکشنبه', 'دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنجشنبه', 'جمعه'];
-
-const years: number[] = [];
-for (let i = 1390; i <= 1410; i++) {
-  years.push(i);
-}
-// rev3
-
-const getMonthDays = (year: number, month: number): number => {
-  if (month <= 5) return 31;
-  if (month <= 10) return 30;
-  const isLeap = moment(`${year}/1/1`, 'jYYYY/jM/jD').isLeapYear();
-  return isLeap ? 30 : 29;
-};
+import logoUrl from './assets/logo.svg';
 
 const getPrayerTimes = (day: number): any => {
   const times = {
@@ -69,9 +64,18 @@ const parseFormattedNumber = (str: string): number => {
   return parseFloat(cleaned);
 };
 
+const SYSTEM_STORAGE_KEY = 'calendarSystem';
+
 function App() {
-  const [currentYear, setCurrentYear] = useState<number>(moment().jYear());
-  const [currentMonth, setCurrentMonth] = useState<number>(moment().jMonth());
+  const [calendarSystem, setCalendarSystem] = useState<CalendarSystem>(() => {
+    const saved = localStorage.getItem(SYSTEM_STORAGE_KEY) as CalendarSystem | null;
+    return saved && CALENDAR_SYSTEMS.includes(saved) ? saved : 'jalali';
+  });
+  const months = getMonthNames(calendarSystem);
+  const years = yearRange(calendarSystem);
+
+  const [currentYear, setCurrentYear] = useState<number>(() => getToday(calendarSystem).year);
+  const [currentMonth, setCurrentMonth] = useState<number>(() => getToday(calendarSystem).month);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [selectedDayNum, setSelectedDayNum] = useState<number | null>(null);
   const [showDayModal, setShowDayModal] = useState<boolean>(false);
@@ -112,15 +116,36 @@ function App() {
 
   useEffect(() => {
     const saved = localStorage.getItem('calendarData');
-    if (saved) setCalendarData(JSON.parse(saved));
+    if (!saved) return;
+    const parsed = JSON.parse(saved) as { [key: string]: DayData };
+    // مهاجرت کلیدهای قدیمیِ شمسی به کلید میلادیِ مشترک بین تقویم‌ها
+    const migrated: { [key: string]: DayData } = {};
+    let changed = false;
+    Object.entries(parsed).forEach(([key, value]) => {
+      const newKey = migrateKey(key);
+      if (newKey !== key) changed = true;
+      migrated[newKey] = value;
+    });
+    setCalendarData(migrated);
+    if (changed) localStorage.setItem('calendarData', JSON.stringify(migrated));
   }, []);
+
+  // هنگام تغییر تقویم، انتخابِ نظام را ذخیره و ماهِ در حال نمایش را تبدیل می‌کنیم
+  const switchCalendar = (system: CalendarSystem) => {
+    if (system === calendarSystem) return;
+    const converted = convertMonth(calendarSystem, system, currentYear, currentMonth);
+    setCalendarSystem(system);
+    setCurrentYear(converted.year);
+    setCurrentMonth(converted.month);
+    localStorage.setItem(SYSTEM_STORAGE_KEY, system);
+  };
 
   const saveData = (data: any) => {
     localStorage.setItem('calendarData', JSON.stringify(data));
     setCalendarData(data);
   };
 
-  const getKey = (y: number, m: number, d: number): string => `${y}-${m + 1}-${d}`;
+  const getKey = (y: number, m: number, d: number): string => dateKey(calendarSystem, y, m, d);
 
   const getDayTransactions = (y: number, m: number, d: number): Transaction[] => {
     const day = calendarData[getKey(y, m, d)];
@@ -146,7 +171,7 @@ function App() {
   // جمع‌های ماه
   const getMonthTotal = (): number => {
     let total = 0;
-    const days = getMonthDays(currentYear, currentMonth);
+    const days = getMonthDays(calendarSystem, currentYear, currentMonth);
     for (let d = 1; d <= days; d++) {
       total += getDayTotalTransactions(currentYear, currentMonth, d);
     }
@@ -155,7 +180,7 @@ function App() {
 
   const getMonthRemaining = (): number => {
     let remaining = 0;
-    const days = getMonthDays(currentYear, currentMonth);
+    const days = getMonthDays(calendarSystem, currentYear, currentMonth);
     for (let d = 1; d <= days; d++) {
       remaining += getDayDebt(currentYear, currentMonth, d);
     }
@@ -164,7 +189,7 @@ function App() {
 
   const getMonthPaid = (): number => {
     let paid = 0;
-    const days = getMonthDays(currentYear, currentMonth);
+    const days = getMonthDays(calendarSystem, currentYear, currentMonth);
     for (let d = 1; d <= days; d++) {
       paid += getDayPaid(currentYear, currentMonth, d);
     }
@@ -172,7 +197,7 @@ function App() {
   };
 
   // تابع ثبت یادآوری
-  const scheduleReminder = async (transaction: Transaction, dateKey: string) => {
+  const scheduleReminder = async (transaction: Transaction) => {
     if (!notificationPermission) {
       alert('لطفاً مجوز نوتیفیکیشن را فعال کنید');
       return false;
@@ -263,7 +288,7 @@ function App() {
       const updatedDay = { transactions: updatedTransactions };
       saveData({ ...calendarData, [selectedTransactionForReminder.dateKey]: updatedDay });
 
-      await scheduleReminder(updatedTransaction, selectedTransactionForReminder.dateKey);
+      await scheduleReminder(updatedTransaction);
       alert('✅ یادآوری با موفقیت ثبت شد');
     }
     setShowReminderModal(false);
@@ -312,9 +337,17 @@ function App() {
 
   const getReport = () => {
     if (!reportStart || !reportEnd) return alert('محدوده تاریخ را انتخاب کنید');
+    // کلیدها به‌صورت میلادیِ بدون صفرِ پیشوند ذخیره می‌شوند؛ برای مقایسه به عدد روز تبدیل می‌کنیم
+    const toTs = (s: string): number => {
+      const [y, m, d] = s.split('-').map(Number);
+      return new Date(y, (m || 1) - 1, d || 1).getTime();
+    };
+    const startTs = toTs(reportStart);
+    const endTs = toTs(reportEnd);
     let total = 0, count = 0, paid = 0;
     Object.entries(calendarData).forEach(([date, data]) => {
-      if (date >= reportStart && date <= reportEnd) {
+      const ts = toTs(date);
+      if (ts >= startTs && ts <= endTs) {
         data.transactions.forEach(t => {
           count++;
           if (!t.isPaid) total += t.amount;
@@ -326,8 +359,9 @@ function App() {
   };
 
   const goToToday = () => {
-    setCurrentYear(moment().jYear());
-    setCurrentMonth(moment().jMonth());
+    const today = getToday(calendarSystem);
+    setCurrentYear(today.year);
+    setCurrentMonth(today.month);
     setShowDayModal(false);
     setShowAddModal(false);
     setShowPrayerModal(false);
@@ -353,9 +387,8 @@ function App() {
 
   const renderDays = () => {
     const days: React.ReactNode[] = [];
-    const daysInMonth = getMonthDays(currentYear, currentMonth);
-    const firstDay = moment(`${currentYear}/${currentMonth + 1}/1`, 'jYYYY/jM/jD').day();
-    const startOffset = firstDay === 6 ? 0 : firstDay + 1;
+    const daysInMonth = getMonthDays(calendarSystem, currentYear, currentMonth);
+    const startOffset = getFirstWeekdayOffset(calendarSystem, currentYear, currentMonth);
 
     for (let i = 0; i < startOffset; i++) {
       days.push(<div key={`e-${i}`} className="day empty"></div>);
@@ -363,19 +396,17 @@ function App() {
 
     for (let d = 1; d <= daysInMonth; d++) {
       const debt = getDayDebt(currentYear, currentMonth, d);
-      const isToday = moment().jYear() === currentYear && 
-                      moment().jMonth() === currentMonth && 
-                      moment().jDate() === d;
+      const dayIsToday = isToday(calendarSystem, currentYear, currentMonth, d);
 
       days.push(
         <div
           key={d}
-          className={`day ${debt > 0 ? 'has-debt' : ''} ${isToday ? 'today' : ''}`}
+          className={`day ${debt > 0 ? 'has-debt' : ''} ${dayIsToday ? 'today' : ''}`}
           onClick={() => openDayDetails(currentYear, currentMonth, d)}
         >
           <span className="day-num">{d}</span>
           {debt > 0 && (
-            <span className="debt-badge">
+            <span className="debt-badge" title={`${formatNumber(debt)} تومان`}>
               {formatNumber(debt)}
             </span>
           )}
@@ -397,22 +428,46 @@ function App() {
             📅 امروز
           </button>
         </div>
-        <h1>دفترچه حساب روزمره</h1>
+        <h1 className="brand">
+          <img className="brand-logo" src={logoUrl} alt="simorgh-ledger" />
+          <span className="brand-name">simorgh-ledger</span>
+        </h1>
         <button className="menu-btn" onClick={() => setShowReportModal(true)}>⋮</button>
       </div>
 
+      {/* سوییچ سه‌وضعیتی تقویم: شمسی / میلادی / قمری */}
+      <div className="calendar-toggle">
+        {CALENDAR_SYSTEMS.map((system) => (
+          <button
+            key={system}
+            className={`calendar-toggle-btn ${calendarSystem === system ? 'active' : ''}`}
+            onClick={() => switchCalendar(system)}
+          >
+            {SYSTEM_LABELS[system]}
+          </button>
+        ))}
+      </div>
+
       <div className="month-nav">
-        <button onClick={() => setCurrentMonth((prev: number) => Math.max(0, prev - 1))}>◀</button>
+        <button onClick={() => {
+          const p = shiftMonth(calendarSystem, currentYear, currentMonth, -1);
+          setCurrentYear(p.year);
+          setCurrentMonth(p.month);
+        }}>◀</button>
         <div className="month-year-selector" onClick={() => {
           setTempYear(currentYear);
           setTempMonth(currentMonth);
           setShowYearMonthModal(true);
         }}>
-          <span>{persianMonths[currentMonth]}</span>
+          <span>{months[currentMonth]}</span>
           <span className="year-text">{currentYear}</span>
           <span className="dropdown-icon">▼</span>
         </div>
-        <button onClick={() => setCurrentMonth((prev: number) => Math.min(11, prev + 1))}>▶</button>
+        <button onClick={() => {
+          const n = shiftMonth(calendarSystem, currentYear, currentMonth, 1);
+          setCurrentYear(n.year);
+          setCurrentMonth(n.month);
+        }}>▶</button>
       </div>
 
       <div className="weekdays">
@@ -472,7 +527,7 @@ function App() {
                 ))}
               </select>
               <select value={tempMonth} onChange={e => setTempMonth(parseInt(e.target.value))}>
-                {persianMonths.map((m: string, idx: number) => (
+                {months.map((m: string, idx: number) => (
                   <option key={idx} value={idx}>{m}</option>
                 ))}
               </select>
@@ -489,7 +544,7 @@ function App() {
         <div className="modal" onClick={() => setShowDayModal(false)}>
           <div className="modal-box day-modal" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
-              <h3>جزئیات روز {selectedDayNum} {persianMonths[currentMonth]}</h3>
+              <h3>جزئیات روز {selectedDayNum} {months[currentMonth]}</h3>
               <button className="close-modal" onClick={() => setShowDayModal(false)}>✕</button>
             </div>
             

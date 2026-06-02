@@ -96,6 +96,7 @@ body {
 .calendar {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
+  grid-auto-rows: 1fr; /* همه‌ی ردیف‌ها هم‌ارتفاع تا با عدد بزرگ خانه‌ها به‌هم نریزند */
   padding: 0 8px;
   background: #fff;
 }
@@ -112,6 +113,8 @@ body {
   transition: all 0.2s;
   margin: 2px;
   background: #fff;
+  min-width: 0;   /* اجازه‌ی کوچک‌شدن محتوا داخل خانه‌ی گرید */
+  overflow: hidden; /* جلوگیری از سرریزِ مبلغ و بدریختیِ جدول */
 }
 
 .day.empty {
@@ -147,6 +150,11 @@ body {
   border-radius: 12px;
   margin-top: 4px;
   font-weight: 600;
+  max-width: 100%;
+  white-space: nowrap;     /* عدد در یک خط بماند و به خط بعد نرود */
+  overflow: hidden;
+  text-overflow: ellipsis; /* مبلغِ خیلی بلند با ... کوتاه می‌شود */
+  direction: ltr;
 }
 
 /* مجموع ماه */
@@ -630,4 +638,64 @@ body {
 .reminder-badge {
   font-size: 12px;
   margin-right: 5px;
+}
+
+/* برند و لوگو در هدر */
+.brand {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin: 0;
+  flex: 1;
+  min-width: 0;
+}
+
+.brand-logo {
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  flex-shrink: 0;
+}
+
+.brand-name {
+  font-size: 16px;
+  font-weight: 700;
+  color: #1a1a2e;
+  direction: ltr;
+  letter-spacing: 0.3px;
+  white-space: nowrap;
+}
+
+/* سوییچ سه‌وضعیتی تقویم: شمسی / میلادی / قمری */
+.calendar-toggle {
+  display: flex;
+  gap: 6px;
+  padding: 10px 16px 4px;
+  background: #fff;
+}
+
+.calendar-toggle-btn {
+  flex: 1;
+  padding: 8px 0;
+  border: 1px solid #e0e0e0;
+  border-radius: 20px;
+  background: #f5f5f5;
+  color: #555;
+  font-size: 13px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.calendar-toggle-btn:hover {
+  background: #ececec;
+}
+
+.calendar-toggle-btn.active {
+  background: linear-gradient(135deg, #4a90e2, #357abd);
+  border-color: #357abd;
+  color: #fff;
+  box-shadow: 0 2px 6px rgba(74, 144, 226, 0.3);
 }

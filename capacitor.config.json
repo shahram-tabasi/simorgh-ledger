@@ -1,6 +1,6 @@
 {
-  "appId": "ir.simorgh.ledger",
-  "appName": "Simorgh Ledger",
+  "appId": "com.simorgh.ledger",
+  "appName": "simorgh-ledger",
   "webDir": "dist",
   "plugins": {
     "LocalNotifications": {

@@ -8,55 +8,46 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    
+
     steps:
     - uses: actions/checkout@v4
-    
+
     - name: Setup Node.js
       uses: actions/setup-node@v4
       with:
         node-version: '22'
-    
-    - name: Remove old lock file
-      run: rm -f package-lock.json
-    
+
     - name: Install dependencies
       run: npm install
-      
-    - name: Install Capacitor
-      run: |
-        npm install @capacitor/cli @capacitor/android
-        npm install @capacitor/local-notifications
-      
+
     - name: Build web app
       run: npm run build
-      
+
     - name: Setup Java
       uses: actions/setup-java@v4
       with:
         distribution: 'zulu'
-        java-version: '21'  # ✅ تغییر از 17 به 21
-        
+        java-version: '21'
+
     - name: Setup Android SDK
       uses: android-actions/setup-android@v3
-      
-    - name: Initialize Capacitor
-      run: |
-        rm -rf android
-        npx cap init "Simorgh Ledger" "ir.simorgh.ledger" --web-dir=dist
-        npx cap add android
-        
+
+    # از پروژه‌ی اندرویدِ کامیت‌شده استفاده می‌کنیم (نام و آیکون‌های simorgh-ledger
+    # در آن قرار دارد) و فقط بیلدِ وب را همگام می‌کنیم؛ پروژه را از نو نمی‌سازیم.
     - name: Sync Capacitor
       run: npx cap sync android
-        
+
     - name: Build APK
       run: |
         cd android
         chmod +x gradlew
         ./gradlew assembleDebug --no-daemon
-        
+
+    - name: Rename APK
+      run: cp android/app/build/outputs/apk/debug/app-debug.apk simorgh-ledger.apk
+
     - name: Upload APK
       uses: actions/upload-artifact@v4
       with:
-        name: app-debug-apk
-        path: android/app/build/outputs/apk/debug/app-debug.apk
+        name: simorgh-ledger
+        path: simorgh-ledger.apk
