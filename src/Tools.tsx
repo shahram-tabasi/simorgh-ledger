@@ -112,6 +112,7 @@ interface ToolsPanelProps {
   currentMonth: number;
   onClose: () => void;
   onAddTransactions: (entries: InstallmentEntry[]) => void;
+  initialSection?: string;
 }
 
 const SECTIONS = [
@@ -124,8 +125,8 @@ const SECTIONS = [
   { id: 'bmi', title: '⚖️ شاخص توده بدنی (BMI)' },
 ] as const;
 
-export default function ToolsPanel({ calendarData, currentSystem, currentYear, currentMonth, onClose, onAddTransactions }: ToolsPanelProps) {
-  const [open, setOpen] = useState<string | null>('report');
+export default function ToolsPanel({ calendarData, currentSystem, currentYear, currentMonth, onClose, onAddTransactions, initialSection }: ToolsPanelProps) {
+  const [open, setOpen] = useState<string | null>(initialSection ?? 'report');
 
   // گزارش مالی بازه‌ای
   const [reportStart, setReportStart] = useState<DateValue>(() => todayValue(currentSystem));

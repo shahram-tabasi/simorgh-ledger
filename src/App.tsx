@@ -21,6 +21,7 @@ import {
 
 import logoUrl from './assets/logo.png';
 import ToolsPanel from './Tools';
+import WelcomeScreen from './WelcomeScreen';
 
 const getPrayerTimes = (day: number): any => {
   const times = {
@@ -97,6 +98,12 @@ function App() {
   const [reminderTime, setReminderTime] = useState<string>('09:00');
   const [selectedTransactionForReminder, setSelectedTransactionForReminder] = useState<{ dateKey: string; transactionId: string } | null>(null);
   const [notificationPermission, setNotificationPermission] = useState<boolean>(false);
+  const [showWelcome, setShowWelcome] = useState<boolean>(true);
+  const [showRightDrawer, setShowRightDrawer] = useState<boolean>(false);
+  const [showLeftDrawer, setShowLeftDrawer] = useState<boolean>(false);
+  const [showAboutModal, setShowAboutModal] = useState<boolean>(false);
+  const [toolsInitialSection, setToolsInitialSection] = useState<string>('report');
+  const [editingTxId, setEditingTxId] = useState<string | null>(null);
 
   // درخواست مجوز نوتیفیکیشن در شروع برنامه
   useEffect(() => {
@@ -252,7 +259,16 @@ function App() {
     }
   };
 
-  // افزودن تراکنش با قابلیت یادآوری
+  // شروع ویرایش یک تراکنش (مثلاً مبلغ یک قسط در همان ماه)
+  const startEdit = (t: Transaction) => {
+    setEditingTxId(t.id);
+    setTitle(t.title);
+    setAmount(t.amount.toLocaleString('en-US'));
+    setShowDayModal(false);
+    setShowAddModal(true);
+  };
+
+  // افزودن یا ویرایش تراکنش
   const addTransaction = async () => {
     if (!title.trim()) return alert('عنوان را وارد کنید');
     const amt = parseFormattedNumber(amount);
@@ -260,16 +276,31 @@ function App() {
     if (!selectedDate) return;
 
     const existing = calendarData[selectedDate] || { transactions: [] };
-    const newTransaction: Transaction = { 
-      id: Date.now().toString(), 
-      title, 
-      amount: amt, 
+
+    // حالت ویرایش: همان تراکنش را به‌روزرسانی می‌کنیم
+    if (editingTxId) {
+      const updatedTx = existing.transactions.map(t =>
+        t.id === editingTxId ? { ...t, title, amount: amt } : t
+      );
+      saveData({ ...calendarData, [selectedDate]: { transactions: updatedTx } });
+      setEditingTxId(null);
+      setTitle('');
+      setAmount('');
+      setShowAddModal(false);
+      setShowDayModal(true);
+      return;
+    }
+
+    const newTransaction: Transaction = {
+      id: Date.now().toString(),
+      title,
+      amount: amt,
       isPaid: false,
       reminderScheduled: false
     };
     const updated = { transactions: [...existing.transactions, newTransaction] };
     saveData({ ...calendarData, [selectedDate]: updated });
-    
+
     setTitle('');
     setAmount('');
     setShowAddModal(false);
@@ -281,6 +312,13 @@ function App() {
       setReminderText(newTransaction.title);
       setShowReminderModal(true);
     }
+  };
+
+  // باز کردن یک ابزار از منوی امکانات
+  const openTool = (section: string) => {
+    setToolsInitialSection(section);
+    setShowRightDrawer(false);
+    setShowToolsModal(true);
   };
 
   // تایید یادآوری
@@ -428,12 +466,15 @@ function App() {
 
   return (
     <div className="app">
+      {showWelcome && <WelcomeScreen onDone={() => setShowWelcome(false)} />}
+
       <div className="header">
+        <button className="icon-btn" onClick={() => setShowRightDrawer(true)} aria-label="امکانات">☰</button>
         <h1 className="brand">
           <img className="brand-logo" src={logoUrl} alt="simorgh-ledger" />
           <span className="brand-name">simorgh-ledger</span>
         </h1>
-        <button className="menu-btn" onClick={() => setShowToolsModal(true)} title="ابزارها و گزارش‌ها">⋮</button>
+        <button className="icon-btn" onClick={() => setShowLeftDrawer(true)} aria-label="درباره ما">ⓘ</button>
       </div>
 
       {/* بنر امروز با هر سه تقویم */}
@@ -597,6 +638,9 @@ function App() {
                       <button className="pay-tick-modal" onClick={() => togglePay(selectedDate, t.id)}>
                         {t.isPaid ? '✓ پرداخت شده' : '○ پرداخت نشده'}
                       </button>
+                      <button className="edit-trans-modal" onClick={() => startEdit(t)} title="ویرایش مبلغ">
+                        ✏️
+                      </button>
                       <button className="delete-trans-modal" onClick={() => deleteTrans(selectedDate, t.id)}>
                         🗑
                       </button>
@@ -610,26 +654,26 @@ function App() {
       )}
 
       {showAddModal && (
-        <div className="modal" onClick={() => setShowAddModal(false)}>
+        <div className="modal" onClick={() => { setShowAddModal(false); setEditingTxId(null); }}>
           <div className="modal-box" onClick={e => e.stopPropagation()}>
-            <h3>➕ افزودن تراکنش جدید</h3>
-            <input 
-              type="text" 
-              placeholder="عنوان (مثال: قبوض آب و برق)" 
-              value={title} 
-              onChange={e => setTitle(e.target.value)} 
+            <h3>{editingTxId ? '✏️ ویرایش تراکنش' : '➕ افزودن تراکنش جدید'}</h3>
+            <input
+              type="text"
+              placeholder="عنوان (مثال: قبوض آب و برق)"
+              value={title}
+              onChange={e => setTitle(e.target.value)}
             />
-            <input 
-              type="text" 
-              placeholder="مبلغ (تومان)" 
-              value={amount} 
+            <input
+              type="text"
+              placeholder="مبلغ (تومان)"
+              value={amount}
               onChange={handleAmountChange}
               dir="ltr"
               style={{ textAlign: 'right' }}
             />
             <div className="modal-btns">
-              <button className="submit" onClick={addTransaction}>ثبت</button>
-              <button className="cancel" onClick={() => setShowAddModal(false)}>انصراف</button>
+              <button className="submit" onClick={addTransaction}>{editingTxId ? 'ذخیره' : 'ثبت'}</button>
+              <button className="cancel" onClick={() => { setShowAddModal(false); setEditingTxId(null); if (editingTxId) setShowDayModal(true); }}>انصراف</button>
             </div>
           </div>
         </div>
@@ -663,7 +707,94 @@ function App() {
           currentMonth={currentMonth}
           onClose={() => setShowToolsModal(false)}
           onAddTransactions={addInstallments}
+          initialSection={toolsInitialSection}
         />
+      )}
+
+      {/* منوی راست: امکانات و ابزارها */}
+      {showRightDrawer && (
+        <div className="drawer-overlay" onClick={() => setShowRightDrawer(false)}>
+          <aside className="drawer drawer-right" onClick={e => e.stopPropagation()}>
+            <div className="drawer-head">
+              <img className="drawer-logo" src={logoUrl} alt="" />
+              <div>
+                <div className="drawer-title">امکانات و ابزارها</div>
+                <div className="drawer-sub">simorgh-ledger</div>
+              </div>
+            </div>
+            <div className="drawer-section-label">گزارش‌ها</div>
+            <button className="drawer-item" onClick={() => openTool('report')}><span>📊</span> گزارش مالی بازه‌ای</button>
+            <button className="drawer-item" onClick={() => openTool('bom')}><span>📅</span> گزارش اول ماه (BOM)</button>
+            <div className="drawer-section-label">مالی</div>
+            <button className="drawer-item" onClick={() => openTool('loan')}><span>💳</span> وام و اقساط</button>
+            <div className="drawer-section-label">ابزارهای کاربردی</div>
+            <button className="drawer-item" onClick={() => openTool('convert')}><span>🔄</span> تبدیل تاریخ</button>
+            <button className="drawer-item" onClick={() => openTool('age')}><span>🎂</span> محاسبه سن</button>
+            <button className="drawer-item" onClick={() => openTool('bio')}><span>🌀</span> بیوریتم</button>
+            <button className="drawer-item" onClick={() => openTool('bmi')}><span>⚖️</span> شاخص توده بدنی</button>
+            <div className="drawer-section-label">میان‌بر</div>
+            <button className="drawer-item" onClick={() => { goToToday(); setShowRightDrawer(false); }}><span>📌</span> برو به امروز</button>
+          </aside>
+        </div>
+      )}
+
+      {/* منوی چپ: درباره ما */}
+      {showLeftDrawer && (
+        <div className="drawer-overlay" onClick={() => setShowLeftDrawer(false)}>
+          <aside className="drawer drawer-left" onClick={e => e.stopPropagation()}>
+            <div className="drawer-head">
+              <img className="drawer-logo" src={logoUrl} alt="" />
+              <div>
+                <div className="drawer-title">درباره ما</div>
+                <div className="drawer-sub">سیمرغ فناوری هوشمند</div>
+              </div>
+            </div>
+            <button className="drawer-item" onClick={() => { setShowLeftDrawer(false); setShowAboutModal(true); }}><span>👥</span> طراحان و خدمات</button>
+            <button className="drawer-item" onClick={() => {
+              const data = { title: 'simorgh-ledger', text: 'دفترکل و تقویم هوشمند سیمرغ', url: 'https://www.simorghai.com' };
+              if (navigator.share) navigator.share(data).catch(() => {});
+              else alert('www.simorghai.com');
+              setShowLeftDrawer(false);
+            }}><span>📤</span> ارسال نرم‌افزار</button>
+            <a className="drawer-item" href="https://www.simorghai.com" target="_blank" rel="noopener noreferrer"><span>🌐</span> وب‌سایت سیمرغ</a>
+            <div className="drawer-foot">نسخه ۱۴۰۵ · ۱.۰.۹</div>
+          </aside>
+        </div>
+      )}
+
+      {/* درباره: طراحان و خدمات */}
+      {showAboutModal && (
+        <div className="modal" onClick={() => setShowAboutModal(false)}>
+          <div className="modal-box about-box" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>👥 طراحان و خدمات</h3>
+              <button className="close-modal" onClick={() => setShowAboutModal(false)}>✕</button>
+            </div>
+            <div className="about-brand">
+              <img className="about-logo" src={logoUrl} alt="" />
+              <div className="about-app">simorgh-ledger</div>
+              <div className="about-company">سیمرغ فناوری هوشمند ایرانیان</div>
+            </div>
+
+            <div className="about-section-title">طراحان</div>
+            <div className="about-designer">هادی ولیخانی</div>
+            <div className="about-designer">شهرام طبسی نژاد</div>
+
+            <div className="about-section-title">راه‌های ارتباطی</div>
+            <a className="about-row" href="tel:09132734850"><span>📞</span> ۰۹۱۳۲۷۳۴۸۵۰</a>
+            <a className="about-row" href="tel:09916505467"><span>📞</span> ۰۹۹۱۶۵۰۵۴۶۷</a>
+            <a className="about-row" href="mailto:info@simorghai.com"><span>✉️</span> info@simorghai.com</a>
+            <a className="about-row" href="https://www.simorghai.com" target="_blank" rel="noopener noreferrer"><span>🌐</span> www.simorghai.com</a>
+
+            <div className="about-section-title">خدمات ما</div>
+            <ul className="about-services">
+              <li>طراحی نرم‌افزار با کمک دستیار هوش مصنوعی</li>
+              <li>طراحی انواع نرم‌افزارهای سفارشی</li>
+              <li>ارائه‌ی اولین نرم‌افزار مبتنی بر اصل SOS</li>
+              <li>طراحی وب‌سایت با سئوی حرفه‌ای</li>
+            </ul>
+          </div>
+        </div>
       )}
 
       {/* مودال یادآوری */}

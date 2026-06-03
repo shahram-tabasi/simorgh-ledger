@@ -1094,3 +1094,264 @@ body {
   color: #fff;
   box-shadow: 0 2px 6px rgba(74, 144, 226, 0.3);
 }
+
+/* ==================== صفحه‌ی خوش‌آمد ==================== */
+.welcome {
+  position: fixed;
+  inset: 0;
+  z-index: 3000;
+  background: radial-gradient(circle at 50% 35%, #20305a 0%, #161d2d 60%, #0e1320 100%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  opacity: 1;
+  transition: opacity 0.45s ease;
+}
+
+.welcome.leaving { opacity: 0; }
+
+.welcome-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  animation: welcomeRise 0.7s ease;
+}
+
+@keyframes welcomeRise {
+  from { opacity: 0; transform: translateY(18px) scale(0.96); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.welcome-logo {
+  width: 168px;
+  height: 168px;
+  border-radius: 36px;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.5);
+}
+
+.welcome-title {
+  margin: 22px 0 0;
+  font-size: 30px;
+  font-weight: 800;
+  color: #fff;
+  direction: ltr;
+  letter-spacing: 0.5px;
+}
+
+.welcome-sub {
+  margin-top: 8px;
+  font-size: 15px;
+  color: #c7d0e0;
+}
+
+.welcome-divider {
+  margin-top: 14px;
+  font-size: 12px;
+  color: #f0c75e;
+  letter-spacing: 1px;
+}
+
+.welcome-footer {
+  position: absolute;
+  bottom: 36px;
+  left: 0;
+  right: 0;
+  color: #8e9ab4;
+  font-size: 12px;
+}
+
+.welcome-version {
+  margin-top: 4px;
+  font-size: 11px;
+  color: #6c7790;
+  direction: ltr;
+}
+
+/* ==================== دکمه‌های آیکونیِ هدر ==================== */
+.icon-btn {
+  background: rgba(255, 255, 255, 0.12);
+  border: none;
+  color: #fff;
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  font-size: 18px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.icon-btn:active { background: rgba(255, 255, 255, 0.22); }
+
+/* ==================== منوهای کشویی دو طرفه ==================== */
+.drawer-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(10, 15, 25, 0.55);
+  z-index: 2500;
+  animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+.drawer {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 80%;
+  max-width: 320px;
+  background: #fff;
+  overflow-y: auto;
+  box-shadow: 0 0 40px rgba(0, 0, 0, 0.3);
+  padding-bottom: 20px;
+}
+
+.drawer-right { right: 0; animation: slideFromRight 0.28s ease; }
+.drawer-left { left: 0; animation: slideFromLeft 0.28s ease; }
+
+@keyframes slideFromRight { from { transform: translateX(100%); } to { transform: translateX(0); } }
+@keyframes slideFromLeft { from { transform: translateX(-100%); } to { transform: translateX(0); } }
+
+.drawer-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 20px 18px;
+  background: linear-gradient(135deg, #1b2540, #161d2d);
+  color: #fff;
+}
+
+.drawer-logo {
+  width: 46px;
+  height: 46px;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+}
+
+.drawer-title { font-size: 16px; font-weight: 800; }
+.drawer-sub { font-size: 12px; color: #aeb8cd; margin-top: 2px; direction: ltr; }
+
+.drawer-section-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: #9aa3b5;
+  padding: 14px 18px 6px;
+}
+
+.drawer-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 13px 18px;
+  background: none;
+  border: none;
+  border-bottom: 1px solid #f3f4f7;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  color: #2c3550;
+  cursor: pointer;
+  text-align: right;
+  text-decoration: none;
+}
+
+.drawer-item span { font-size: 18px; width: 24px; text-align: center; }
+.drawer-item:active { background: #f3f6fb; }
+
+.drawer-foot {
+  text-align: center;
+  font-size: 11px;
+  color: #aab2c2;
+  padding: 18px;
+  direction: ltr;
+}
+
+/* ==================== درباره: طراحان و خدمات ==================== */
+.about-box { text-align: center; }
+
+.about-brand {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-bottom: 8px;
+}
+
+.about-logo { width: 84px; height: 84px; border-radius: 20px; box-shadow: 0 6px 20px rgba(0,0,0,0.2); }
+.about-app { margin-top: 10px; font-size: 18px; font-weight: 800; direction: ltr; color: #1a2238; }
+.about-company { font-size: 13px; color: #667; margin-top: 2px; }
+
+.about-section-title {
+  text-align: right;
+  font-size: 12px;
+  font-weight: 800;
+  color: #2c6fc0;
+  margin: 16px 0 8px;
+  padding-bottom: 5px;
+  border-bottom: 1px solid #eef0f4;
+}
+
+.about-designer {
+  text-align: right;
+  font-size: 15px;
+  font-weight: 700;
+  color: #1a2238;
+  padding: 5px 4px;
+}
+
+.about-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 12px;
+  margin-bottom: 6px;
+  background: #f7f9fc;
+  border-radius: 12px;
+  font-size: 14px;
+  color: #1a2238;
+  text-decoration: none;
+  direction: ltr;
+  justify-content: flex-end;
+  font-weight: 600;
+}
+
+.about-row span { font-size: 16px; }
+
+.about-services {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  text-align: right;
+}
+
+.about-services li {
+  position: relative;
+  padding: 10px 22px 10px 8px;
+  font-size: 13.5px;
+  color: #2c3550;
+  border-bottom: 1px dashed #eceef2;
+  font-weight: 600;
+}
+
+.about-services li::before {
+  content: '✦';
+  position: absolute;
+  right: 2px;
+  color: #f0a93e;
+  font-size: 12px;
+}
+
+/* دکمه‌ی ویرایش تراکنش */
+.edit-trans-modal {
+  background: #5a6b8c;
+  border: none;
+  padding: 5px 10px;
+  border-radius: 20px;
+  cursor: pointer;
+  color: white;
+  font-size: 12px;
+}

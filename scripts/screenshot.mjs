@@ -10,7 +10,6 @@ const browser = await puppeteer.launch({
 const page = await browser.newPage();
 await page.setViewport({ width: 430, height: 920, deviceScaleFactor: 2 });
 
-// تزریق چند تراکنش نمونه تا بج‌ها و آمار دیده شوند
 await page.evaluateOnNewDocument(() => {
   const now = new Date();
   const k = (d) => `${now.getFullYear()}-${now.getMonth() + 1}-${d}`;
@@ -18,30 +17,39 @@ await page.evaluateOnNewDocument(() => {
     [k(5)]: { transactions: [{ id: '1', title: 'قبض برق', amount: 1850000, isPaid: false }] },
     [k(12)]: { transactions: [{ id: '2', title: 'قسط وام', amount: 10250000, isPaid: false }] },
     [k(18)]: { transactions: [{ id: '3', title: 'اجاره', amount: 25000000, isPaid: true }] },
-    [k(23)]: { transactions: [{ id: '4', title: 'اینترنت', amount: 430000, isPaid: false }] },
   };
   localStorage.setItem('calendarData', JSON.stringify(data));
   localStorage.setItem('calendarSystem', 'jalali');
 });
 
 await page.goto(URL, { waitUntil: 'networkidle0' });
-await page.waitForSelector('.calendar');
-await new Promise((r) => setTimeout(r, 600));
-await page.screenshot({ path: '/tmp/shot-main.png' });
-console.log('saved /tmp/shot-main.png');
 
-// باز کردن پنل ابزارها و بخش وام
-await page.click('.menu-btn');
-await page.waitForSelector('.accordion');
+// 1) صفحه‌ی خوش‌آمد
+await new Promise((r) => setTimeout(r, 500));
+await page.screenshot({ path: '/tmp/shot-welcome.png' });
+console.log('saved welcome');
+
+// صبر تا welcome کاملاً برود
+await page.waitForFunction(() => !document.querySelector('.welcome'), { timeout: 8000 });
 await new Promise((r) => setTimeout(r, 300));
-const opened = await page.evaluate(() => {
-  const heads = [...document.querySelectorAll('.acc-head')];
-  const loan = heads.find((h) => h.textContent.includes('وام'));
-  if (loan) { loan.click(); return true; }
-  return false;
+
+// 2) منوی راست (امکانات)
+await page.click('.icon-btn[aria-label="امکانات"]');
+await new Promise((r) => setTimeout(r, 500));
+await page.screenshot({ path: '/tmp/shot-right.png' });
+console.log('saved right drawer');
+await page.click('.drawer-overlay', { offset: { x: 5, y: 400 } }).catch(() => {});
+await new Promise((r) => setTimeout(r, 300));
+
+// 3) منوی چپ + درباره
+await page.click('.icon-btn[aria-label="درباره ما"]');
+await new Promise((r) => setTimeout(r, 400));
+await page.evaluate(() => {
+  const b = [...document.querySelectorAll('.drawer-item')].find((x) => x.textContent.includes('طراحان'));
+  if (b) b.click();
 });
 await new Promise((r) => setTimeout(r, 400));
-await page.screenshot({ path: '/tmp/shot-tools.png' });
-console.log('saved /tmp/shot-tools.png, loanOpened=', opened);
+await page.screenshot({ path: '/tmp/shot-about.png' });
+console.log('saved about');
 
 await browser.close();
