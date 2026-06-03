@@ -27,6 +27,7 @@ import {
 import logoUrl from './assets/logo.png';
 import ToolsPanel, { CalendarDateInput, type DateValue } from './Tools';
 import WelcomeScreen from './WelcomeScreen';
+import { Onboarding, WhatsNew } from './Onboarding';
 import {
   IconReport, IconBom, IconLoan, IconConvert, IconAge, IconBio, IconBmi,
   IconToday, IconUsers, IconShare, IconGlobe, IconMenu, IconInfo,
@@ -59,6 +60,15 @@ const parseFormattedNumber = (str: string): number => {
 };
 
 const SYSTEM_STORAGE_KEY = 'calendarSystem';
+
+// نسخه و فهرستِ تغییرات برای پنجره‌ی «تازه‌ها»
+const APP_VERSION = '1.0.17';
+const CHANGELOG: string[] = [
+  'نمایشِ تمام‌صفحه و هماهنگ‌شدنِ نوار وضعیت با هدر',
+  'ابزارها حالا در یک صفحه‌ی مجزا و تمام‌صفحه باز می‌شوند',
+  'راهنمای نصبِ اولیه و پنجره‌ی تغییراتِ نسخه',
+  'ظاهرِ تمیزتر و باکلاس‌ترِ فرم‌ها و آیکون‌ها',
+];
 
 function App() {
   const [calendarSystem, setCalendarSystem] = useState<CalendarSystem>(() => {
@@ -94,7 +104,12 @@ function App() {
   const [reminderTime, setReminderTime] = useState<string>('09:00');
   const [selectedTransactionForReminder, setSelectedTransactionForReminder] = useState<{ dateKey: string; transactionId: string } | null>(null);
   const [notificationPermission, setNotificationPermission] = useState<boolean>(false);
-  const [showWelcome, setShowWelcome] = useState<boolean>(true);
+  const [showOnboarding, setShowOnboarding] = useState<boolean>(() => !localStorage.getItem('onboardedVersion'));
+  const [showWhatsNew, setShowWhatsNew] = useState<boolean>(() => {
+    const onboarded = localStorage.getItem('onboardedVersion');
+    return !!onboarded && localStorage.getItem('lastSeenVersion') !== APP_VERSION;
+  });
+  const [showWelcome, setShowWelcome] = useState<boolean>(() => !!localStorage.getItem('onboardedVersion'));
   const [showRightDrawer, setShowRightDrawer] = useState<boolean>(false);
   const [showLeftDrawer, setShowLeftDrawer] = useState<boolean>(false);
   const [showAboutModal, setShowAboutModal] = useState<boolean>(false);
@@ -143,11 +158,10 @@ function App() {
     localStorage.setItem('theme', theme);
   }, [theme]);
 
-  // هم‌رنگ‌کردن نوار وضعیتِ گوشی با هدرِ سرمه‌ای (آیکون‌های روشن)
+  // نوار وضعیتِ گوشی روی هدرِ سرمه‌ای می‌افتد (بدون نوار سفید)، با آیکون‌های روشن
   useEffect(() => {
     if (!Capacitor.isNativePlatform()) return;
-    StatusBar.setOverlaysWebView({ overlay: false }).catch(() => {});
-    StatusBar.setBackgroundColor({ color: '#16202d' }).catch(() => {});
+    StatusBar.setOverlaysWebView({ overlay: true }).catch(() => {});
     StatusBar.setStyle({ style: Style.Dark }).catch(() => {});
   }, []);
 
@@ -564,6 +578,20 @@ function App() {
   return (
     <div className="app" onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
       {showWelcome && <WelcomeScreen onDone={() => setShowWelcome(false)} />}
+      {showOnboarding && (
+        <Onboarding onDone={() => {
+          localStorage.setItem('onboardedVersion', APP_VERSION);
+          localStorage.setItem('lastSeenVersion', APP_VERSION);
+          setShowOnboarding(false);
+        }} />
+      )}
+      {showWhatsNew && (
+        <WhatsNew
+          version={APP_VERSION}
+          items={CHANGELOG}
+          onClose={() => { localStorage.setItem('lastSeenVersion', APP_VERSION); setShowWhatsNew(false); }}
+        />
+      )}
 
       <div className="header">
         <button className="icon-btn" onClick={() => setShowRightDrawer(true)} aria-label="امکانات"><IconMenu /></button>
@@ -918,7 +946,7 @@ function App() {
               <button className={`theme-btn ${theme === 'dark' ? 'active' : ''}`} onClick={() => setTheme('dark')}>🌙 تیره</button>
             </div>
 
-            <div className="drawer-foot">نسخه ۱۴۰۵ · ۱.۰.۱۶</div>
+            <div className="drawer-foot">نسخه ۱۴۰۵ · ۱.۰.۱۷</div>
           </aside>
         </div>
       )}

@@ -1469,13 +1469,16 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 40px;
-  height: 40px;
-  border-radius: 12px;
-  background: rgba(240, 199, 94, 0.16);
+  width: 46px;
+  height: 46px;
+  border-radius: 14px;
+  background: rgba(240, 199, 94, 0.18);
   color: #f0c75e;
   flex-shrink: 0;
+  font-size: 22px;
 }
+
+.tool-panel-icon svg { width: 27px; height: 27px; stroke-width: 1.9; }
 
 .tool-panel-head h3 {
   flex: 1;
@@ -1546,11 +1549,11 @@ body {
 
 .add-trans-btn {
   flex: 2;
-  background: linear-gradient(135deg, #2e9e5b, #1f8a4c);
+  background: linear-gradient(135deg, #1f2b4a, #161d2d);
   border: none;
-  padding: 12px;
+  padding: 13px;
   border-radius: 13px;
-  color: white;
+  color: #f3d488;
   font-size: 14px;
   cursor: pointer;
   font-weight: 700;
@@ -1558,15 +1561,15 @@ body {
 }
 .prayer-btn-modal {
   flex: 1;
-  background: #5a6b8c;
-  border: none;
-  padding: 12px;
+  background: #f3f5f9;
+  border: 1px solid #dfe3ec;
+  padding: 13px;
   border-radius: 13px;
-  color: white;
+  color: #44506a;
   font-size: 13px;
   cursor: pointer;
   font-family: inherit;
-  font-weight: 600;
+  font-weight: 700;
 }
 
 .trans-item-modal {
@@ -1584,7 +1587,14 @@ body {
   border-radius: 13px;
 }
 .add-modal-body .submit {
-  background: linear-gradient(135deg, #2e9e5b, #1f8a4c);
+  background: linear-gradient(135deg, #1f2b4a, #161d2d);
+  color: #f3d488;
+  font-weight: 700;
+  padding: 13px;
+}
+.add-modal-body .cancel {
+  background: #eef0f4;
+  color: #55617a;
   font-weight: 700;
   padding: 13px;
 }
@@ -1728,3 +1738,129 @@ body.dark .prayer-row strong { color: #7aa2e3; }
 /* فوتر در حالت تیره */
 body.dark .app-footer { background: #0f1623; border-color: #243049; color: #8893a7; }
 body.dark .footer-text-en, body.dark .footer-copyright { color: #6c7790; }
+
+/* ==================== ابزارها: صفحه‌ی مجزا و تمام‌صفحه ==================== */
+.modal-box.tool-panel {
+  width: 100%;
+  max-width: 100%;
+  height: 100vh;
+  height: 100dvh;
+  max-height: 100dvh;
+  border-radius: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+.tool-panel .tool-panel-head {
+  padding-top: calc(18px + env(safe-area-inset-top));
+}
+.tool-panel .tool-panel-body {
+  flex: 1;
+  max-height: none;
+  padding-bottom: calc(24px + env(safe-area-inset-bottom));
+}
+@media (min-width: 560px) {
+  .modal-box.tool-panel {
+    width: 92%;
+    max-width: 480px;
+    height: auto;
+    max-height: 88vh;
+    border-radius: 20px;
+  }
+  .tool-panel .tool-panel-head { padding-top: 18px; }
+  .tool-panel .tool-panel-body { padding-bottom: 18px; }
+}
+
+/* ایمنی فضای پایین برای فوتر در حالت تمام‌صفحه */
+.app-footer { padding-bottom: calc(16px + env(safe-area-inset-bottom)); }
+
+/* ==================== راهنمای نصب اول ==================== */
+.onb {
+  position: fixed;
+  inset: 0;
+  z-index: 3500;
+  background: radial-gradient(circle at 50% 32%, #20305a 0%, #161d2d 60%, #0d121d 100%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: calc(40px + env(safe-area-inset-top)) 26px calc(30px + env(safe-area-inset-bottom));
+  text-align: center;
+  color: #fff;
+}
+.onb-skip {
+  position: absolute;
+  top: calc(18px + env(safe-area-inset-top));
+  left: 18px;
+  background: rgba(255,255,255,0.12);
+  border: none;
+  color: #cdd5e6;
+  padding: 7px 14px;
+  border-radius: 16px;
+  font-family: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.onb-card {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  animation: onbIn 0.35s ease;
+}
+@keyframes onbIn { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
+.onb-logo { width: 150px; height: 150px; border-radius: 32px; box-shadow: 0 16px 44px rgba(0,0,0,0.5); margin-bottom: 8px; }
+.onb-icon {
+  width: 120px; height: 120px; border-radius: 30px;
+  background: rgba(240,199,94,0.14);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 58px; margin-bottom: 8px;
+}
+.onb-title { font-size: 23px; font-weight: 800; margin: 22px 0 0; }
+.onb-text { font-size: 15px; line-height: 2; color: #c2cbdc; margin: 14px 0 0; max-width: 340px; }
+.onb-bottom { width: 100%; max-width: 360px; }
+.onb-dots { display: flex; gap: 8px; justify-content: center; margin-bottom: 18px; }
+.onb-dot { width: 8px; height: 8px; border-radius: 50%; background: rgba(255,255,255,0.25); transition: all 0.2s; }
+.onb-dot.active { background: #f0c75e; width: 22px; border-radius: 4px; }
+.onb-next {
+  width: 100%;
+  padding: 15px;
+  border: none;
+  border-radius: 15px;
+  background: linear-gradient(135deg, #f0c75e, #d8a73a);
+  color: #21305a;
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: 800;
+  cursor: pointer;
+  box-shadow: 0 8px 22px rgba(240,199,94,0.28);
+}
+
+/* ==================== تازه‌های نسخه ==================== */
+.wn-box { padding: 0; overflow: hidden; max-width: 420px; }
+.wn-body { padding: 16px 18px 18px; }
+.wn-list { list-style: none; padding: 0; margin: 0; }
+.wn-list li {
+  position: relative;
+  padding: 11px 24px 11px 6px;
+  font-size: 14px;
+  color: #2c3550;
+  border-bottom: 1px dashed #eceef2;
+  font-weight: 600;
+}
+.wn-list li::before { content: '✦'; position: absolute; right: 2px; color: #f0a93e; font-size: 13px; }
+.wn-ok {
+  width: 100%;
+  margin-top: 14px;
+  padding: 13px;
+  border: none;
+  border-radius: 13px;
+  background: linear-gradient(135deg, #1f2b4a, #161d2d);
+  color: #f3d488;
+  font-family: inherit;
+  font-weight: 800;
+  font-size: 15px;
+  cursor: pointer;
+}
+body.dark .wn-list li { color: #d6def0; border-color: #243049; }
