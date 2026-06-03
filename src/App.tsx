@@ -30,6 +30,7 @@ import ToolsPanel, { CalendarDateInput, type DateValue } from './Tools';
 import WelcomeScreen from './WelcomeScreen';
 import { Onboarding, WhatsNew } from './Onboarding';
 import FundPanel from './Fund';
+import CoachTour, { type CoachStep } from './Coach';
 import {
   IconReport, IconBom, IconLoan, IconConvert, IconAge, IconBio, IconBmi,
   IconToday, IconUsers, IconShare, IconGlobe, IconMenu, IconInfo,
@@ -88,13 +89,21 @@ const parseFormattedNumber = (str: string): number => {
 
 const SYSTEM_STORAGE_KEY = 'calendarSystem';
 
+// مراحلِ راهنمای تصویری (هایلایتِ عناصرِ واقعیِ صفحه)
+const TOUR_STEPS: CoachStep[] = [
+  { selector: '.icon-btn[aria-label="امکانات"]', title: 'منوی امکانات', text: 'از این دکمه به وام، صندوق خانوادگی، گزارش‌ها و ابزارها می‌رسید. می‌توانید انگشت را هم از لبه به داخل بکشید.' },
+  { selector: '.calendar-toggle', title: 'سه تقویم', text: 'بین تقویمِ شمسی، میلادی و قمری جابه‌جا شوید؛ تاریخِ امروز در هر سه نمایش داده می‌شود.' },
+  { selector: '.month-nav', title: 'جابه‌جایی ماه', text: 'با این دکمه‌ها ماهِ قبل/بعد را ببینید یا روی نام ماه بزنید و مستقیم انتخاب کنید.' },
+  { selector: '.calendar', title: 'ثبت روی روزها', text: 'روی هر روز بزنید تا بدهی یا قسط ثبت کنید. نگه‌داشتنِ انگشت، خلاصه‌ی بدهیِ آن روز را نشان می‌دهد.' },
+  { selector: '.month-summary', title: 'ترازِ مالی', text: 'مانده بدهی، تسویه‌شده و گردشِ کلِ این ماه را یک‌جا می‌بینید.' },
+  { selector: '.icon-btn[aria-label="درباره ما"]', title: 'درباره و پوسته', text: 'درباره‌ی ما، تغییر پوسته (روشن/تیره) و همین راهنما از این منو در دسترس است.' },
+];
+
 // نسخه و فهرستِ تغییرات برای پنجره‌ی «تازه‌ها»
-const APP_VERSION = '1.0.21';
+const APP_VERSION = '1.0.22';
 const CHANGELOG: string[] = [
-  'گزینه‌ی «چند روز قبل از سررسید» در یادآوری‌ها',
-  'ارسال یادآوریِ پرداخت به اعضای صندوق با واتساپ، پیامک یا اشتراک‌گذاری (ایتا/تلگرام)',
-  'افزودنِ شماره‌ی موبایلِ اعضا',
-  'ماشین‌حسابِ صندوق: مبلغِ هدف و تعداد نفرات → واریزیِ ماهانه',
+  'راهنمای تصویری: صفحه تیره می‌شود و هر بخش روشن و توضیح داده می‌شود (اختیاری و قابل رد کردن)',
+  'دسترسی به راهنمای تصویری از منوی «درباره ما»',
 ];
 
 function App() {
@@ -150,6 +159,7 @@ function App() {
   const [dayPreview, setDayPreview] = useState<{ x: number; y: number; day: number } | null>(null);
   const [dialog, setDialog] = useState<{ type: 'alert' | 'confirm'; message: string; onYes?: () => void } | null>(null);
   const [exitHint, setExitHint] = useState<boolean>(false);
+  const [showTour, setShowTour] = useState<boolean>(false);
   const touchStart = useRef<{ x: number; y: number } | null>(null);
   const longPressTimer = useRef<number | null>(null);
   const suppressClick = useRef<boolean>(false);
@@ -208,6 +218,7 @@ function App() {
   useEffect(() => {
     if (!Capacitor.isNativePlatform()) return;
     const closers: [boolean, () => void][] = [
+      [showTour, () => { setShowTour(false); localStorage.setItem('tourSeen', '1'); }],
       [!!dialog, () => setDialog(null)],
       [showAddModal, () => { setShowAddModal(false); setEditingTxId(null); }],
       [showReminderModal, () => setShowReminderModal(false)],
@@ -232,7 +243,7 @@ function App() {
       else { lastBack.current = now; setExitHint(true); setTimeout(() => setExitHint(false), 2000); }
     });
     return () => { sub.then((h) => h.remove()); };
-  }, [dialog, showAddModal, showReminderModal, showPrayerModal, showToolsModal, selectedLoanId, showLoansModal, showFundModal, showAboutModal, showYearMonthModal, showDayModal, showRightDrawer, showLeftDrawer, showWhatsNew, showOnboarding]);
+  }, [showTour, dialog, showAddModal, showReminderModal, showPrayerModal, showToolsModal, selectedLoanId, showLoansModal, showFundModal, showAboutModal, showYearMonthModal, showDayModal, showRightDrawer, showLeftDrawer, showWhatsNew, showOnboarding]);
 
   // هنگام تغییر تقویم، انتخابِ نظام را ذخیره و ماهِ در حال نمایش را تبدیل می‌کنیم
   const switchCalendar = (system: CalendarSystem) => {
@@ -746,7 +757,12 @@ function App() {
           localStorage.setItem('onboardedVersion', APP_VERSION);
           localStorage.setItem('lastSeenVersion', APP_VERSION);
           setShowOnboarding(false);
+          // راهنمای تصویریِ اختیاری، یک‌بار پس از معرفی
+          if (!localStorage.getItem('tourSeen')) setTimeout(() => setShowTour(true), 500);
         }} />
+      )}
+      {showTour && (
+        <CoachTour steps={TOUR_STEPS} onClose={() => { setShowTour(false); localStorage.setItem('tourSeen', '1'); }} />
       )}
       {showWhatsNew && (
         <WhatsNew
@@ -1192,6 +1208,7 @@ function App() {
               <button className="drawer-close" onClick={() => setShowLeftDrawer(false)} aria-label="بستن">✕</button>
             </div>
             <button className="drawer-item" onClick={() => { setShowLeftDrawer(false); setShowAboutModal(true); }}><span className="di-icon"><IconUsers /></span> طراحان و خدمات</button>
+            <button className="drawer-item" onClick={() => { setShowLeftDrawer(false); setTimeout(() => setShowTour(true), 250); }}><span className="di-icon"><IconInfo /></span> راهنمای تصویری</button>
             <button className="drawer-item" onClick={shareApp}><span className="di-icon"><IconShare /></span> ارسال نرم‌افزار</button>
             <a className="drawer-item" href="https://www.simorghai.com" target="_blank" rel="noopener noreferrer"><span className="di-icon"><IconGlobe /></span> وب‌سایت سیمرغ</a>
 
@@ -1201,7 +1218,7 @@ function App() {
               <button className={`theme-btn ${theme === 'dark' ? 'active' : ''}`} onClick={() => setTheme('dark')}>🌙 تیره</button>
             </div>
 
-            <div className="drawer-foot">نسخه ۱۴۰۵ · ۱.۰.۲۱</div>
+            <div className="drawer-foot">نسخه ۱۴۰۵ · ۱.۰.۲۲</div>
           </aside>
         </div>
       )}
