@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import './App.css';
 import { LocalNotifications } from '@capacitor/local-notifications';
+import { Share } from '@capacitor/share';
 import {
   type CalendarSystem,
   CALENDAR_SYSTEMS,
@@ -113,7 +114,10 @@ function App() {
   const [showAboutModal, setShowAboutModal] = useState<boolean>(false);
   const [toolsInitialSection, setToolsInitialSection] = useState<string>('report');
   const [editingTxId, setEditingTxId] = useState<string | null>(null);
+  const [dayPreview, setDayPreview] = useState<{ x: number; y: number; day: number } | null>(null);
   const touchStart = useRef<{ x: number; y: number } | null>(null);
+  const longPressTimer = useRef<number | null>(null);
+  const suppressClick = useRef<boolean>(false);
 
   // درخواست مجوز نوتیفیکیشن در شروع برنامه
   useEffect(() => {
@@ -253,7 +257,7 @@ function App() {
             title: '📌 یادآوری قسط',
             body: `${transaction.title} - مبلغ: ${formatNumber(transaction.amount)} تومان`,
             id: parseInt(transaction.id) % 1000000,
-            schedule: { at: reminderDateTime },
+            schedule: { at: reminderDateTime, allowWhileIdle: true },
             sound: null,
             attachments: null,
             actionTypeId: '',
@@ -334,6 +338,28 @@ function App() {
     setShowToolsModal(true);
   };
 
+  // اشتراک‌گذاری نرم‌افزار (شیت اشتراک‌گذاری بومی، با fallback وب)
+  const shareApp = async () => {
+    setShowLeftDrawer(false);
+    const data = {
+      title: 'simorgh-ledger',
+      text: 'دفترکل و تقویم هوشمند سیمرغ — شمسی، میلادی و قمری',
+      url: 'https://www.simorghai.com',
+      dialogTitle: 'اشتراک‌گذاری simorgh-ledger',
+    };
+    try {
+      await Share.share(data);
+    } catch {
+      try {
+        if (navigator.share) await navigator.share(data);
+        else {
+          await navigator.clipboard?.writeText('simorgh-ledger\nwww.simorghai.com');
+          alert('لینک نرم‌افزار کپی شد:\nwww.simorghai.com');
+        }
+      } catch { /* کاربر منصرف شد */ }
+    }
+  };
+
   // تایید یادآوری
   const confirmReminder = async () => {
     if (!selectedTransactionForReminder || !reminderTime) {
@@ -387,10 +413,30 @@ function App() {
   };
 
   const openDayDetails = (year: number, month: number, day: number) => {
+    if (suppressClick.current) { suppressClick.current = false; return; }
+    setDayPreview(null);
     const dateKey = getKey(year, month, day);
     setSelectedDate(dateKey);
     setSelectedDayNum(day);
     setShowDayModal(true);
+  };
+
+  // پیش‌نمایشِ بدهی‌های روز هنگام هاور (دسکتاپ) یا نگه‌داشتنِ انگشت (موبایل)
+  const showDayPreview = (el: HTMLElement, day: number) => {
+    if (getDayTransactions(currentYear, currentMonth, day).length === 0) return;
+    const r = el.getBoundingClientRect();
+    setDayPreview({ x: r.left + r.width / 2, y: r.top, day });
+  };
+  const hideDayPreview = () => setDayPreview(null);
+  const startLongPress = (el: HTMLElement, day: number) => {
+    clearLongPress();
+    longPressTimer.current = window.setTimeout(() => {
+      suppressClick.current = true;
+      showDayPreview(el, day);
+    }, 420);
+  };
+  const clearLongPress = () => {
+    if (longPressTimer.current) { clearTimeout(longPressTimer.current); longPressTimer.current = null; }
   };
 
   const openPrayerTimes = (day: number) => {
@@ -451,6 +497,11 @@ function App() {
           key={d}
           className={`day ${debt > 0 ? 'has-debt' : ''} ${dayIsToday ? 'today' : ''} ${isFriday ? 'friday' : ''}`}
           onClick={() => openDayDetails(currentYear, currentMonth, d)}
+          onMouseEnter={(e) => showDayPreview(e.currentTarget, d)}
+          onMouseLeave={hideDayPreview}
+          onTouchStart={(e) => startLongPress(e.currentTarget, d)}
+          onTouchEnd={() => { clearLongPress(); hideDayPreview(); }}
+          onTouchMove={() => { clearLongPress(); hideDayPreview(); }}
         >
           <span className="day-num">{d}</span>
           {debt > 0 && (
@@ -494,8 +545,8 @@ function App() {
     const dy = t.clientY - touchStart.current.y;
     touchStart.current = null;
     if (Math.abs(dx) > 70 && Math.abs(dx) > Math.abs(dy) * 1.8) {
-      if (dx > 0) setShowRightDrawer(true);
-      else setShowLeftDrawer(true);
+      if (dx > 0) setShowLeftDrawer(true);
+      else setShowRightDrawer(true);
     }
   };
 
@@ -569,6 +620,28 @@ function App() {
         {renderDays()}
       </div>
 
+      {/* پیش‌نمایشِ بدهی‌های روز (هاور/نگه‌داشتن) */}
+      {dayPreview && (() => {
+        const items = getDayTransactions(currentYear, currentMonth, dayPreview.day);
+        const debt = getDayDebt(currentYear, currentMonth, dayPreview.day);
+        return (
+          <div className="day-preview" style={{ left: dayPreview.x, top: dayPreview.y }}>
+            <div className="dp-title">{dayPreview.day} {months[currentMonth]}</div>
+            {items.map((t) => (
+              <div key={t.id} className={`dp-row ${t.isPaid ? 'paid' : ''}`}>
+                <span className={`dp-dot ${t.isPaid ? 'paid' : 'debt'}`} />
+                <span className="dp-name">{t.title}</span>
+                <span className="dp-amount">{formatNumber(t.amount)}</span>
+              </div>
+            ))}
+            <div className="dp-foot">
+              <span>مانده بدهی</span>
+              <strong>{formatNumber(debt)} تومان</strong>
+            </div>
+          </div>
+        );
+      })()}
+
       {/* تراز مالیِ ماه */}
       <div className="month-summary">
         <div className="ms-title">ترازِ مالیِ {months[currentMonth]} {currentYear}</div>
@@ -638,13 +711,15 @@ function App() {
       {showDayModal && selectedDate && selectedDayNum && (
         <div className="modal" onClick={() => setShowDayModal(false)}>
           <div className="modal-box day-modal" onClick={e => e.stopPropagation()}>
-            <div className="modal-header">
-              <h3>جزئیات روز {selectedDayNum} {months[currentMonth]}</h3>
+            <div className="tool-panel-head">
+              <span className="tool-panel-icon"><IconBom /></span>
+              <h3>{selectedDayNum} {months[currentMonth]} {currentYear}</h3>
               <button className="close-modal" onClick={() => setShowDayModal(false)}>✕</button>
             </div>
-            
+
+            <div className="day-modal-body">
             <div className="day-debt-summary">
-              <span>مجموع بدهی این روز:</span>
+              <span>مجموع بدهی این روز</span>
               <strong>{formatNumber(selectedDayDebt)} تومان</strong>
             </div>
 
@@ -688,14 +763,20 @@ function App() {
                 ))
               )}
             </div>
+            </div>
           </div>
         </div>
       )}
 
       {showAddModal && (
         <div className="modal" onClick={() => { setShowAddModal(false); setEditingTxId(null); }}>
-          <div className="modal-box" onClick={e => e.stopPropagation()}>
-            <h3>{editingTxId ? '✏️ ویرایش تراکنش' : '➕ افزودن تراکنش جدید'}</h3>
+          <div className="modal-box add-modal" onClick={e => e.stopPropagation()}>
+            <div className="tool-panel-head">
+              <span className="tool-panel-icon"><IconLoan /></span>
+              <h3>{editingTxId ? 'ویرایش تراکنش' : 'افزودن تراکنش'}</h3>
+              <button className="close-modal" onClick={() => { setShowAddModal(false); setEditingTxId(null); if (editingTxId) setShowDayModal(true); }}>✕</button>
+            </div>
+            <div className="add-modal-body">
             <input
               type="text"
               placeholder="عنوان (مثال: قبوض آب و برق)"
@@ -713,6 +794,7 @@ function App() {
             <div className="modal-btns">
               <button className="submit" onClick={addTransaction}>{editingTxId ? 'ذخیره' : 'ثبت'}</button>
               <button className="cancel" onClick={() => { setShowAddModal(false); setEditingTxId(null); if (editingTxId) setShowDayModal(true); }}>انصراف</button>
+            </div>
             </div>
           </div>
         </div>
@@ -791,14 +873,9 @@ function App() {
               <button className="drawer-close" onClick={() => setShowLeftDrawer(false)} aria-label="بستن">✕</button>
             </div>
             <button className="drawer-item" onClick={() => { setShowLeftDrawer(false); setShowAboutModal(true); }}><span className="di-icon"><IconUsers /></span> طراحان و خدمات</button>
-            <button className="drawer-item" onClick={() => {
-              const data = { title: 'simorgh-ledger', text: 'دفترکل و تقویم هوشمند سیمرغ', url: 'https://www.simorghai.com' };
-              if (navigator.share) navigator.share(data).catch(() => {});
-              else alert('www.simorghai.com');
-              setShowLeftDrawer(false);
-            }}><span className="di-icon"><IconShare /></span> ارسال نرم‌افزار</button>
+            <button className="drawer-item" onClick={shareApp}><span className="di-icon"><IconShare /></span> ارسال نرم‌افزار</button>
             <a className="drawer-item" href="https://www.simorghai.com" target="_blank" rel="noopener noreferrer"><span className="di-icon"><IconGlobe /></span> وب‌سایت سیمرغ</a>
-            <div className="drawer-foot">نسخه ۱۴۰۵ · ۱.۰.۱۲</div>
+            <div className="drawer-foot">نسخه ۱۴۰۵ · ۱.۰.۱۳</div>
           </aside>
         </div>
       )}
