@@ -88,12 +88,11 @@ const parseFormattedNumber = (str: string): number => {
 const SYSTEM_STORAGE_KEY = 'calendarSystem';
 
 // نسخه و فهرستِ تغییرات برای پنجره‌ی «تازه‌ها»
-const APP_VERSION = '1.0.19';
+const APP_VERSION = '1.0.20';
 const CHANGELOG: string[] = [
-  'وام‌های نام‌دار: هر وام را نام بگذارید و در «وام‌های من» مانده و پرداختی‌اش را ببینید',
-  'یادآوری برای هر قسطِ وام',
-  'صندوقِ خانوادگی (قرض‌الحسنه گردشی) با اعضا و قرعه‌کشیِ ماهانه',
-  'رفعِ بیرون‌زدنِ متنِ پیش‌نمایشِ روز از لبه‌ی صفحه',
+  'رفعِ اشکالِ قرعه‌کشیِ دوره‌های بعدیِ صندوق (برنده‌ی قبلی هم واریز می‌کند ولی دوباره برنده نمی‌شود)',
+  'گزارشِ صندوق: پرداختی و مانده‌ی هر نفر تا پایان دوره + توضیحِ ساده',
+  'ثبتِ واریزی‌های صندوق به‌صورت یادآور در تقویم',
 ];
 
 function App() {
@@ -304,6 +303,20 @@ function App() {
   };
 
   const saveFunds = (f: Fund[]) => { localStorage.setItem('funds', JSON.stringify(f)); setFunds(f); };
+
+  // ثبتِ واریزی‌های ماهانه‌ی صندوق به‌عنوان یادآور در تقویمِ کاربر
+  const addFundDeposits = (fundName: string, amount: number, count: number) => {
+    const t = getToday(calendarSystem);
+    const entries: { key: string; title: string; amount: number }[] = [];
+    for (let k = 0; k < count; k++) {
+      const sh = shiftMonth(calendarSystem, t.year, t.month, k);
+      const md = getMonthDays(calendarSystem, sh.year, sh.month);
+      const day = Math.min(t.day, md);
+      entries.push({ key: dateKey(calendarSystem, sh.year, sh.month, day), title: `واریزی صندوق ${fundName}`, amount });
+    }
+    addInstallments(entries);
+    notify(`${count} واریزی در تقویم ثبت شد`);
+  };
 
   // باز کردن یادآوری برای یک تراکنشِ موجود (قسط/وام)
   const openReminderFor = (dKey: string, tx: Transaction) => {
@@ -1110,7 +1123,7 @@ function App() {
 
       {/* صندوق خانوادگی */}
       {showFundModal && (
-        <FundPanel funds={funds} onChange={saveFunds} onClose={() => setShowFundModal(false)} confirm={askConfirm} />
+        <FundPanel funds={funds} onChange={saveFunds} onClose={() => setShowFundModal(false)} confirm={askConfirm} onAddDeposits={addFundDeposits} />
       )}
 
       {/* منوی راست: امکانات و ابزارها */}
@@ -1165,7 +1178,7 @@ function App() {
               <button className={`theme-btn ${theme === 'dark' ? 'active' : ''}`} onClick={() => setTheme('dark')}>🌙 تیره</button>
             </div>
 
-            <div className="drawer-foot">نسخه ۱۴۰۵ · ۱.۰.۱۹</div>
+            <div className="drawer-foot">نسخه ۱۴۰۵ · ۱.۰.۲۰</div>
           </aside>
         </div>
       )}

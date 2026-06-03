@@ -13,11 +13,13 @@ interface Props {
   onChange: (f: Fund[]) => void;
   onClose: () => void;
   confirm: (msg: string, onYes: () => void) => void;
+  onAddDeposits: (fundName: string, amount: number, count: number) => void;
 }
 
-export default function FundPanel({ funds, onChange, onClose, confirm }: Props) {
+export default function FundPanel({ funds, onChange, onClose, confirm, onAddDeposits }: Props) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  const [view, setView] = useState<'round' | 'report'>('round');
   const [newName, setNewName] = useState('');
   const [newAmount, setNewAmount] = useState('');
   const [members, setMembers] = useState<string[]>([]);
@@ -89,60 +91,99 @@ export default function FundPanel({ funds, onChange, onClose, confirm }: Props) 
     const allPaid = inProgress && fund.members.every((m) => cur.paid[m]);
     const payout = fund.monthlyAmount * fund.members.length;
     const roundNo = winners.length + (inProgress ? 1 : 0);
+    const totalRounds = fund.members.length; // هر نفر یک‌بار دریافت می‌کند
 
     return (
       <div className="modal" onClick={onClose}>
         <div className="modal-box tool-panel" onClick={(e) => e.stopPropagation()}>
           <div className="tool-panel-head">
-            <button className="close-modal" onClick={() => { setSelectedId(null); setDrawResult(null); }}>‹</button>
+            <button className="close-modal" onClick={() => { setSelectedId(null); setDrawResult(null); setView('round'); }}>‹</button>
             <h3>{fund.name}</h3>
             <button className="close-modal" onClick={onClose}>✕</button>
           </div>
           <div className="tool-panel-body">
+            <div className="mini-toggle">
+              <button type="button" className={`mini-toggle-btn ${view === 'round' ? 'active' : ''}`} onClick={() => setView('round')}>دوره‌ی جاری</button>
+              <button type="button" className={`mini-toggle-btn ${view === 'report' ? 'active' : ''}`} onClick={() => setView('report')}>گزارش صندوق</button>
+            </div>
+
             <div className="tool-result">
               <div className="tool-result-row"><span>واریزی ماهانه‌ی هر نفر</span><strong>{fmt(fund.monthlyAmount)} تومان</strong></div>
               <div className="tool-result-row"><span>تعداد اعضا</span><strong>{fund.members.length} نفر</strong></div>
-              <div className="tool-result-row closing"><span>مبلغِ هر قرعه (پرداختی به برنده)</span><strong>{fmt(payout)} تومان</strong></div>
+              <div className="tool-result-row closing"><span>مبلغِ هر قرعه (به برنده)</span><strong>{fmt(payout)} تومان</strong></div>
             </div>
 
-            {drawResult && (
-              <div className="fund-draw">🎉 برنده‌ی این دوره: <strong>{drawResult}</strong></div>
-            )}
+            {view === 'round' ? (
+              <>
+                {drawResult && (
+                  <div className="fund-draw">🎉 برنده‌ی این دوره: <strong>{drawResult}</strong></div>
+                )}
 
-            {remaining.length === 0 ? (
-              <div className="loan-success">✅ همه‌ی اعضا برنده شدند؛ دوره‌ی صندوق کامل شد</div>
+                {remaining.length === 0 ? (
+                  <div className="loan-success">✅ همه‌ی اعضا برنده شدند؛ دوره‌ی صندوق کامل شد</div>
+                ) : (
+                  <>
+                    <div className="loan-sched-head">
+                      <span>دوره‌ی {roundNo} — واریزی‌ها</span>
+                      <span className="loan-sched-hint">{remaining.length} نفر هنوز برنده نشده</span>
+                    </div>
+                    <div className="fund-members">
+                      {fund.members.map((m) => {
+                        const won = winners.includes(m);
+                        return (
+                          <button key={m} className={`fund-member ${cur.paid[m] ? 'paid' : ''} ${won ? 'won' : ''}`} onClick={() => togglePaid(m)}>
+                            <span className="fm-check">{cur.paid[m] ? '✓' : '○'}</span>
+                            <span className="fm-name">{m} {won && <span className="fm-trophy">🏆 برنده</span>}</span>
+                            <span className="fm-amt">{fmt(fund.monthlyAmount)}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <button className="loan-submit" disabled={!allPaid} onClick={draw}>
+                      {allPaid ? 'قرعه‌کشی این دوره' : 'تا همه واریز نکنند قرعه‌کشی فعال نیست'}
+                    </button>
+                  </>
+                )}
+
+                {winners.length > 0 && (
+                  <>
+                    <div className="loan-sched-head"><span>درآمدها (برندگان)</span></div>
+                    <div className="tool-result">
+                      {fund.rounds.filter((r) => r.winner).map((r, i) => (
+                        <div key={i} className="tool-result-row"><span>دوره {i + 1} — {r.winner}</span><strong className="fund-income">+{fmt(payout)}</strong></div>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </>
             ) : (
               <>
-                <div className="loan-sched-head">
-                  <span>دوره‌ی {roundNo} — واریزی‌ها</span>
-                  <span className="loan-sched-hint">{remaining.length} نفر باقی‌مانده</span>
+                <div className="fund-help">
+                  هر ماه هر نفر <strong>{fmt(fund.monthlyAmount)}</strong> واریز می‌کند و جمعاً <strong>{fmt(payout)}</strong> به یک نفر می‌رسد.
+                  در پایانِ <strong>{totalRounds} ماه</strong>، همه یک‌بار دریافت کرده‌اند و هر نفر روی‌هم <strong>{fmt(payout)}</strong> داده و گرفته است (بدون سود).
                 </div>
-                <div className="fund-members">
+                <div className="loan-sched-head"><span>وضعیتِ هر نفر</span><span className="loan-sched-hint">تا پایان دوره</span></div>
+                <div className="loan-detail-list">
                   {fund.members.map((m) => {
+                    const paidRounds = fund.rounds.filter((r) => r.paid[m]).length;
+                    const paidAmt = paidRounds * fund.monthlyAmount;
+                    const obligation = totalRounds * fund.monthlyAmount;
+                    const rem = Math.max(0, obligation - paidAmt);
                     const won = winners.includes(m);
                     return (
-                      <button key={m} className={`fund-member ${cur.paid[m] ? 'paid' : ''} ${won ? 'won' : ''}`} onClick={() => !won && togglePaid(m)} disabled={won}>
-                        <span className="fm-check">{cur.paid[m] ? '✓' : won ? '🏆' : '○'}</span>
-                        <span className="fm-name">{m}</span>
-                        <span className="fm-amt">{won ? 'برنده شد' : fmt(fund.monthlyAmount)}</span>
-                      </button>
+                      <div key={m} className="loan-detail-row">
+                        <div className="ld-info">
+                          <span className="ld-amt">{m} {won && '🏆'}</span>
+                          <span className="ld-date">پرداختی: {fmt(paidAmt)} · مانده: {fmt(rem)}</span>
+                        </div>
+                        <span className={`fund-status ${won ? 'got' : 'wait'}`}>{won ? 'دریافت کرده' : 'در انتظار'}</span>
+                      </div>
                     );
                   })}
                 </div>
-                <button className="loan-submit" disabled={!allPaid} onClick={draw}>
-                  {allPaid ? 'قرعه‌کشی این دوره' : 'تا همه واریز نکنند قرعه‌کشی فعال نیست'}
+                <button className="loan-submit" onClick={() => onAddDeposits(fund.name, fund.monthlyAmount, Math.max(1, totalRounds - winners.length))}>
+                  افزودنِ واریزی‌های من به تقویم (یادآور)
                 </button>
-              </>
-            )}
-
-            {winners.length > 0 && (
-              <>
-                <div className="loan-sched-head"><span>درآمدها (برندگان)</span></div>
-                <div className="tool-result">
-                  {fund.rounds.filter((r) => r.winner).map((r, i) => (
-                    <div key={i} className="tool-result-row"><span>دوره {i + 1} — {r.winner}</span><strong className="fund-income">+{fmt(payout)}</strong></div>
-                  ))}
-                </div>
               </>
             )}
 

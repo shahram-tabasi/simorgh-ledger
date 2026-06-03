@@ -2044,3 +2044,20 @@ body.dark .ld-date { color: #9aa6bf; }
 body.dark .ld-amt { color: #e3e9f4; }
 body.dark .fund-chip { background: #243049; color: #cfd7e8; }
 body.dark .ld-btn.rem { background: #243049; }
+
+/* گزارش و وضعیتِ صندوق */
+.fund-help {
+  background: #eef5fe; border: 1px solid #d7e6fb; border-radius: 13px;
+  padding: 13px 14px; font-size: 13px; line-height: 2.1; color: #335a86; margin-bottom: 14px;
+}
+.fund-help strong { color: #1c4a7e; }
+.fm-trophy { font-size: 11px; color: #b5840f; font-weight: 700; margin-right: 4px; }
+.fund-status {
+  font-size: 11px; font-weight: 800; padding: 5px 10px; border-radius: 14px; flex-shrink: 0;
+}
+.fund-status.got { background: #fff3cf; color: #8a6a14; }
+.fund-status.wait { background: #eef2f8; color: #5a6b8c; }
+body.dark .fund-help { background: #12233a; border-color: #234063; color: #aecbe9; }
+body.dark .fund-help strong { color: #cfe4fb; }
+body.dark .fund-status.got { background: #2a2410; color: #d9b34e; }
+body.dark .fund-status.wait { background: #243049; color: #aeb8cd; }
