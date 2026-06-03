@@ -534,23 +534,27 @@ function App() {
         {renderDays()}
       </div>
 
-      {/* سه دسته‌بندی جدید */}
-      <div className="stats-container">
-        <div className="stat-card remaining">
-          <span className="stat-label">💰 باقی‌مانده</span>
-          <strong className="stat-value">{formatNumber(getMonthRemaining())}</strong>
-          <span className="stat-unit">تومان</span>
+      {/* تراز مالیِ ماه */}
+      <div className="month-summary">
+        <div className="ms-title">ترازِ مالیِ {months[currentMonth]} {currentYear}</div>
+        <div className="ms-cols">
+          <div className="ms-col">
+            <span className="ms-dot debt" />
+            <span className="ms-label">مانده بدهی</span>
+            <strong className="ms-value debt">{formatNumber(getMonthRemaining())}</strong>
+          </div>
+          <div className="ms-col">
+            <span className="ms-dot paid" />
+            <span className="ms-label">تسویه‌شده</span>
+            <strong className="ms-value paid">{formatNumber(getMonthPaid())}</strong>
+          </div>
+          <div className="ms-col">
+            <span className="ms-dot total" />
+            <span className="ms-label">گردش ماه</span>
+            <strong className="ms-value total">{formatNumber(getMonthTotal())}</strong>
+          </div>
         </div>
-        <div className="stat-card paid">
-          <span className="stat-label">✅ پرداخت شده</span>
-          <strong className="stat-value">{formatNumber(getMonthPaid())}</strong>
-          <span className="stat-unit">تومان</span>
-        </div>
-        <div className="stat-card total">
-          <span className="stat-label">📊 کل ماه</span>
-          <strong className="stat-value">{formatNumber(getMonthTotal())}</strong>
-          <span className="stat-unit">تومان</span>
-        </div>
+        <div className="ms-unit">مبالغ به تومان</div>
       </div>
 
       <footer className="app-footer">
@@ -757,7 +761,7 @@ function App() {
               setShowLeftDrawer(false);
             }}><span>📤</span> ارسال نرم‌افزار</button>
             <a className="drawer-item" href="https://www.simorghai.com" target="_blank" rel="noopener noreferrer"><span>🌐</span> وب‌سایت سیمرغ</a>
-            <div className="drawer-foot">نسخه ۱۴۰۵ · ۱.۰.۹</div>
+            <div className="drawer-foot">نسخه ۱۴۰۵ · ۱.۰.۱۰</div>
           </aside>
         </div>
       )}

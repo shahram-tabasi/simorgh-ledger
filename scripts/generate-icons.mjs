@@ -1,6 +1,7 @@
 // تولید همه‌ی آیکون‌ها از روی لوگوی اصلیِ کاربر (public/pwa-512-NEW.png)
-// نیازمندِ sharp (فقط برای تولید آیکون، جزو وابستگی‌های برنامه نیست):
-//   npm install --no-save sharp
+// متنِ SIMORGH/LEDGER از تصویر حذف و فقط سیمرغ وسطِ یک مربعِ سرمه‌ای قرار می‌گیرد
+// تا آیکون کامل و تمیز دیده شود.
+// نیازمندِ sharp:  npm install --no-save sharp
 // اجرا: node scripts/generate-icons.mjs
 import sharp from 'sharp';
 import { mkdirSync } from 'node:fs';
@@ -8,7 +9,18 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const SRC = resolve(root, 'public/pwa-512-NEW.png');
+const ORIGINAL = resolve(root, 'public/pwa-512-NEW.png');
+const NAVY = { r: 22, g: 29, b: 45 }; // #161D2D
+
+// ۱) منبعِ تمیز: یک برشِ مربعی که فقط سیمرغِ کامل را دارد (متنِ SIMORGH/LEDGER حذف می‌شود)
+// این برش مستقیم از کارتِ سرمه‌ایِ اصلی است؛ بدون ترکیب و بدون خطِ لبه.
+const CANVAS = 1024;
+const SRC = await sharp(ORIGINAL, { limitInputPixels: false })
+  .extract({ left: 218, top: 118, width: 760, height: 760 })
+  .resize(CANVAS, CANVAS)
+  .png()
+  .toBuffer();
+void NAVY;
 
 function load() {
   return sharp(SRC, { limitInputPixels: false });
@@ -44,7 +56,7 @@ await square(512, `${pub}/pwa-512.png`);
 await square(180, `${pub}/apple-touch-icon.png`);
 await square(64, `${pub}/favicon.png`);
 
-// لوگوی هدر برنامه (کوچک برای کاهش حجم باندل)
-await square(128, resolve(root, 'src/assets/logo.png'));
+// لوگوی هدر/خوش‌آمد (کوچک برای کاهش حجم باندل)
+await square(160, resolve(root, 'src/assets/logo.png'));
 
-console.log('✅ همه‌ی آیکون‌ها از روی pwa-512-NEW.png ساخته شدند');
+console.log('✅ آیکون‌ها (فقط سیمرغ، بدون متن) از روی لوگوی اصلی ساخته شدند');
