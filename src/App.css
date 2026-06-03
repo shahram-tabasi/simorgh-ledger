@@ -1616,3 +1616,97 @@ body {
 }
 .dp-foot span { color: #aeb8cd; }
 .dp-foot strong { color: #f0c75e; direction: ltr; }
+
+/* ==================== انتخاب پوسته ==================== */
+.theme-switch { display: flex; gap: 8px; padding: 4px 18px 6px; }
+.theme-btn {
+  flex: 1; padding: 11px; border: 1px solid #e0e0e0; border-radius: 12px;
+  background: #f5f5f5; font-family: inherit; font-weight: 700; font-size: 13px;
+  cursor: pointer; color: #444;
+}
+.theme-btn.active { background: linear-gradient(135deg, #1b2540, #161d2d); color: #fff; border-color: #161d2d; }
+
+/* ==================== اوقات شرعی ==================== */
+.prayer-body { padding: 16px 18px 18px; }
+.prayer-loc { display: flex; gap: 10px; margin-bottom: 10px; }
+.pl-field { flex: 1; }
+.pl-field select {
+  width: 100%; padding: 11px 8px; border: 1px solid #ddd; border-radius: 11px;
+  font-family: inherit; background: #fff; text-align: center; font-size: 14px;
+}
+.prayer-date { text-align: center; font-size: 12px; color: #8a93a6; margin-bottom: 8px; font-weight: 600; }
+.prayer-list { margin: 4px 0; }
+.prayer-row span { font-size: 14px; color: #555; }
+.prayer-row strong { color: #2c6fc0; }
+.prayer-note { text-align: center; font-size: 11px; color: #9aa3b5; margin-top: 12px; }
+
+/* ==================== پوسته‌ی تیره ==================== */
+body.dark { background: #090d15; }
+body.dark .app { background: #121a28; }
+
+body.dark .calendar,
+body.dark .weekdays,
+body.dark .month-nav,
+body.dark .calendar-toggle { background: #121a28; }
+
+body.dark .day { background: #1a2434; }
+body.dark .day-num { color: #d6def0; }
+body.dark .day:hover { background: #233048; }
+body.dark .day.has-debt { background: #2a2718; }
+body.dark .day.empty { background: transparent; }
+
+body.dark .month-nav button { background: #1f2a3e; color: #cfd7e8; }
+body.dark .month-year-selector { background: #1f2a3e; color: #eef2fa; }
+body.dark .calendar-toggle-btn { background: #1a2434; border-color: #2a3850; color: #aeb8cd; }
+
+body.dark .calendar-toggle-btn.active { color: #fff; }
+body.dark .weekday { color: #8893a7; }
+
+/* مودال‌ها و سطوح سفید در حالت تیره */
+body.dark .modal-box { background: #1a2434; color: #e3e9f4; }
+body.dark .modal-header { border-color: #2a3850; }
+body.dark .modal-header h3 { color: #e9eef7; }
+body.dark .modal-box input,
+body.dark .pl-field select,
+body.dark .date-selects select,
+body.dark .bmi-inputs input,
+body.dark .tool-text-input {
+  background: #121a28; border-color: #2a3850; color: #e3e9f4;
+}
+body.dark .field-label { color: #9aa6bf; }
+
+body.dark .tool-result,
+body.dark .loan-preview { background: #121a28; border-color: #2a3850; }
+body.dark .tool-result-row { border-color: #243049; }
+body.dark .tool-result-row span { color: #9aa6bf; }
+body.dark .tool-result-row strong { color: #e3e9f4; }
+
+body.dark .mini-toggle-btn { background: #121a28; border-color: #2a3850; color: #aeb8cd; }
+
+/* تراکنش‌ها و خلاصه‌ی روز در حالت تیره */
+body.dark .trans-item-modal { background: #121a28; border-color: #2a3850; }
+body.dark .trans-title-modal { color: #e3e9f4; }
+body.dark .empty-trans { color: #7d869c; }
+
+/* منوهای کشویی در حالت تیره */
+body.dark .drawer { background: #1a2434; }
+body.dark .drawer-item { color: #d6def0; border-color: #243049; }
+body.dark .drawer-item:active { background: #233048; }
+body.dark .di-icon { color: #aab4c8; }
+body.dark .drawer-section-label { color: #7f8aa3; }
+body.dark .theme-btn { background: #121a28; border-color: #2a3850; color: #cfd7e8; }
+
+/* درباره در حالت تیره */
+body.dark .about-app { color: #e9eef7; }
+body.dark .about-designer { color: #e3e9f4; }
+body.dark .about-row { background: #121a28; color: #e3e9f4; }
+body.dark .about-services li { color: #cfd7e8; border-color: #243049; }
+
+/* اوقات شرعی در حالت تیره */
+body.dark .prayer-row { border-color: #243049; }
+body.dark .prayer-row span { color: #aeb8cd; }
+body.dark .prayer-row strong { color: #7aa2e3; }
+
+/* فوتر در حالت تیره */
+body.dark .app-footer { background: #0f1623; border-color: #243049; color: #8893a7; }
+body.dark .footer-text-en, body.dark .footer-copyright { color: #6c7790; }

@@ -29,26 +29,8 @@ import {
   IconReport, IconBom, IconLoan, IconConvert, IconAge, IconBio, IconBmi,
   IconToday, IconUsers, IconShare, IconGlobe, IconMenu, IconInfo,
 } from './icons';
-
-const getPrayerTimes = (day: number): any => {
-  const times = {
-    fajr: ['04:28', '04:26', '04:24', '04:22'],
-    sunrise: ['06:00', '05:58', '05:56', '05:54'],
-    dhuhr: ['12:00', '12:01', '12:02', '12:03'],
-    asr: ['15:30', '15:31', '15:32', '15:33'],
-    maghrib: ['18:00', '18:02', '18:04', '18:06'],
-    isha: ['19:30', '19:32', '19:34', '19:36']
-  };
-  const index = Math.floor((day - 1) / 10);
-  return {
-    fajr: times.fajr[index],
-    sunrise: times.sunrise[index],
-    dhuhr: times.dhuhr[index],
-    asr: times.asr[index],
-    maghrib: times.maghrib[index],
-    isha: times.isha[index]
-  };
-};
+import { PROVINCES, findCity } from './cities';
+import { computePrayerTimes } from './prayer';
 
 interface Transaction {
   id: string;
@@ -97,7 +79,9 @@ function App() {
   const [title, setTitle] = useState<string>('');
   const [amount, setAmount] = useState<string>('');
   const [calendarData, setCalendarData] = useState<{ [key: string]: DayData }>({});
-  const [prayerTimes, setPrayerTimes] = useState<any>(null);
+  const [theme, setTheme] = useState<'light' | 'dark'>(() => (localStorage.getItem('theme') as 'light' | 'dark') || 'light');
+  const [prayerProvince, setPrayerProvince] = useState<string>(() => localStorage.getItem('prayerProvince') || 'تهران');
+  const [prayerCity, setPrayerCity] = useState<string>(() => localStorage.getItem('prayerCity') || 'تهران');
   const [tempYear, setTempYear] = useState<number>(currentYear);
   const [tempMonth, setTempMonth] = useState<number>(currentMonth);
   const [reminderText, setReminderText] = useState<string>('');
@@ -150,6 +134,12 @@ function App() {
     setCalendarData(migrated);
     if (changed) localStorage.setItem('calendarData', JSON.stringify(migrated));
   }, []);
+
+  // اعمال و ذخیره‌ی پوسته (روشن/تیره)
+  useEffect(() => {
+    document.body.classList.toggle('dark', theme === 'dark');
+    localStorage.setItem('theme', theme);
+  }, [theme]);
 
   // هنگام تغییر تقویم، انتخابِ نظام را ذخیره و ماهِ در حال نمایش را تبدیل می‌کنیم
   const switchCalendar = (system: CalendarSystem) => {
@@ -439,10 +429,21 @@ function App() {
     if (longPressTimer.current) { clearTimeout(longPressTimer.current); longPressTimer.current = null; }
   };
 
-  const openPrayerTimes = (day: number) => {
-    const times = getPrayerTimes(day);
-    setPrayerTimes(times);
+  const openPrayerTimes = () => {
     setShowPrayerModal(true);
+  };
+
+  // انتخاب شهر برای اوقات شرعی (با ذخیره)
+  const changePrayerProvince = (province: string) => {
+    const first = PROVINCES.find((p) => p.name === province)?.cities[0]?.name || '';
+    setPrayerProvince(province);
+    setPrayerCity(first);
+    localStorage.setItem('prayerProvince', province);
+    localStorage.setItem('prayerCity', first);
+  };
+  const changePrayerCity = (city: string) => {
+    setPrayerCity(city);
+    localStorage.setItem('prayerCity', city);
   };
 
   const changeYearMonth = () => {
@@ -731,7 +732,7 @@ function App() {
                 + افزودن تراکنش
               </button>
               <button className="prayer-btn-modal" onClick={() => {
-                openPrayerTimes(selectedDayNum);
+                openPrayerTimes();
               }}>
                 🕌 اوقات شرعی
               </button>
@@ -800,25 +801,50 @@ function App() {
         </div>
       )}
 
-      {showPrayerModal && prayerTimes && (
-        <div className="modal" onClick={() => setShowPrayerModal(false)}>
-          <div className="modal-box prayer-box" onClick={e => e.stopPropagation()}>
-            <div className="modal-header">
-              <h3>🕌 اوقات شرعی</h3>
-              <button className="close-modal" onClick={() => setShowPrayerModal(false)}>✕</button>
+      {showPrayerModal && (() => {
+        const pcity = findCity(prayerProvince, prayerCity) || findCity('تهران', 'تهران')!;
+        const pDay = selectedDayNum || getToday(calendarSystem).day;
+        const pDate = toDate(calendarSystem, currentYear, currentMonth, pDay);
+        const pt = computePrayerTimes(pcity.lat, pcity.lng, pDate);
+        const cityList = PROVINCES.find((p) => p.name === prayerProvince)?.cities || [];
+        return (
+          <div className="modal" onClick={() => setShowPrayerModal(false)}>
+            <div className="modal-box prayer-box" onClick={e => e.stopPropagation()}>
+              <div className="tool-panel-head">
+                <span className="tool-panel-icon">🕌</span>
+                <h3>اوقات شرعی</h3>
+                <button className="close-modal" onClick={() => setShowPrayerModal(false)}>✕</button>
+              </div>
+              <div className="prayer-body">
+                <div className="prayer-loc">
+                  <div className="pl-field">
+                    <label className="field-label">استان</label>
+                    <select value={prayerProvince} onChange={e => changePrayerProvince(e.target.value)}>
+                      {PROVINCES.map(p => <option key={p.name} value={p.name}>{p.name}</option>)}
+                    </select>
+                  </div>
+                  <div className="pl-field">
+                    <label className="field-label">شهر</label>
+                    <select value={prayerCity} onChange={e => changePrayerCity(e.target.value)}>
+                      {cityList.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}
+                    </select>
+                  </div>
+                </div>
+                <div className="prayer-date">{pDay} {months[currentMonth]} {currentYear} — {prayerCity}</div>
+                <div className="prayer-list">
+                  <div className="prayer-row"><span>🌅 اذان صبح</span><strong>{pt.fajr}</strong></div>
+                  <div className="prayer-row"><span>☀️ طلوع آفتاب</span><strong>{pt.sunrise}</strong></div>
+                  <div className="prayer-row"><span>🕛 اذان ظهر</span><strong>{pt.dhuhr}</strong></div>
+                  <div className="prayer-row"><span>🌇 اذان عصر</span><strong>{pt.asr}</strong></div>
+                  <div className="prayer-row"><span>🌆 اذان مغرب</span><strong>{pt.maghrib}</strong></div>
+                  <div className="prayer-row"><span>🌙 اذان عشاء</span><strong>{pt.isha}</strong></div>
+                </div>
+                <div className="prayer-note">به وقت ایران · روش مؤسسه ژئوفیزیک دانشگاه تهران</div>
+              </div>
             </div>
-            <div className="prayer-list">
-              <div className="prayer-row"><span>اذان صبح:</span><strong>{prayerTimes.fajr}</strong></div>
-              <div className="prayer-row"><span>طلوع آفتاب:</span><strong>{prayerTimes.sunrise}</strong></div>
-              <div className="prayer-row"><span>اذان ظهر:</span><strong>{prayerTimes.dhuhr}</strong></div>
-              <div className="prayer-row"><span>اذان عصر:</span><strong>{prayerTimes.asr}</strong></div>
-              <div className="prayer-row"><span>اذان مغرب:</span><strong>{prayerTimes.maghrib}</strong></div>
-              <div className="prayer-row"><span>اذان عشاء:</span><strong>{prayerTimes.isha}</strong></div>
-            </div>
-            <button className="close-prayer" onClick={() => setShowPrayerModal(false)}>بستن</button>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {showToolsModal && (
         <ToolsPanel
@@ -875,7 +901,14 @@ function App() {
             <button className="drawer-item" onClick={() => { setShowLeftDrawer(false); setShowAboutModal(true); }}><span className="di-icon"><IconUsers /></span> طراحان و خدمات</button>
             <button className="drawer-item" onClick={shareApp}><span className="di-icon"><IconShare /></span> ارسال نرم‌افزار</button>
             <a className="drawer-item" href="https://www.simorghai.com" target="_blank" rel="noopener noreferrer"><span className="di-icon"><IconGlobe /></span> وب‌سایت سیمرغ</a>
-            <div className="drawer-foot">نسخه ۱۴۰۵ · ۱.۰.۱۳</div>
+
+            <div className="drawer-section-label">پوسته</div>
+            <div className="theme-switch">
+              <button className={`theme-btn ${theme === 'light' ? 'active' : ''}`} onClick={() => setTheme('light')}>☀️ روشن</button>
+              <button className={`theme-btn ${theme === 'dark' ? 'active' : ''}`} onClick={() => setTheme('dark')}>🌙 تیره</button>
+            </div>
+
+            <div className="drawer-foot">نسخه ۱۴۰۵ · ۱.۰.۱۴</div>
           </aside>
         </div>
       )}
