@@ -6,19 +6,36 @@
 
 body {
   font-family: 'Vazirmatn', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-  background: linear-gradient(160deg, #e9eef5 0%, #dde6f0 100%);
+  background: #16202d;
   direction: rtl;
-  padding: 12px;
+  padding: 0;
+  margin: 0;
   -webkit-font-smoothing: antialiased;
 }
 
+/* پیش‌فرض موبایل: تمام‌صفحه و لبه‌به‌لبه */
 .app {
-  max-width: 500px;
-  margin: 0 auto;
+  width: 100%;
   background: #fff;
-  border-radius: 28px;
-  overflow: hidden;
-  box-shadow: 0 10px 40px rgba(20, 33, 61, 0.18);
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
+/* فقط روی نمایشگرهای بزرگ (دسکتاپ) حالتِ کارتِ وسط‌چین */
+@media (min-width: 560px) {
+  body {
+    background: linear-gradient(160deg, #e9eef5 0%, #dde6f0 100%);
+    padding: 16px;
+  }
+  body.dark { background: #090d15; }
+  .app {
+    max-width: 500px;
+    margin: 0 auto;
+    min-height: auto;
+    border-radius: 28px;
+    overflow: hidden;
+    box-shadow: 0 10px 40px rgba(20, 33, 61, 0.18);
+  }
 }
 
 /* هدر */
@@ -494,6 +511,7 @@ body {
   justify-content: space-between;
   align-items: center;
   padding: 14px 18px 10px;
+  padding-top: calc(14px + env(safe-area-inset-top));
   background: linear-gradient(135deg, #1b2540 0%, #161d2d 100%);
   position: relative;
 }

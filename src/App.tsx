@@ -908,7 +908,7 @@ function App() {
               <button className={`theme-btn ${theme === 'dark' ? 'active' : ''}`} onClick={() => setTheme('dark')}>🌙 تیره</button>
             </div>
 
-            <div className="drawer-foot">نسخه ۱۴۰۵ · ۱.۰.۱۴</div>
+            <div className="drawer-foot">نسخه ۱۴۰۵ · ۱.۰.۱۵</div>
           </aside>
         </div>
       )}
