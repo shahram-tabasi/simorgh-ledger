@@ -115,6 +115,7 @@ interface ToolsPanelProps {
   currentMonth: number;
   onClose: () => void;
   onAddTransactions: (entries: InstallmentEntry[]) => void;
+  onCreateLoan: (meta: { name: string; type: 'gharz' | 'azad' | 'manual'; principal: number; total: number; count: number }, entries: InstallmentEntry[]) => void;
   section: string;
 }
 
@@ -128,7 +129,7 @@ const SECTION_META: Record<string, { title: string; icon: ReactNode }> = {
   bmi: { title: 'شاخص توده بدنی (BMI)', icon: <IconBmi /> },
 };
 
-export default function ToolsPanel({ calendarData, currentSystem, currentYear, currentMonth, onClose, onAddTransactions, section }: ToolsPanelProps) {
+export default function ToolsPanel({ calendarData, currentSystem, currentYear, currentMonth, onClose, onAddTransactions, onCreateLoan, section }: ToolsPanelProps) {
 
   // گزارش مالی بازه‌ای
   const [reportStart, setReportStart] = useState<DateValue>(() => todayValue(currentSystem));
@@ -148,6 +149,7 @@ export default function ToolsPanel({ calendarData, currentSystem, currentYear, c
   const [weight, setWeight] = useState<string>('');
 
   // وام و اقساط
+  const [loanName, setLoanName] = useState<string>('');
   const [loanType, setLoanType] = useState<'gharz' | 'azad' | 'manual'>('azad');
   const [loanAmount, setLoanAmount] = useState<string>('');
   const [loanRate, setLoanRate] = useState<string>('23');
@@ -277,12 +279,13 @@ export default function ToolsPanel({ calendarData, currentSystem, currentYear, c
 
   const submitLoan = () => {
     if (!loan) return;
+    const name = loanName.trim() || `${loanTypeLabel} ${formatNumber(loan.principal)}`;
     const entries: InstallmentEntry[] = loan.dueKeys.map((key, i) => ({
       key,
-      title: `قسط ${i + 1} از ${loan.n} - ${loanTypeLabel}`,
+      title: `قسط ${i + 1} از ${loan.n} - ${name}`,
       amount: loanSchedule[i] || 0,
     }));
-    onAddTransactions(entries);
+    onCreateLoan({ name, type: loanType, principal: loan.principal, total: loanScheduleTotal, count: loan.n }, entries);
     setLoanSaved(entries.length);
   };
 
@@ -357,6 +360,14 @@ export default function ToolsPanel({ calendarData, currentSystem, currentYear, c
 
                   {section === 'loan' && (
                     <>
+                      <label className="field-label">نام وام</label>
+                      <input
+                        className="tool-text-input"
+                        type="text"
+                        placeholder="مثلاً وام مسکن بانک ملی"
+                        value={loanName}
+                        onChange={(e) => setLoanName(e.target.value)}
+                      />
                       <label className="field-label">نوع وام</label>
                       <div className="mini-toggle">
                         <button type="button" className={`mini-toggle-btn ${loanType === 'gharz' ? 'active' : ''}`} onClick={() => setLoanType('gharz')}>قرض‌الحسنه</button>

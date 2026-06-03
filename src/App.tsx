@@ -29,6 +29,7 @@ import logoUrl from './assets/logo.png';
 import ToolsPanel, { CalendarDateInput, type DateValue } from './Tools';
 import WelcomeScreen from './WelcomeScreen';
 import { Onboarding, WhatsNew } from './Onboarding';
+import FundPanel from './Fund';
 import {
   IconReport, IconBom, IconLoan, IconConvert, IconAge, IconBio, IconBmi,
   IconToday, IconUsers, IconShare, IconGlobe, IconMenu, IconInfo,
@@ -43,10 +44,34 @@ interface Transaction {
   isPaid: boolean;
   reminderDateTime?: string; // ذخیره زمان یادآوری
   reminderScheduled?: boolean;
+  loanId?: string; // اتصال قسط به وام
 }
 
 interface DayData {
   transactions: Transaction[];
+}
+
+// متادیتای هر وام (نام و مشخصات)
+interface LoanMeta {
+  id: string;
+  name: string;
+  type: 'gharz' | 'azad' | 'manual';
+  principal: number;
+  total: number;
+  count: number;
+}
+
+// صندوق خانوادگی (قرض‌الحسنه گردشی)
+interface FundRound {
+  paid: { [member: string]: boolean };
+  winner: string | null;
+}
+interface Fund {
+  id: string;
+  name: string;
+  monthlyAmount: number;
+  members: string[];
+  rounds: FundRound[];
 }
 
 // تابع فرمت عدد با جداکننده سه‌رقمی
@@ -63,12 +88,12 @@ const parseFormattedNumber = (str: string): number => {
 const SYSTEM_STORAGE_KEY = 'calendarSystem';
 
 // نسخه و فهرستِ تغییرات برای پنجره‌ی «تازه‌ها»
-const APP_VERSION = '1.0.18';
+const APP_VERSION = '1.0.19';
 const CHANGELOG: string[] = [
-  'وام و اقساط بازطراحی شد: نوع وام (قرض‌الحسنه، آزاد، بدون سود) و امکان ویرایشِ مبلغِ هر قسط',
-  'پیام‌ها و تأییدها با پنجره‌های زیبای داخلِ برنامه (به‌جای آلارمِ سیستم)',
-  'دکمه‌ی برگشتِ گوشی داخلِ برنامه کار می‌کند و با دوبار زدن خارج می‌شوید',
-  'رفعِ منوی کپی/پیست هنگام نگه‌داشتنِ انگشت روی روزها',
+  'وام‌های نام‌دار: هر وام را نام بگذارید و در «وام‌های من» مانده و پرداختی‌اش را ببینید',
+  'یادآوری برای هر قسطِ وام',
+  'صندوقِ خانوادگی (قرض‌الحسنه گردشی) با اعضا و قرعه‌کشیِ ماهانه',
+  'رفعِ بیرون‌زدنِ متنِ پیش‌نمایشِ روز از لبه‌ی صفحه',
 ];
 
 function App() {
@@ -92,6 +117,11 @@ function App() {
   const [title, setTitle] = useState<string>('');
   const [amount, setAmount] = useState<string>('');
   const [calendarData, setCalendarData] = useState<{ [key: string]: DayData }>({});
+  const [loans, setLoans] = useState<LoanMeta[]>(() => { try { return JSON.parse(localStorage.getItem('loans') || '[]'); } catch { return []; } });
+  const [funds, setFunds] = useState<Fund[]>(() => { try { return JSON.parse(localStorage.getItem('funds') || '[]'); } catch { return []; } });
+  const [showLoansModal, setShowLoansModal] = useState<boolean>(false);
+  const [selectedLoanId, setSelectedLoanId] = useState<string | null>(null);
+  const [showFundModal, setShowFundModal] = useState<boolean>(false);
   const [theme, setTheme] = useState<'light' | 'dark'>(() => (localStorage.getItem('theme') as 'light' | 'dark') || 'light');
   const [prayerProvince, setPrayerProvince] = useState<string>(() => localStorage.getItem('prayerProvince') || 'تهران');
   const [prayerCity, setPrayerCity] = useState<string>(() => localStorage.getItem('prayerCity') || 'تهران');
@@ -182,6 +212,9 @@ function App() {
       [showReminderModal, () => setShowReminderModal(false)],
       [showPrayerModal, () => setShowPrayerModal(false)],
       [showToolsModal, () => setShowToolsModal(false)],
+      [!!selectedLoanId, () => setSelectedLoanId(null)],
+      [showLoansModal, () => setShowLoansModal(false)],
+      [showFundModal, () => setShowFundModal(false)],
       [showAboutModal, () => setShowAboutModal(false)],
       [showYearMonthModal, () => setShowYearMonthModal(false)],
       [showDayModal, () => setShowDayModal(false)],
@@ -198,7 +231,7 @@ function App() {
       else { lastBack.current = now; setExitHint(true); setTimeout(() => setExitHint(false), 2000); }
     });
     return () => { sub.then((h) => h.remove()); };
-  }, [dialog, showAddModal, showReminderModal, showPrayerModal, showToolsModal, showAboutModal, showYearMonthModal, showDayModal, showRightDrawer, showLeftDrawer, showWhatsNew, showOnboarding]);
+  }, [dialog, showAddModal, showReminderModal, showPrayerModal, showToolsModal, selectedLoanId, showLoansModal, showFundModal, showAboutModal, showYearMonthModal, showDayModal, showRightDrawer, showLeftDrawer, showWhatsNew, showOnboarding]);
 
   // هنگام تغییر تقویم، انتخابِ نظام را ذخیره و ماهِ در حال نمایش را تبدیل می‌کنیم
   const switchCalendar = (system: CalendarSystem) => {
@@ -215,8 +248,8 @@ function App() {
     setCalendarData(data);
   };
 
-  // درج خودکار اقساط وام روی تاریخ سررسید هر قسط در تقویم
-  const addInstallments = (entries: { key: string; title: string; amount: number }[]) => {
+  // درج خودکار اقساط وام روی تاریخ سررسید هر قسط در تقویم (با اتصال به وام)
+  const addInstallments = (entries: { key: string; title: string; amount: number }[], loanId?: string) => {
     const next: { [key: string]: DayData } = { ...calendarData };
     entries.forEach(({ key, title, amount }, idx) => {
       const existing = next[key]?.transactions || [];
@@ -225,10 +258,69 @@ function App() {
         title,
         amount,
         isPaid: false,
+        loanId,
       };
       next[key] = { transactions: [...existing, tx] };
     });
     saveData(next);
+  };
+
+  // ساخت یک وامِ نام‌دار به همراه اقساطش
+  const createLoan = (meta: Omit<LoanMeta, 'id'>, entries: { key: string; title: string; amount: number }[]) => {
+    const id = `loan-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    const list = [...loans, { ...meta, id }];
+    localStorage.setItem('loans', JSON.stringify(list));
+    setLoans(list);
+    addInstallments(entries, id);
+  };
+
+  const deleteLoan = (id: string) => {
+    askConfirm('این وام و همه‌ی اقساطش حذف شود؟', () => {
+      // حذف اقساطِ متصل به این وام از تقویم
+      const next: { [key: string]: DayData } = {};
+      Object.entries(calendarData).forEach(([key, day]) => {
+        const kept = day.transactions.filter((t) => t.loanId !== id);
+        if (kept.length) next[key] = { transactions: kept };
+      });
+      saveData(next);
+      const list = loans.filter((l) => l.id !== id);
+      localStorage.setItem('loans', JSON.stringify(list));
+      setLoans(list);
+      setSelectedLoanId(null);
+    });
+  };
+
+  // جمع‌بندیِ وضعیتِ یک وام از روی اقساطِ موجود در تقویم
+  const loanInstallments = (id: string): { key: string; tx: Transaction }[] => {
+    const out: { key: string; tx: Transaction }[] = [];
+    Object.entries(calendarData).forEach(([key, day]) => {
+      day.transactions.forEach((t) => { if (t.loanId === id) out.push({ key, tx: t }); });
+    });
+    return out.sort((a, b) => {
+      const [ay, am, ad] = a.key.split('-').map(Number);
+      const [by, bm, bd] = b.key.split('-').map(Number);
+      return new Date(ay, am - 1, ad).getTime() - new Date(by, bm - 1, bd).getTime();
+    });
+  };
+
+  const saveFunds = (f: Fund[]) => { localStorage.setItem('funds', JSON.stringify(f)); setFunds(f); };
+
+  // باز کردن یادآوری برای یک تراکنشِ موجود (قسط/وام)
+  const openReminderFor = (dKey: string, tx: Transaction) => {
+    setSelectedTransactionForReminder({ dateKey: dKey, transactionId: tx.id });
+    setReminderText(tx.title);
+    const [gy, gm, gd] = dKey.split('-').map(Number);
+    setReminderDateValue({ system: calendarSystem, ...fromDate(calendarSystem, new Date(gy, (gm || 1) - 1, gd || 1)) });
+    setReminderTime('09:00');
+    setShowReminderModal(true);
+  };
+
+  // تغییر وضعیتِ پرداختِ یک تراکنش با کلیدِ مشخص
+  const togglePaidByKey = (dKey: string, id: string) => {
+    const day = calendarData[dKey];
+    if (!day) return;
+    const updated = day.transactions.map(t => t.id === id ? { ...t, isPaid: !t.isPaid } : t);
+    saveData({ ...calendarData, [dKey]: { transactions: updated } });
   };
 
   const getKey = (y: number, m: number, d: number): string => dateKey(calendarSystem, y, m, d);
@@ -699,7 +791,7 @@ function App() {
         const items = getDayTransactions(currentYear, currentMonth, dayPreview.day);
         const debt = getDayDebt(currentYear, currentMonth, dayPreview.day);
         return (
-          <div className="day-preview" style={{ left: dayPreview.x, top: dayPreview.y }}>
+          <div className="day-preview" style={{ left: Math.min(Math.max(dayPreview.x, 128), window.innerWidth - 128), top: dayPreview.y }}>
             <div className="dp-title">{dayPreview.day} {months[currentMonth]}</div>
             {items.map((t) => (
               <div key={t.id} className={`dp-row ${t.isPaid ? 'paid' : ''}`}>
@@ -927,8 +1019,98 @@ function App() {
           currentMonth={currentMonth}
           onClose={() => setShowToolsModal(false)}
           onAddTransactions={addInstallments}
+          onCreateLoan={createLoan}
           section={toolsInitialSection}
         />
+      )}
+
+      {/* وام‌های من: فهرست */}
+      {showLoansModal && !selectedLoanId && (
+        <div className="modal" onClick={() => setShowLoansModal(false)}>
+          <div className="modal-box tool-panel" onClick={e => e.stopPropagation()}>
+            <div className="tool-panel-head">
+              <span className="tool-panel-icon"><IconLoan /></span>
+              <h3>وام‌های من</h3>
+              <button className="close-modal" onClick={() => setShowLoansModal(false)}>✕</button>
+            </div>
+            <div className="tool-panel-body">
+              {loans.length === 0 ? (
+                <div className="tool-note" style={{ marginTop: 16 }}>هنوز وامی ثبت نکرده‌اید. از «وام جدید» بسازید.</div>
+              ) : (
+                loans.map((ln) => {
+                  const items = loanInstallments(ln.id);
+                  const paid = items.filter(i => i.tx.isPaid).reduce((s, i) => s + i.tx.amount, 0);
+                  const remaining = items.filter(i => !i.tx.isPaid).reduce((s, i) => s + i.tx.amount, 0);
+                  const paidCount = items.filter(i => i.tx.isPaid).length;
+                  const pct = items.length ? Math.round((paidCount / items.length) * 100) : 0;
+                  return (
+                    <button key={ln.id} className="loan-card" onClick={() => setSelectedLoanId(ln.id)}>
+                      <div className="loan-card-top">
+                        <span className="loan-card-name">{ln.name}</span>
+                        <span className="loan-card-count">{paidCount}/{items.length} قسط</span>
+                      </div>
+                      <div className="loan-card-bar"><span style={{ width: `${pct}%` }} /></div>
+                      <div className="loan-card-row"><span>مانده</span><strong className="lc-debt">{formatNumber(remaining)} تومان</strong></div>
+                      <div className="loan-card-row"><span>پرداخت‌شده</span><strong className="lc-paid">{formatNumber(paid)} تومان</strong></div>
+                    </button>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* وام‌های من: جزئیاتِ یک وام */}
+      {showLoansModal && selectedLoanId && (() => {
+        const ln = loans.find(l => l.id === selectedLoanId);
+        if (!ln) return null;
+        const items = loanInstallments(ln.id);
+        const paid = items.filter(i => i.tx.isPaid).reduce((s, i) => s + i.tx.amount, 0);
+        const remaining = items.filter(i => !i.tx.isPaid).reduce((s, i) => s + i.tx.amount, 0);
+        return (
+          <div className="modal" onClick={() => setShowLoansModal(false)}>
+            <div className="modal-box tool-panel" onClick={e => e.stopPropagation()}>
+              <div className="tool-panel-head">
+                <button className="close-modal" onClick={() => setSelectedLoanId(null)}>‹</button>
+                <h3>{ln.name}</h3>
+                <button className="close-modal" onClick={() => setShowLoansModal(false)}>✕</button>
+              </div>
+              <div className="tool-panel-body">
+                <div className="tool-result">
+                  <div className="tool-result-row"><span>مجموع وام</span><strong>{formatNumber(ln.total)} تومان</strong></div>
+                  <div className="tool-result-row paid"><span>پرداخت‌شده</span><strong>{formatNumber(paid)} تومان</strong></div>
+                  <div className="tool-result-row closing"><span>ماندهٔ کل وام</span><strong>{formatNumber(remaining)} تومان</strong></div>
+                </div>
+                <div className="loan-sched-head"><span>اقساط ({items.length})</span><span className="loan-sched-hint">برای پرداخت/یادآوری روی قسط بزنید</span></div>
+                <div className="loan-detail-list">
+                  {items.map(({ key, tx }, i) => {
+                    const [yy, mm, dd] = key.split('-').map(Number);
+                    const c = fromDate(calendarSystem, new Date(yy, mm - 1, dd));
+                    return (
+                      <div key={tx.id} className={`loan-detail-row ${tx.isPaid ? 'paid' : ''}`}>
+                        <span className="ls-num">{i + 1}</span>
+                        <div className="ld-info">
+                          <span className="ld-date">{c.day} {months[c.month]} {c.year} {tx.reminderDateTime && '⏰'}</span>
+                          <span className="ld-amt">{formatNumber(tx.amount)} تومان</span>
+                        </div>
+                        <button className="ld-btn pay" onClick={() => togglePaidByKey(key, tx.id)}>{tx.isPaid ? '✓' : '○'}</button>
+                        <button className="ld-btn rem" onClick={() => openReminderFor(key, tx)}>⏰</button>
+                        <button className="ld-btn del" onClick={() => deleteTrans(key, tx.id)}>🗑</button>
+                      </div>
+                    );
+                  })}
+                </div>
+                <button className="fund-delete" onClick={() => deleteLoan(ln.id)}>حذف وام</button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* صندوق خانوادگی */}
+      {showFundModal && (
+        <FundPanel funds={funds} onChange={saveFunds} onClose={() => setShowFundModal(false)} confirm={askConfirm} />
       )}
 
       {/* منوی راست: امکانات و ابزارها */}
@@ -947,7 +1129,9 @@ function App() {
             <button className="drawer-item" onClick={() => openTool('report')}><span className="di-icon"><IconReport /></span> گزارش مالی بازه‌ای</button>
             <button className="drawer-item" onClick={() => openTool('bom')}><span className="di-icon"><IconBom /></span> گزارش اول ماه (BOM)</button>
             <div className="drawer-section-label">مالی</div>
-            <button className="drawer-item" onClick={() => openTool('loan')}><span className="di-icon"><IconLoan /></span> وام و اقساط</button>
+            <button className="drawer-item" onClick={() => openTool('loan')}><span className="di-icon"><IconLoan /></span> وام جدید</button>
+            <button className="drawer-item" onClick={() => { setShowRightDrawer(false); setShowLoansModal(true); }}><span className="di-icon"><IconReport /></span> وام‌های من</button>
+            <button className="drawer-item" onClick={() => { setShowRightDrawer(false); setShowFundModal(true); }}><span className="di-icon"><IconUsers /></span> صندوق خانوادگی</button>
             <div className="drawer-section-label">ابزارهای کاربردی</div>
             <button className="drawer-item" onClick={() => openTool('convert')}><span className="di-icon"><IconConvert /></span> تبدیل تاریخ</button>
             <button className="drawer-item" onClick={() => openTool('age')}><span className="di-icon"><IconAge /></span> محاسبه سن</button>
@@ -981,7 +1165,7 @@ function App() {
               <button className={`theme-btn ${theme === 'dark' ? 'active' : ''}`} onClick={() => setTheme('dark')}>🌙 تیره</button>
             </div>
 
-            <div className="drawer-foot">نسخه ۱۴۰۵ · ۱.۰.۱۸</div>
+            <div className="drawer-foot">نسخه ۱۴۰۵ · ۱.۰.۱۹</div>
           </aside>
         </div>
       )}

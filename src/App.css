@@ -1976,3 +1976,71 @@ body.dark .loan-sched-row { border-color: #1d2740; }
 body.dark .ls-num { background: #243049; color: #aeb8cd; }
 body.dark .ls-date { color: #9aa6bf; }
 body.dark .ls-input { background: #121a28; border-color: #2a3850; color: #e3e9f4; }
+
+/* ==================== کارت‌های وام/صندوق و جزئیات ==================== */
+.loan-card {
+  display: block; width: 100%; text-align: right;
+  background: #f7f9fc; border: 1px solid #eef0f4; border-radius: 16px;
+  padding: 14px; margin-bottom: 12px; cursor: pointer; font-family: inherit;
+}
+.loan-card-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.loan-card-name { font-size: 15px; font-weight: 800; color: #1a2238; }
+.loan-card-count { font-size: 12px; color: #8a93a6; font-weight: 600; }
+.loan-card-sub { font-size: 12.5px; color: #66718a; font-weight: 600; }
+.loan-card-bar { height: 7px; background: #e6e9f0; border-radius: 5px; overflow: hidden; margin-bottom: 10px; }
+.loan-card-bar span { display: block; height: 100%; background: linear-gradient(90deg, #57cf8b, #2e9e5b); }
+.loan-card-row { display: flex; justify-content: space-between; font-size: 12.5px; padding: 2px 0; }
+.loan-card-row span { color: #8a93a6; }
+.lc-debt { color: #d8861f; direction: ltr; }
+.lc-paid { color: #2e9e5b; direction: ltr; }
+
+.loan-detail-list { border: 1px solid #eef0f4; border-radius: 14px; overflow: hidden; }
+.loan-detail-row { display: flex; align-items: center; gap: 8px; padding: 9px 10px; border-bottom: 1px solid #f2f4f8; }
+.loan-detail-row:last-child { border-bottom: none; }
+.loan-detail-row.paid { background: #effbf3; }
+.loan-detail-row.paid .ld-amt { text-decoration: line-through; opacity: 0.7; }
+.ld-info { flex: 1; display: flex; flex-direction: column; }
+.ld-date { font-size: 12px; color: #55617a; font-weight: 600; }
+.ld-amt { font-size: 13px; color: #1a2238; font-weight: 700; direction: rtl; }
+.ld-btn { width: 32px; height: 32px; border: none; border-radius: 9px; cursor: pointer; font-size: 14px; flex-shrink: 0; }
+.ld-btn.pay { background: #e8f5e9; color: #2e7d32; font-weight: 800; }
+.ld-btn.rem { background: #eef2f8; }
+.ld-btn.del { background: #fdecea; }
+
+.fund-delete {
+  width: 100%; margin-top: 16px; padding: 12px; border: 1px solid #f3c0bd;
+  border-radius: 12px; background: #fff5f4; color: #c0392b; font-family: inherit;
+  font-weight: 700; font-size: 13px; cursor: pointer;
+}
+
+/* اعضای صندوق */
+.fund-add-row { display: flex; gap: 8px; }
+.fund-add-btn { width: 46px; flex-shrink: 0; border: none; border-radius: 11px; background: #1f2b4a; color: #f3d488; font-size: 22px; cursor: pointer; }
+.fund-chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
+.fund-chip { background: #eef2f8; color: #2c3550; padding: 6px 12px; border-radius: 16px; font-size: 13px; font-weight: 600; cursor: pointer; }
+.fund-members { display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; }
+.fund-member {
+  display: flex; align-items: center; gap: 10px; width: 100%; text-align: right;
+  background: #f7f9fc; border: 1px solid #eef0f4; border-radius: 13px; padding: 12px; cursor: pointer; font-family: inherit;
+}
+.fund-member.paid { background: #effbf3; border-color: #cdeed7; }
+.fund-member.won { background: #fff8e7; border-color: #f3e2c0; opacity: 0.95; }
+.fm-check { width: 24px; font-size: 16px; text-align: center; }
+.fm-name { flex: 1; font-size: 14px; font-weight: 700; color: #1a2238; }
+.fm-amt { font-size: 12.5px; color: #66718a; font-weight: 600; direction: ltr; }
+.fund-draw { background: linear-gradient(135deg, #fff3cf, #ffe9a8); border: 1px solid #f0d588; border-radius: 14px; padding: 14px; text-align: center; font-size: 15px; color: #7a5a12; margin-bottom: 12px; font-weight: 700; }
+.fund-draw strong { color: #b5840f; }
+.fund-income { color: #2e9e5b; direction: ltr; }
+
+/* حالت تیره */
+body.dark .loan-card, body.dark .fund-member { background: #121a28; border-color: #243049; }
+body.dark .loan-card-name, body.dark .fm-name { color: #e3e9f4; }
+body.dark .loan-card-bar { background: #243049; }
+body.dark .loan-detail-list { border-color: #243049; }
+body.dark .loan-detail-row { border-color: #1d2740; }
+body.dark .loan-detail-row.paid, body.dark .fund-member.paid { background: #14241a; }
+body.dark .fund-member.won { background: #241f10; border-color: #3a3214; }
+body.dark .ld-date { color: #9aa6bf; }
+body.dark .ld-amt { color: #e3e9f4; }
+body.dark .fund-chip { background: #243049; color: #cfd7e8; }
+body.dark .ld-btn.rem { background: #243049; }
