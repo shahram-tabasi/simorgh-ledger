@@ -1864,3 +1864,115 @@ body.dark .footer-text-en, body.dark .footer-copyright { color: #6c7790; }
   cursor: pointer;
 }
 body.dark .wn-list li { color: #d6def0; border-color: #243049; }
+
+/* جلوگیری از منوی کپی/پیست هنگام نگه‌داشتنِ انگشت روی روزها */
+.app {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+.app input, .app textarea, .app select, .app [contenteditable="true"] {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+/* دیالوگ سفارشی */
+.dialog-modal { z-index: 4000; }
+.dialog-box {
+  background: #fff;
+  width: 86%;
+  max-width: 340px;
+  border-radius: 18px;
+  padding: 24px 20px 16px;
+  box-shadow: 0 20px 55px rgba(0,0,0,0.45);
+  text-align: center;
+  animation: onbIn 0.18s ease;
+}
+.dialog-msg {
+  font-size: 15px;
+  color: #2c3550;
+  line-height: 2;
+  white-space: pre-line;
+  margin-bottom: 20px;
+  font-weight: 700;
+}
+.dialog-btns { display: flex; gap: 10px; }
+.dialog-ok {
+  flex: 1; padding: 13px; border: none; border-radius: 13px;
+  background: linear-gradient(135deg, #1f2b4a, #161d2d);
+  color: #f3d488; font-family: inherit; font-weight: 800; font-size: 14px; cursor: pointer;
+}
+.dialog-cancel {
+  flex: 1; padding: 13px; border: none; border-radius: 13px;
+  background: #eef0f4; color: #55617a; font-family: inherit; font-weight: 700; font-size: 14px; cursor: pointer;
+}
+body.dark .dialog-box { background: #1a2434; }
+body.dark .dialog-msg { color: #e3e9f4; }
+body.dark .dialog-cancel { background: #243049; color: #cfd7e8; }
+
+/* راهنمای خروج (دوبار برگشت) */
+.exit-hint {
+  position: fixed;
+  bottom: calc(30px + env(safe-area-inset-bottom));
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(20, 26, 40, 0.95);
+  color: #fff;
+  padding: 11px 20px;
+  border-radius: 24px;
+  font-size: 13px;
+  z-index: 4000;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.4);
+  white-space: nowrap;
+}
+
+/* جدولِ اقساطِ قابل‌ویرایش */
+.loan-sched-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin: 14px 2px 8px;
+}
+.loan-sched-head > span:first-child { font-size: 13px; font-weight: 800; color: #2c3550; }
+.loan-sched-hint { font-size: 11px; color: #9aa3b5; }
+.loan-sched {
+  max-height: 260px;
+  overflow-y: auto;
+  border: 1px solid #eef0f4;
+  border-radius: 14px;
+}
+.loan-sched-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-bottom: 1px solid #f2f4f8;
+}
+.loan-sched-row:last-child { border-bottom: none; }
+.ls-num {
+  width: 26px; height: 26px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: #eef2f8; color: #44506a; border-radius: 8px;
+  font-size: 12px; font-weight: 700;
+}
+.ls-date { flex: 1; font-size: 12.5px; color: #55617a; font-weight: 600; }
+.ls-input {
+  width: 120px;
+  padding: 8px 10px;
+  border: 1px solid #dfe3ec;
+  border-radius: 10px;
+  font-family: inherit;
+  font-size: 13px;
+  text-align: center;
+  direction: ltr;
+  color: #1a2238;
+  background: #fff;
+}
+.ls-input:focus { outline: none; border-color: #c9962f; }
+
+body.dark .loan-sched-head > span:first-child { color: #e3e9f4; }
+body.dark .loan-sched { border-color: #243049; }
+body.dark .loan-sched-row { border-color: #1d2740; }
+body.dark .ls-num { background: #243049; color: #aeb8cd; }
+body.dark .ls-date { color: #9aa6bf; }
+body.dark .ls-input { background: #121a28; border-color: #2a3850; color: #e3e9f4; }

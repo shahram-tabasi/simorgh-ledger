@@ -3,6 +3,7 @@ import './App.css';
 import { LocalNotifications } from '@capacitor/local-notifications';
 import { Share } from '@capacitor/share';
 import { StatusBar, Style } from '@capacitor/status-bar';
+import { App as CapApp } from '@capacitor/app';
 import { Capacitor } from '@capacitor/core';
 import {
   type CalendarSystem,
@@ -62,12 +63,12 @@ const parseFormattedNumber = (str: string): number => {
 const SYSTEM_STORAGE_KEY = 'calendarSystem';
 
 // نسخه و فهرستِ تغییرات برای پنجره‌ی «تازه‌ها»
-const APP_VERSION = '1.0.17';
+const APP_VERSION = '1.0.18';
 const CHANGELOG: string[] = [
-  'نمایشِ تمام‌صفحه و هماهنگ‌شدنِ نوار وضعیت با هدر',
-  'ابزارها حالا در یک صفحه‌ی مجزا و تمام‌صفحه باز می‌شوند',
-  'راهنمای نصبِ اولیه و پنجره‌ی تغییراتِ نسخه',
-  'ظاهرِ تمیزتر و باکلاس‌ترِ فرم‌ها و آیکون‌ها',
+  'وام و اقساط بازطراحی شد: نوع وام (قرض‌الحسنه، آزاد، بدون سود) و امکان ویرایشِ مبلغِ هر قسط',
+  'پیام‌ها و تأییدها با پنجره‌های زیبای داخلِ برنامه (به‌جای آلارمِ سیستم)',
+  'دکمه‌ی برگشتِ گوشی داخلِ برنامه کار می‌کند و با دوبار زدن خارج می‌شوید',
+  'رفعِ منوی کپی/پیست هنگام نگه‌داشتنِ انگشت روی روزها',
 ];
 
 function App() {
@@ -116,9 +117,16 @@ function App() {
   const [toolsInitialSection, setToolsInitialSection] = useState<string>('report');
   const [editingTxId, setEditingTxId] = useState<string | null>(null);
   const [dayPreview, setDayPreview] = useState<{ x: number; y: number; day: number } | null>(null);
+  const [dialog, setDialog] = useState<{ type: 'alert' | 'confirm'; message: string; onYes?: () => void } | null>(null);
+  const [exitHint, setExitHint] = useState<boolean>(false);
   const touchStart = useRef<{ x: number; y: number } | null>(null);
   const longPressTimer = useRef<number | null>(null);
   const suppressClick = useRef<boolean>(false);
+  const lastBack = useRef<number>(0);
+
+  // دیالوگ‌های سفارشی به‌جای alert/confirm زشتِ سیستم
+  const notify = (message: string) => setDialog({ type: 'alert', message });
+  const askConfirm = (message: string, onYes: () => void) => setDialog({ type: 'confirm', message, onYes });
 
   // درخواست مجوز نوتیفیکیشن در شروع برنامه
   useEffect(() => {
@@ -164,6 +172,33 @@ function App() {
     StatusBar.setOverlaysWebView({ overlay: true }).catch(() => {});
     StatusBar.setStyle({ style: Style.Dark }).catch(() => {});
   }, []);
+
+  // دکمه‌ی برگشتِ اندروید: ابتدا پنجره‌ی باز را می‌بندد، در نهایت با دوبار زدن خارج می‌شود
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return;
+    const closers: [boolean, () => void][] = [
+      [!!dialog, () => setDialog(null)],
+      [showAddModal, () => { setShowAddModal(false); setEditingTxId(null); }],
+      [showReminderModal, () => setShowReminderModal(false)],
+      [showPrayerModal, () => setShowPrayerModal(false)],
+      [showToolsModal, () => setShowToolsModal(false)],
+      [showAboutModal, () => setShowAboutModal(false)],
+      [showYearMonthModal, () => setShowYearMonthModal(false)],
+      [showDayModal, () => setShowDayModal(false)],
+      [showRightDrawer, () => setShowRightDrawer(false)],
+      [showLeftDrawer, () => setShowLeftDrawer(false)],
+      [showWhatsNew, () => setShowWhatsNew(false)],
+      [showOnboarding, () => setShowOnboarding(false)],
+    ];
+    const sub = CapApp.addListener('backButton', () => {
+      const open = closers.find(([isOpen]) => isOpen);
+      if (open) { open[1](); return; }
+      const now = Date.now();
+      if (now - lastBack.current < 2000) { CapApp.exitApp(); }
+      else { lastBack.current = now; setExitHint(true); setTimeout(() => setExitHint(false), 2000); }
+    });
+    return () => { sub.then((h) => h.remove()); };
+  }, [dialog, showAddModal, showReminderModal, showPrayerModal, showToolsModal, showAboutModal, showYearMonthModal, showDayModal, showRightDrawer, showLeftDrawer, showWhatsNew, showOnboarding]);
 
   // هنگام تغییر تقویم، انتخابِ نظام را ذخیره و ماهِ در حال نمایش را تبدیل می‌کنیم
   const switchCalendar = (system: CalendarSystem) => {
@@ -250,7 +285,7 @@ function App() {
   // تابع ثبت یادآوری
   const scheduleReminder = async (transaction: Transaction) => {
     if (!notificationPermission) {
-      alert('لطفاً مجوز نوتیفیکیشن را فعال کنید');
+      notify('لطفاً مجوز نوتیفیکیشن را فعال کنید');
       return false;
     }
 
@@ -260,7 +295,7 @@ function App() {
     const now = new Date();
 
     if (reminderDateTime <= now) {
-      alert('زمان یادآوری باید در آینده باشد');
+      notify('زمان یادآوری باید در آینده باشد');
       return false;
     }
 
@@ -298,9 +333,9 @@ function App() {
 
   // افزودن یا ویرایش تراکنش
   const addTransaction = async () => {
-    if (!title.trim()) return alert('عنوان را وارد کنید');
+    if (!title.trim()) { notify('عنوان را وارد کنید'); return; }
     const amt = parseFormattedNumber(amount);
-    if (isNaN(amt) || amt <= 0) return alert('مبلغ معتبر وارد کنید');
+    if (isNaN(amt) || amt <= 0) { notify('مبلغ معتبر وارد کنید'); return; }
     if (!selectedDate) return;
 
     const existing = calendarData[selectedDate] || { transactions: [] };
@@ -333,16 +368,15 @@ function App() {
     setAmount('');
     setShowAddModal(false);
 
-    // پرسش برای ثبت یادآوری
-    const wantReminder = confirm('آیا می‌خواهید برای این قسط یادآوری ثبت کنید؟');
-    if (wantReminder) {
-      setSelectedTransactionForReminder({ dateKey: selectedDate, transactionId: newTransaction.id });
+    // پرسش برای ثبت یادآوری (دیالوگ سفارشی)
+    const dateForReminder = selectedDate;
+    askConfirm('آیا می‌خواهید برای این قسط یادآوری ثبت کنید؟', () => {
+      setSelectedTransactionForReminder({ dateKey: dateForReminder, transactionId: newTransaction.id });
       setReminderText(newTransaction.title);
-      // پیش‌فرضِ تاریخِ یادآوری = روزِ تراکنش، در همان تقویمِ انتخابی
-      const [gy, gm, gd] = selectedDate.split('-').map(Number);
+      const [gy, gm, gd] = dateForReminder.split('-').map(Number);
       setReminderDateValue({ system: calendarSystem, ...fromDate(calendarSystem, new Date(gy, (gm || 1) - 1, gd || 1)) });
       setShowReminderModal(true);
-    }
+    });
   };
 
   // باز کردن یک ابزار از منوی امکانات
@@ -368,7 +402,7 @@ function App() {
         if (navigator.share) await navigator.share(data);
         else {
           await navigator.clipboard?.writeText('simorgh-ledger\nwww.simorghai.com');
-          alert('لینک نرم‌افزار کپی شد:\nwww.simorghai.com');
+          notify('لینک نرم‌افزار کپی شد:\nwww.simorghai.com');
         }
       } catch { /* کاربر منصرف شد */ }
     }
@@ -377,7 +411,7 @@ function App() {
   // تایید یادآوری
   const confirmReminder = async () => {
     if (!selectedTransactionForReminder || !reminderTime) {
-      alert('لطفاً تاریخ و ساعت را انتخاب کنید');
+      notify('لطفاً تاریخ و ساعت را انتخاب کنید');
       return;
     }
 
@@ -400,7 +434,7 @@ function App() {
       saveData({ ...calendarData, [selectedTransactionForReminder.dateKey]: updatedDay });
 
       await scheduleReminder(updatedTransaction);
-      alert('✅ یادآوری با موفقیت ثبت شد');
+      notify('✅ یادآوری با موفقیت ثبت شد');
     }
     setShowReminderModal(false);
     setSelectedTransactionForReminder(null);
@@ -416,14 +450,15 @@ function App() {
   };
 
   const deleteTrans = (dateKey: string, id: string) => {
-    if (!confirm('حذف شود؟')) return;
-    const day = calendarData[dateKey];
-    if (!day) return;
-    const filtered = day.transactions.filter(t => t.id !== id);
-    const newData = { ...calendarData };
-    if (filtered.length === 0) delete newData[dateKey];
-    else newData[dateKey] = { transactions: filtered };
-    saveData(newData);
+    askConfirm('این تراکنش حذف شود؟', () => {
+      const day = calendarData[dateKey];
+      if (!day) return;
+      const filtered = day.transactions.filter(t => t.id !== id);
+      const newData = { ...calendarData };
+      if (filtered.length === 0) delete newData[dateKey];
+      else newData[dateKey] = { transactions: filtered };
+      saveData(newData);
+    });
   };
 
   const openDayDetails = (year: number, month: number, day: number) => {
@@ -946,7 +981,7 @@ function App() {
               <button className={`theme-btn ${theme === 'dark' ? 'active' : ''}`} onClick={() => setTheme('dark')}>🌙 تیره</button>
             </div>
 
-            <div className="drawer-foot">نسخه ۱۴۰۵ · ۱.۰.۱۷</div>
+            <div className="drawer-foot">نسخه ۱۴۰۵ · ۱.۰.۱۸</div>
           </aside>
         </div>
       )}
@@ -1010,6 +1045,28 @@ function App() {
           </div>
         </div>
       )}
+
+      {/* دیالوگ سفارشی (به‌جای alert/confirm سیستم) */}
+      {dialog && (
+        <div className="modal dialog-modal" onClick={() => setDialog(null)}>
+          <div className="dialog-box" onClick={e => e.stopPropagation()}>
+            <div className="dialog-msg">{dialog.message}</div>
+            <div className="dialog-btns">
+              {dialog.type === 'confirm' && (
+                <button className="dialog-cancel" onClick={() => setDialog(null)}>انصراف</button>
+              )}
+              <button
+                className="dialog-ok"
+                onClick={() => { const y = dialog.onYes; setDialog(null); y && y(); }}
+              >
+                {dialog.type === 'confirm' ? 'بله' : 'باشه'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {exitHint && <div className="exit-hint">برای خروج، دوباره دکمه‌ی برگشت را بزنید</div>}
     </div>
   );
 }

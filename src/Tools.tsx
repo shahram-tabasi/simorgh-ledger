@@ -1,5 +1,5 @@
 // هر ابزار، پنلِ اختصاصیِ خودش است (نه آکوردیون)
-import { useMemo, useState, type ReactNode } from 'react';
+import { useMemo, useState, useEffect, type ReactNode } from 'react';
 import {
   type CalendarSystem,
   CALENDAR_SYSTEMS,
@@ -148,12 +148,13 @@ export default function ToolsPanel({ calendarData, currentSystem, currentYear, c
   const [weight, setWeight] = useState<string>('');
 
   // وام و اقساط
+  const [loanType, setLoanType] = useState<'gharz' | 'azad' | 'manual'>('azad');
   const [loanAmount, setLoanAmount] = useState<string>('');
-  const [loanRate, setLoanRate] = useState<string>('');
+  const [loanRate, setLoanRate] = useState<string>('23');
   const [loanCount, setLoanCount] = useState<string>('12');
   const [loanPeriod, setLoanPeriod] = useState<'monthly' | 'yearly'>('monthly');
-  const [loanMethod, setLoanMethod] = useState<'simple' | 'compound'>('simple');
   const [loanFirstDue, setLoanFirstDue] = useState<DateValue>(() => todayValue(currentSystem));
+  const [loanEdited, setLoanEdited] = useState<number[] | null>(null);
   const [loanSaved, setLoanSaved] = useState<number>(0);
 
   const report = useMemo(() => {
@@ -224,42 +225,65 @@ export default function ToolsPanel({ calendarData, currentSystem, currentYear, c
     return { value: value.toFixed(1), category, cls };
   }, [height, weight]);
 
+  const loanTypeLabel = loanType === 'gharz' ? 'قرض‌الحسنه' : loanType === 'azad' ? 'وام آزاد' : 'بدون سود';
+
   const loan = useMemo(() => {
     const P = parseFloat(onlyDigits(loanAmount));
-    const r = parseFloat(loanRate);
+    const r = parseFloat(loanRate) || 0;
     const n = parseInt(loanCount, 10);
-    if (!P || P <= 0 || isNaN(r) || r < 0 || !n || n <= 0 || n > 600) return null;
+    if (!P || P <= 0 || !n || n <= 0 || n > 600) return null;
 
     const periodMonths = loanPeriod === 'monthly' ? 1 : 12;
-    let installment: number;
-    if (loanMethod === 'simple') {
-      const totalInterest = P * (r / 100) * ((n * periodMonths) / 12);
-      installment = (P + totalInterest) / n;
-    } else {
-      const i = (r / 100) * (periodMonths / 12); // نرخ هر دوره
-      installment = i === 0 ? P / n : (P * i * Math.pow(1 + i, n)) / (Math.pow(1 + i, n) - 1);
-    }
+    const years = (n * periodMonths) / 12;
 
-    const perRounded = Math.round(installment);
-    const totalPaid = perRounded * n;
-    const totalInterest = totalPaid - P;
+    // محاسبه‌ی مبلغِ کل بر اساس نوع وام
+    let total: number;
+    if (loanType === 'manual') total = P;                          // تقسیمِ ساده بدون سود
+    else if (loanType === 'gharz') total = P + P * 0.04 * years;    // کارمزدِ ۴٪ سالانه
+    else total = P + P * (r / 100) * years;                        // وام آزاد با نرخ سود
+    const extra = Math.round(total - P);
 
-    // ساخت اقساط با سررسیدِ خودکار
-    const entries: InstallmentEntry[] = [];
+    // تقسیمِ مساوی با اصلاحِ روندِ آخرین قسط
+    const base = Math.round(total / n);
+    const baseSchedule: number[] = Array(n).fill(base);
+    baseSchedule[n - 1] = Math.round(total) - base * (n - 1);
+
+    // سررسیدِ هر قسط
+    const dueKeys: string[] = [];
+    const dueLabels: string[] = [];
+    const dn = getMonthNames(loanFirstDue.system);
     for (let k = 0; k < n; k++) {
       const sh = shiftMonth(loanFirstDue.system, loanFirstDue.year, loanFirstDue.month, k * periodMonths);
       const md = getMonthDays(loanFirstDue.system, sh.year, sh.month);
       const day = Math.min(loanFirstDue.day, md);
-      const key = dateKey(loanFirstDue.system, sh.year, sh.month, day);
-      entries.push({ key, title: `قسط ${k + 1} از ${n} - وام`, amount: perRounded });
+      dueKeys.push(dateKey(loanFirstDue.system, sh.year, sh.month, day));
+      dueLabels.push(`${day} ${dn[sh.month]} ${sh.year}`);
     }
-    return { per: perRounded, totalPaid, totalInterest, principal: P, entries };
-  }, [loanAmount, loanRate, loanCount, loanPeriod, loanMethod, loanFirstDue]);
+    return { n, base, baseSchedule, dueKeys, dueLabels, principal: P, extra, total: Math.round(total) };
+  }, [loanType, loanAmount, loanRate, loanCount, loanPeriod, loanFirstDue]);
+
+  // با تغییرِ پارامترها، ویرایش‌های دستی پاک و دوباره از فرمول پر می‌شود
+  useEffect(() => { setLoanEdited(null); setLoanSaved(0); }, [loanType, loanAmount, loanRate, loanCount, loanPeriod, loanFirstDue]);
+
+  const loanSchedule = loanEdited ?? loan?.baseSchedule ?? [];
+  const loanScheduleTotal = loanSchedule.reduce((s, a) => s + (a || 0), 0);
+
+  const editLoanRow = (i: number, value: string) => {
+    const base = loanEdited ?? loan?.baseSchedule ?? [];
+    const copy = [...base];
+    copy[i] = parseInt(onlyDigits(value), 10) || 0;
+    setLoanEdited(copy);
+  };
 
   const submitLoan = () => {
     if (!loan) return;
-    onAddTransactions(loan.entries);
-    setLoanSaved(loan.entries.length);
+    const entries: InstallmentEntry[] = loan.dueKeys.map((key, i) => ({
+      key,
+      title: `قسط ${i + 1} از ${loan.n} - ${loanTypeLabel}`,
+      amount: loanSchedule[i] || 0,
+    }));
+    onAddTransactions(entries);
+    setLoanSaved(entries.length);
   };
 
   const monthNames = getMonthNames(currentSystem);
@@ -333,6 +357,18 @@ export default function ToolsPanel({ calendarData, currentSystem, currentYear, c
 
                   {section === 'loan' && (
                     <>
+                      <label className="field-label">نوع وام</label>
+                      <div className="mini-toggle">
+                        <button type="button" className={`mini-toggle-btn ${loanType === 'gharz' ? 'active' : ''}`} onClick={() => setLoanType('gharz')}>قرض‌الحسنه</button>
+                        <button type="button" className={`mini-toggle-btn ${loanType === 'azad' ? 'active' : ''}`} onClick={() => setLoanType('azad')}>وام آزاد</button>
+                        <button type="button" className={`mini-toggle-btn ${loanType === 'manual' ? 'active' : ''}`} onClick={() => setLoanType('manual')}>بدون سود</button>
+                      </div>
+                      <div className="tool-note">
+                        {loanType === 'gharz' && 'کارمزدِ سالانه ۴٪ روی اصلِ وام'}
+                        {loanType === 'azad' && 'سود بر اساس نرخِ سالانه‌ای که وارد می‌کنید'}
+                        {loanType === 'manual' && 'اصلِ وام بدون سود، به‌طور مساوی تقسیم می‌شود'}
+                      </div>
+
                       <label className="field-label">مبلغ وام (تومان)</label>
                       <input
                         className="tool-text-input"
@@ -344,10 +380,12 @@ export default function ToolsPanel({ calendarData, currentSystem, currentYear, c
                         onChange={(e) => setLoanAmount(withSeparators(e.target.value))}
                       />
                       <div className="loan-grid">
-                        <div>
-                          <label className="field-label">نرخ سود سالانه ٪</label>
-                          <input className="tool-text-input" type="number" inputMode="decimal" dir="ltr" placeholder="23" value={loanRate} onChange={(e) => setLoanRate(e.target.value)} />
-                        </div>
+                        {loanType === 'azad' && (
+                          <div>
+                            <label className="field-label">نرخ سود سالانه ٪</label>
+                            <input className="tool-text-input" type="number" inputMode="decimal" dir="ltr" placeholder="23" value={loanRate} onChange={(e) => setLoanRate(e.target.value)} />
+                          </div>
+                        )}
                         <div>
                           <label className="field-label">تعداد اقساط</label>
                           <input className="tool-text-input" type="number" inputMode="numeric" dir="ltr" placeholder="12" value={loanCount} onChange={(e) => setLoanCount(onlyDigits(e.target.value))} />
@@ -360,43 +398,46 @@ export default function ToolsPanel({ calendarData, currentSystem, currentYear, c
                         <button type="button" className={`mini-toggle-btn ${loanPeriod === 'yearly' ? 'active' : ''}`} onClick={() => setLoanPeriod('yearly')}>سالانه</button>
                       </div>
 
-                      <label className="field-label">روش محاسبه‌ی سود</label>
-                      <div className="mini-toggle">
-                        <button type="button" className={`mini-toggle-btn ${loanMethod === 'simple' ? 'active' : ''}`} onClick={() => setLoanMethod('simple')}>سود ساده (آخر دوره)</button>
-                        <button type="button" className={`mini-toggle-btn ${loanMethod === 'compound' ? 'active' : ''}`} onClick={() => setLoanMethod('compound')}>سود مرکب (اول و آخر)</button>
-                      </div>
-
                       <label className="field-label">سررسید اولین قسط</label>
-                      <CalendarDateInput value={loanFirstDue} onChange={(v) => { setLoanFirstDue(v); setLoanSaved(0); }} />
+                      <CalendarDateInput value={loanFirstDue} onChange={setLoanFirstDue} />
 
                       {!loan ? (
-                        <div className="tool-note">مبلغ، نرخ و تعداد اقساط را وارد کنید</div>
+                        <div className="tool-note">مبلغ و تعداد اقساط را وارد کنید</div>
                       ) : (
                         <>
                           <div className="tool-result">
-                            <div className="tool-result-row big"><span>مبلغ هر قسط</span><strong>{formatNumber(loan.per)} تومان</strong></div>
-                            <div className="tool-result-row debt"><span>مجموع سود</span><strong>{formatNumber(loan.totalInterest)} تومان</strong></div>
-                            <div className="tool-result-row closing"><span>مجموع بازپرداخت</span><strong>{formatNumber(loan.totalPaid)} تومان</strong></div>
+                            <div className="tool-result-row"><span>اصلِ وام</span><strong>{formatNumber(loan.principal)} تومان</strong></div>
+                            {loanType !== 'manual' && (
+                              <div className="tool-result-row debt"><span>{loanType === 'gharz' ? 'کارمزد' : 'سود'}</span><strong>{formatNumber(loan.extra)} تومان</strong></div>
+                            )}
+                            <div className="tool-result-row closing"><span>مجموع بازپرداخت</span><strong>{formatNumber(loanScheduleTotal)} تومان</strong></div>
                           </div>
-                          <div className="loan-preview">
-                            <div className="loan-preview-title">چند قسط اول:</div>
-                            {loan.entries.slice(0, 3).map((e, idx) => {
-                              const [yy, mm, dd] = e.key.split('-').map(Number);
-                              const c = fromDate(loanFirstDue.system, new Date(yy, mm - 1, dd));
-                              return (
-                                <div key={idx} className="loan-preview-row">
-                                  <span>قسط {idx + 1}</span>
-                                  <span>{c.day} {getMonthNames(loanFirstDue.system)[c.month]} {c.year}</span>
-                                  <strong>{formatNumber(e.amount)}</strong>
-                                </div>
-                              );
-                            })}
-                            {loan.entries.length > 3 && <div className="tool-note">... و {loan.entries.length - 3} قسط دیگر</div>}
+
+                          <div className="loan-sched-head">
+                            <span>اقساط ({loan.n})</span>
+                            <span className="loan-sched-hint">مبلغ هر قسط قابل ویرایش است</span>
                           </div>
+                          <div className="loan-sched">
+                            {loanSchedule.map((amt, i) => (
+                              <div key={i} className="loan-sched-row">
+                                <span className="ls-num">{i + 1}</span>
+                                <span className="ls-date">{loan.dueLabels[i]}</span>
+                                <input
+                                  className="ls-input"
+                                  type="text"
+                                  inputMode="numeric"
+                                  dir="ltr"
+                                  value={formatNumber(amt)}
+                                  onChange={(e) => editLoanRow(i, e.target.value)}
+                                />
+                              </div>
+                            ))}
+                          </div>
+
                           {loanSaved > 0 ? (
                             <div className="loan-success">✅ {loanSaved} قسط در تقویم ثبت شد</div>
                           ) : (
-                            <button className="loan-submit" onClick={submitLoan}>ثبت {loan.entries.length} قسط در تقویم</button>
+                            <button className="loan-submit" onClick={submitLoan}>ثبت {loan.n} قسط در تقویم</button>
                           )}
                         </>
                       )}
