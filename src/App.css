@@ -1434,3 +1434,77 @@ body {
   padding-top: 10px;
   border-top: 1px solid rgba(255, 255, 255, 0.06);
 }
+
+/* ==================== پنل اختصاصیِ هر ابزار ==================== */
+.tool-panel { max-width: 460px; padding: 0; overflow: hidden; }
+
+.tool-panel-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 18px 18px;
+  background: linear-gradient(135deg, #1b2540, #161d2d);
+  color: #fff;
+}
+
+.tool-panel-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: rgba(240, 199, 94, 0.16);
+  color: #f0c75e;
+  flex-shrink: 0;
+}
+
+.tool-panel-head h3 {
+  flex: 1;
+  font-size: 17px;
+  font-weight: 800;
+  margin: 0;
+  color: #fff;
+}
+
+.tool-panel-head .close-modal { color: #cdd5e6; }
+
+.tool-panel-body {
+  padding: 18px;
+  max-height: 72vh;
+  overflow-y: auto;
+}
+
+/* آیکون‌های خطیِ منو (سیاه‌وسفیدِ باکلاس) */
+.di-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  color: #39435c;
+  flex-shrink: 0;
+}
+
+.drawer-item .di-icon svg { width: 21px; height: 21px; }
+
+/* دکمه‌ی بستنِ منوی کشویی */
+.drawer-head { position: relative; }
+.drawer-head > div:not(.drawer-close):nth-child(2) { flex: 1; }
+
+.drawer-close {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  border: none;
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+  font-size: 15px;
+  cursor: pointer;
+  line-height: 1;
+}
+
+/* آیکون‌های هدر (SVG) */
+.icon-btn svg { width: 22px; height: 22px; }

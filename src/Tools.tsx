@@ -1,5 +1,5 @@
-// پنل ابزارها و گزارش‌ها به‌صورت آکاردیون تا هر بخش جدا و بدون قاطی‌شدن باشد
-import { useMemo, useState } from 'react';
+// هر ابزار، پنلِ اختصاصیِ خودش است (نه آکوردیون)
+import { useMemo, useState, type ReactNode } from 'react';
 import {
   type CalendarSystem,
   CALENDAR_SYSTEMS,
@@ -15,6 +15,9 @@ import {
   shiftMonth,
   dateKey,
 } from './calendar';
+import {
+  IconReport, IconBom, IconLoan, IconConvert, IconAge, IconBio, IconBmi,
+} from './icons';
 
 const formatNumber = (n: number): string => n.toLocaleString('en-US');
 const onlyDigits = (s: string): string => s.replace(/[^0-9]/g, '');
@@ -112,21 +115,20 @@ interface ToolsPanelProps {
   currentMonth: number;
   onClose: () => void;
   onAddTransactions: (entries: InstallmentEntry[]) => void;
-  initialSection?: string;
+  section: string;
 }
 
-const SECTIONS = [
-  { id: 'report', title: '📊 گزارش مالی بازه‌ای' },
-  { id: 'bom', title: '📅 گزارش اول ماه (BOM)' },
-  { id: 'loan', title: '💳 وام و اقساط' },
-  { id: 'convert', title: '🔄 تبدیل تاریخ' },
-  { id: 'age', title: '🎂 محاسبه سن' },
-  { id: 'bio', title: '🌀 بیوریتم' },
-  { id: 'bmi', title: '⚖️ شاخص توده بدنی (BMI)' },
-] as const;
+const SECTION_META: Record<string, { title: string; icon: ReactNode }> = {
+  report: { title: 'گزارش مالی بازه‌ای', icon: <IconReport /> },
+  bom: { title: 'گزارش اول ماه (BOM)', icon: <IconBom /> },
+  loan: { title: 'وام و اقساط', icon: <IconLoan /> },
+  convert: { title: 'تبدیل تاریخ', icon: <IconConvert /> },
+  age: { title: 'محاسبه سن', icon: <IconAge /> },
+  bio: { title: 'بیوریتم', icon: <IconBio /> },
+  bmi: { title: 'شاخص توده بدنی (BMI)', icon: <IconBmi /> },
+};
 
-export default function ToolsPanel({ calendarData, currentSystem, currentYear, currentMonth, onClose, onAddTransactions, initialSection }: ToolsPanelProps) {
-  const [open, setOpen] = useState<string | null>(initialSection ?? 'report');
+export default function ToolsPanel({ calendarData, currentSystem, currentYear, currentMonth, onClose, onAddTransactions, section }: ToolsPanelProps) {
 
   // گزارش مالی بازه‌ای
   const [reportStart, setReportStart] = useState<DateValue>(() => todayValue(currentSystem));
@@ -283,25 +285,19 @@ export default function ToolsPanel({ calendarData, currentSystem, currentYear, c
     </div>
   );
 
+  const meta = SECTION_META[section] ?? SECTION_META.report;
+
   return (
     <div className="modal" onClick={onClose}>
-      <div className="modal-box tools-box" onClick={(e) => e.stopPropagation()}>
-        <div className="modal-header">
-          <h3>🧰 ابزارها و گزارش‌ها</h3>
+      <div className="modal-box tool-panel" onClick={(e) => e.stopPropagation()}>
+        <div className="tool-panel-head">
+          <span className="tool-panel-icon">{meta.icon}</span>
+          <h3>{meta.title}</h3>
           <button className="close-modal" onClick={onClose}>✕</button>
         </div>
 
-        <div className="accordion">
-          {SECTIONS.map((sec) => (
-            <div key={sec.id} className={`acc-item ${open === sec.id ? 'open' : ''}`}>
-              <button className="acc-head" onClick={() => setOpen(open === sec.id ? null : sec.id)}>
-                <span>{sec.title}</span>
-                <span className="acc-arrow">{open === sec.id ? '▲' : '▼'}</span>
-              </button>
-
-              {open === sec.id && (
-                <div className="acc-body">
-                  {sec.id === 'report' && (
+        <div className="tool-panel-body">
+                  {section === 'report' && (
                     <>
                       <label className="field-label">از تاریخ</label>
                       <CalendarDateInput value={reportStart} onChange={setReportStart} />
@@ -320,7 +316,7 @@ export default function ToolsPanel({ calendarData, currentSystem, currentYear, c
                     </>
                   )}
 
-                  {sec.id === 'bom' && (
+                  {section === 'bom' && (
                     <>
                       <div className="tool-note">
                         مربوط به ماهِ در حال نمایش: <strong>{monthNames[currentMonth]} {currentYear}</strong>
@@ -335,7 +331,7 @@ export default function ToolsPanel({ calendarData, currentSystem, currentYear, c
                     </>
                   )}
 
-                  {sec.id === 'loan' && (
+                  {section === 'loan' && (
                     <>
                       <label className="field-label">مبلغ وام (تومان)</label>
                       <input
@@ -407,7 +403,7 @@ export default function ToolsPanel({ calendarData, currentSystem, currentYear, c
                     </>
                   )}
 
-                  {sec.id === 'convert' && (
+                  {section === 'convert' && (
                     <>
                       <label className="field-label">تاریخ را وارد کنید</label>
                       <CalendarDateInput value={convertDate} onChange={setConvertDate} />
@@ -420,7 +416,7 @@ export default function ToolsPanel({ calendarData, currentSystem, currentYear, c
                     </>
                   )}
 
-                  {sec.id === 'age' && (
+                  {section === 'age' && (
                     <>
                       <label className="field-label">تاریخ تولد</label>
                       <CalendarDateInput value={birth} onChange={setBirth} />
@@ -438,7 +434,7 @@ export default function ToolsPanel({ calendarData, currentSystem, currentYear, c
                     </>
                   )}
 
-                  {sec.id === 'bio' && (
+                  {section === 'bio' && (
                     <>
                       <label className="field-label">تاریخ تولد</label>
                       <CalendarDateInput value={birth} onChange={setBirth} />
@@ -455,7 +451,7 @@ export default function ToolsPanel({ calendarData, currentSystem, currentYear, c
                     </>
                   )}
 
-                  {sec.id === 'bmi' && (
+                  {section === 'bmi' && (
                     <>
                       <div className="bmi-inputs">
                         <input type="number" inputMode="decimal" placeholder="قد (سانتی‌متر)" value={height} onChange={(e) => setHeight(e.target.value)} />
@@ -471,10 +467,6 @@ export default function ToolsPanel({ calendarData, currentSystem, currentYear, c
                       )}
                     </>
                   )}
-                </div>
-              )}
-            </div>
-          ))}
         </div>
       </div>
     </div>

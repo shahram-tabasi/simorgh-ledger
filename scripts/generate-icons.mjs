@@ -9,15 +9,21 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const ORIGINAL = resolve(root, 'public/pwa-512-NEW.png');
-const NAVY = { r: 22, g: 29, b: 45 }; // #161D2D
+const ORIGINAL = resolve(root, 'public/1.jpg');
+const NAVY = { r: 22, g: 31, b: 45 }; // سرمه‌ایِ همتراز با زمینه‌ی لوگو
 
-// ۱) منبعِ تمیز: یک برشِ مربعی که فقط سیمرغِ کامل را دارد (متنِ SIMORGH/LEDGER حذف می‌شود)
-// این برش مستقیم از کارتِ سرمه‌ایِ اصلی است؛ بدون ترکیب و بدون خطِ لبه.
+// ۱) منبعِ تمیز: سیمرغِ کامل وسطِ مربع، با گسترشِ لبه‌های سرمه‌ای (بدون خط/درز)
 const CANVAS = 1024;
-const SRC = await sharp(ORIGINAL, { limitInputPixels: false })
-  .extract({ left: 218, top: 118, width: 760, height: 760 })
-  .resize(CANVAS, CANVAS)
+const resized = await sharp(ORIGINAL, { limitInputPixels: false })
+  .resize({ height: Math.round(CANVAS * 0.84), fit: 'inside' })
+  .toBuffer();
+const rm = await sharp(resized).metadata();
+const top = Math.floor((CANVAS - rm.height) / 2);
+const bottom = CANVAS - rm.height - top;
+const left = Math.floor((CANVAS - rm.width) / 2);
+const right = CANVAS - rm.width - left;
+const SRC = await sharp(resized)
+  .extend({ top, bottom, left, right, extendWith: 'copy' })
   .png()
   .toBuffer();
 void NAVY;

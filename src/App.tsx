@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import './App.css';
 import { LocalNotifications } from '@capacitor/local-notifications';
 import {
@@ -22,6 +22,10 @@ import {
 import logoUrl from './assets/logo.png';
 import ToolsPanel from './Tools';
 import WelcomeScreen from './WelcomeScreen';
+import {
+  IconReport, IconBom, IconLoan, IconConvert, IconAge, IconBio, IconBmi,
+  IconToday, IconUsers, IconShare, IconGlobe, IconMenu, IconInfo,
+} from './icons';
 
 const getPrayerTimes = (day: number): any => {
   const times = {
@@ -104,6 +108,7 @@ function App() {
   const [showAboutModal, setShowAboutModal] = useState<boolean>(false);
   const [toolsInitialSection, setToolsInitialSection] = useState<string>('report');
   const [editingTxId, setEditingTxId] = useState<string | null>(null);
+  const touchStart = useRef<{ x: number; y: number } | null>(null);
 
   // درخواست مجوز نوتیفیکیشن در شروع برنامه
   useEffect(() => {
@@ -464,17 +469,36 @@ function App() {
   };
   const otherSystems = CALENDAR_SYSTEMS.filter((s) => s !== calendarSystem);
 
+  // باز کردن منوها با کشیدنِ انگشت (راست → منوی راست، چپ → منوی چپ)
+  const anyOverlayOpen = showWelcome || showRightDrawer || showLeftDrawer || showToolsModal ||
+    showDayModal || showAddModal || showPrayerModal || showYearMonthModal || showReminderModal || showAboutModal;
+  const onTouchStart = (e: React.TouchEvent) => {
+    const t = e.touches[0];
+    touchStart.current = { x: t.clientX, y: t.clientY };
+  };
+  const onTouchEnd = (e: React.TouchEvent) => {
+    if (!touchStart.current || anyOverlayOpen) { touchStart.current = null; return; }
+    const t = e.changedTouches[0];
+    const dx = t.clientX - touchStart.current.x;
+    const dy = t.clientY - touchStart.current.y;
+    touchStart.current = null;
+    if (Math.abs(dx) > 70 && Math.abs(dx) > Math.abs(dy) * 1.8) {
+      if (dx > 0) setShowRightDrawer(true);
+      else setShowLeftDrawer(true);
+    }
+  };
+
   return (
-    <div className="app">
+    <div className="app" onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
       {showWelcome && <WelcomeScreen onDone={() => setShowWelcome(false)} />}
 
       <div className="header">
-        <button className="icon-btn" onClick={() => setShowRightDrawer(true)} aria-label="امکانات">☰</button>
+        <button className="icon-btn" onClick={() => setShowRightDrawer(true)} aria-label="امکانات"><IconMenu /></button>
         <h1 className="brand">
           <img className="brand-logo" src={logoUrl} alt="simorgh-ledger" />
           <span className="brand-name">simorgh-ledger</span>
         </h1>
-        <button className="icon-btn" onClick={() => setShowLeftDrawer(true)} aria-label="درباره ما">ⓘ</button>
+        <button className="icon-btn" onClick={() => setShowLeftDrawer(true)} aria-label="درباره ما"><IconInfo /></button>
       </div>
 
       {/* بنر امروز با هر سه تقویم */}
@@ -711,7 +735,7 @@ function App() {
           currentMonth={currentMonth}
           onClose={() => setShowToolsModal(false)}
           onAddTransactions={addInstallments}
-          initialSection={toolsInitialSection}
+          section={toolsInitialSection}
         />
       )}
 
@@ -725,19 +749,20 @@ function App() {
                 <div className="drawer-title">امکانات و ابزارها</div>
                 <div className="drawer-sub">simorgh-ledger</div>
               </div>
+              <button className="drawer-close" onClick={() => setShowRightDrawer(false)} aria-label="بستن">✕</button>
             </div>
             <div className="drawer-section-label">گزارش‌ها</div>
-            <button className="drawer-item" onClick={() => openTool('report')}><span>📊</span> گزارش مالی بازه‌ای</button>
-            <button className="drawer-item" onClick={() => openTool('bom')}><span>📅</span> گزارش اول ماه (BOM)</button>
+            <button className="drawer-item" onClick={() => openTool('report')}><span className="di-icon"><IconReport /></span> گزارش مالی بازه‌ای</button>
+            <button className="drawer-item" onClick={() => openTool('bom')}><span className="di-icon"><IconBom /></span> گزارش اول ماه (BOM)</button>
             <div className="drawer-section-label">مالی</div>
-            <button className="drawer-item" onClick={() => openTool('loan')}><span>💳</span> وام و اقساط</button>
+            <button className="drawer-item" onClick={() => openTool('loan')}><span className="di-icon"><IconLoan /></span> وام و اقساط</button>
             <div className="drawer-section-label">ابزارهای کاربردی</div>
-            <button className="drawer-item" onClick={() => openTool('convert')}><span>🔄</span> تبدیل تاریخ</button>
-            <button className="drawer-item" onClick={() => openTool('age')}><span>🎂</span> محاسبه سن</button>
-            <button className="drawer-item" onClick={() => openTool('bio')}><span>🌀</span> بیوریتم</button>
-            <button className="drawer-item" onClick={() => openTool('bmi')}><span>⚖️</span> شاخص توده بدنی</button>
+            <button className="drawer-item" onClick={() => openTool('convert')}><span className="di-icon"><IconConvert /></span> تبدیل تاریخ</button>
+            <button className="drawer-item" onClick={() => openTool('age')}><span className="di-icon"><IconAge /></span> محاسبه سن</button>
+            <button className="drawer-item" onClick={() => openTool('bio')}><span className="di-icon"><IconBio /></span> بیوریتم</button>
+            <button className="drawer-item" onClick={() => openTool('bmi')}><span className="di-icon"><IconBmi /></span> شاخص توده بدنی</button>
             <div className="drawer-section-label">میان‌بر</div>
-            <button className="drawer-item" onClick={() => { goToToday(); setShowRightDrawer(false); }}><span>📌</span> برو به امروز</button>
+            <button className="drawer-item" onClick={() => { goToToday(); setShowRightDrawer(false); }}><span className="di-icon"><IconToday /></span> برو به امروز</button>
           </aside>
         </div>
       )}
@@ -752,16 +777,17 @@ function App() {
                 <div className="drawer-title">درباره ما</div>
                 <div className="drawer-sub">سیمرغ فناوری هوشمند</div>
               </div>
+              <button className="drawer-close" onClick={() => setShowLeftDrawer(false)} aria-label="بستن">✕</button>
             </div>
-            <button className="drawer-item" onClick={() => { setShowLeftDrawer(false); setShowAboutModal(true); }}><span>👥</span> طراحان و خدمات</button>
+            <button className="drawer-item" onClick={() => { setShowLeftDrawer(false); setShowAboutModal(true); }}><span className="di-icon"><IconUsers /></span> طراحان و خدمات</button>
             <button className="drawer-item" onClick={() => {
               const data = { title: 'simorgh-ledger', text: 'دفترکل و تقویم هوشمند سیمرغ', url: 'https://www.simorghai.com' };
               if (navigator.share) navigator.share(data).catch(() => {});
               else alert('www.simorghai.com');
               setShowLeftDrawer(false);
-            }}><span>📤</span> ارسال نرم‌افزار</button>
-            <a className="drawer-item" href="https://www.simorghai.com" target="_blank" rel="noopener noreferrer"><span>🌐</span> وب‌سایت سیمرغ</a>
-            <div className="drawer-foot">نسخه ۱۴۰۵ · ۱.۰.۱۰</div>
+            }}><span className="di-icon"><IconShare /></span> ارسال نرم‌افزار</button>
+            <a className="drawer-item" href="https://www.simorghai.com" target="_blank" rel="noopener noreferrer"><span className="di-icon"><IconGlobe /></span> وب‌سایت سیمرغ</a>
+            <div className="drawer-foot">نسخه ۱۴۰۵ · ۱.۰.۱۱</div>
           </aside>
         </div>
       )}
