@@ -15,6 +15,7 @@
     "@capacitor/core": "^8.3.1",
     "@capacitor/local-notifications": "^8.0.0",
     "@capacitor/share": "^8.0.1",
+    "@capacitor/status-bar": "^8.0.2",
     "@fontsource/vazirmatn": "^5.2.8",
     "adhan": "^4.4.3",
     "moment-hijri": "^3.0.0",
