@@ -15,12 +15,14 @@ import {
   shiftMonth,
   convertMonth,
   convertAll,
+  toDate,
+  fromDate,
   yearRange,
   migrateKey,
 } from './calendar';
 
 import logoUrl from './assets/logo.png';
-import ToolsPanel from './Tools';
+import ToolsPanel, { CalendarDateInput, type DateValue } from './Tools';
 import WelcomeScreen from './WelcomeScreen';
 import {
   IconReport, IconBom, IconLoan, IconConvert, IconAge, IconBio, IconBmi,
@@ -98,7 +100,10 @@ function App() {
   const [tempYear, setTempYear] = useState<number>(currentYear);
   const [tempMonth, setTempMonth] = useState<number>(currentMonth);
   const [reminderText, setReminderText] = useState<string>('');
-  const [reminderDate, setReminderDate] = useState<string>('');
+  const [reminderDateValue, setReminderDateValue] = useState<DateValue>(() => {
+    const t = getToday(calendarSystem);
+    return { system: calendarSystem, year: t.year, month: t.month, day: t.day };
+  });
   const [reminderTime, setReminderTime] = useState<string>('09:00');
   const [selectedTransactionForReminder, setSelectedTransactionForReminder] = useState<{ dateKey: string; transactionId: string } | null>(null);
   const [notificationPermission, setNotificationPermission] = useState<boolean>(false);
@@ -315,6 +320,9 @@ function App() {
     if (wantReminder) {
       setSelectedTransactionForReminder({ dateKey: selectedDate, transactionId: newTransaction.id });
       setReminderText(newTransaction.title);
+      // پیش‌فرضِ تاریخِ یادآوری = روزِ تراکنش، در همان تقویمِ انتخابی
+      const [gy, gm, gd] = selectedDate.split('-').map(Number);
+      setReminderDateValue({ system: calendarSystem, ...fromDate(calendarSystem, new Date(gy, (gm || 1) - 1, gd || 1)) });
       setShowReminderModal(true);
     }
   };
@@ -328,12 +336,16 @@ function App() {
 
   // تایید یادآوری
   const confirmReminder = async () => {
-    if (!selectedTransactionForReminder || !reminderDate || !reminderTime) {
+    if (!selectedTransactionForReminder || !reminderTime) {
       alert('لطفاً تاریخ و ساعت را انتخاب کنید');
       return;
     }
 
-    const reminderDateTime = `${reminderDate}T${reminderTime}`;
+    // تاریخِ انتخاب‌شده (در هر تقویمی) را به زمانِ واقعی تبدیل می‌کنیم
+    const base = toDate(reminderDateValue.system, reminderDateValue.year, reminderDateValue.month, reminderDateValue.day);
+    const [hh, mm] = reminderTime.split(':').map(Number);
+    base.setHours(hh || 0, mm || 0, 0, 0);
+    const reminderDateTime = base.toISOString();
     const transaction = calendarData[selectedTransactionForReminder.dateKey]?.transactions.find(
       t => t.id === selectedTransactionForReminder.transactionId
     );
@@ -353,7 +365,6 @@ function App() {
     setShowReminderModal(false);
     setSelectedTransactionForReminder(null);
     setReminderText('');
-    setReminderDate('');
     setReminderTime('09:00');
   };
 
@@ -787,7 +798,7 @@ function App() {
               setShowLeftDrawer(false);
             }}><span className="di-icon"><IconShare /></span> ارسال نرم‌افزار</button>
             <a className="drawer-item" href="https://www.simorghai.com" target="_blank" rel="noopener noreferrer"><span className="di-icon"><IconGlobe /></span> وب‌سایت سیمرغ</a>
-            <div className="drawer-foot">نسخه ۱۴۰۵ · ۱.۰.۱۱</div>
+            <div className="drawer-foot">نسخه ۱۴۰۵ · ۱.۰.۱۲</div>
           </aside>
         </div>
       )}
@@ -835,15 +846,12 @@ function App() {
             <p style={{ marginBottom: '12px', fontSize: '13px', color: '#666' }}>
               برای: <strong>{reminderText}</strong>
             </p>
-            <input 
-              type="date" 
-              value={reminderDate} 
-              onChange={e => setReminderDate(e.target.value)}
-              style={{ marginBottom: '12px' }}
-            />
-            <input 
-              type="time" 
-              value={reminderTime} 
+            <label className="field-label">تاریخ یادآوری</label>
+            <CalendarDateInput value={reminderDateValue} onChange={setReminderDateValue} />
+            <label className="field-label">ساعت</label>
+            <input
+              type="time"
+              value={reminderTime}
               onChange={e => setReminderTime(e.target.value)}
               style={{ marginBottom: '12px' }}
             />

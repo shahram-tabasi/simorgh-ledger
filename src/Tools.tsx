@@ -28,7 +28,7 @@ const withSeparators = (s: string): string => {
 
 type CalData = { [key: string]: { transactions: { amount: number; isPaid: boolean }[] } };
 
-interface DateValue {
+export interface DateValue {
   system: CalendarSystem;
   year: number;
   month: number; // صفرمبنا
@@ -54,7 +54,7 @@ function keyToTs(key: string): number {
 }
 
 // ورودیِ تاریخِ چندتقویمی با سوییچ شمسی/میلادی/قمری
-function CalendarDateInput({ value, onChange }: { value: DateValue; onChange: (v: DateValue) => void }) {
+export function CalendarDateInput({ value, onChange }: { value: DateValue; onChange: (v: DateValue) => void }) {
   const months = getMonthNames(value.system);
   const maxDay = getMonthDays(value.system, value.year, value.month);
   const days = Array.from({ length: maxDay }, (_, i) => i + 1);
