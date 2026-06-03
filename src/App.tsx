@@ -71,6 +71,7 @@ interface Fund {
   name: string;
   monthlyAmount: number;
   members: string[];
+  phones?: { [member: string]: string };
   rounds: FundRound[];
 }
 
@@ -88,11 +89,12 @@ const parseFormattedNumber = (str: string): number => {
 const SYSTEM_STORAGE_KEY = 'calendarSystem';
 
 // نسخه و فهرستِ تغییرات برای پنجره‌ی «تازه‌ها»
-const APP_VERSION = '1.0.20';
+const APP_VERSION = '1.0.21';
 const CHANGELOG: string[] = [
-  'رفعِ اشکالِ قرعه‌کشیِ دوره‌های بعدیِ صندوق (برنده‌ی قبلی هم واریز می‌کند ولی دوباره برنده نمی‌شود)',
-  'گزارشِ صندوق: پرداختی و مانده‌ی هر نفر تا پایان دوره + توضیحِ ساده',
-  'ثبتِ واریزی‌های صندوق به‌صورت یادآور در تقویم',
+  'گزینه‌ی «چند روز قبل از سررسید» در یادآوری‌ها',
+  'ارسال یادآوریِ پرداخت به اعضای صندوق با واتساپ، پیامک یا اشتراک‌گذاری (ایتا/تلگرام)',
+  'افزودنِ شماره‌ی موبایلِ اعضا',
+  'ماشین‌حسابِ صندوق: مبلغِ هدف و تعداد نفرات → واریزیِ ماهانه',
 ];
 
 function App() {
@@ -328,6 +330,15 @@ function App() {
     setShowReminderModal(true);
   };
 
+  // تنظیمِ تاریخِ یادآوری بر اساس «چند روز قبل از سررسید»
+  const setReminderOffset = (daysBefore: number) => {
+    if (!selectedTransactionForReminder) return;
+    const [gy, gm, gd] = selectedTransactionForReminder.dateKey.split('-').map(Number);
+    const d = new Date(gy, (gm || 1) - 1, gd || 1);
+    d.setDate(d.getDate() - daysBefore);
+    setReminderDateValue({ system: calendarSystem, ...fromDate(calendarSystem, d) });
+  };
+
   // تغییر وضعیتِ پرداختِ یک تراکنش با کلیدِ مشخص
   const togglePaidByKey = (dKey: string, id: string) => {
     const day = calendarData[dKey];
@@ -510,6 +521,18 @@ function App() {
           notify('لینک نرم‌افزار کپی شد:\nwww.simorghai.com');
         }
       } catch { /* کاربر منصرف شد */ }
+    }
+  };
+
+  // اشتراک‌گذاریِ یک متنِ دلخواه (برای پیامِ یادآوریِ صندوق)
+  const shareText = async (text: string) => {
+    try {
+      await Share.share({ text, dialogTitle: 'اشتراک‌گذاری پیام' });
+    } catch {
+      try {
+        if (navigator.share) await navigator.share({ text });
+        else { await navigator.clipboard?.writeText(text); notify('پیام کپی شد؛ در گروه بفرستید'); }
+      } catch { /* منصرف شد */ }
     }
   };
 
@@ -1123,7 +1146,7 @@ function App() {
 
       {/* صندوق خانوادگی */}
       {showFundModal && (
-        <FundPanel funds={funds} onChange={saveFunds} onClose={() => setShowFundModal(false)} confirm={askConfirm} onAddDeposits={addFundDeposits} />
+        <FundPanel funds={funds} onChange={saveFunds} onClose={() => setShowFundModal(false)} confirm={askConfirm} onAddDeposits={addFundDeposits} onShare={shareText} />
       )}
 
       {/* منوی راست: امکانات و ابزارها */}
@@ -1178,7 +1201,7 @@ function App() {
               <button className={`theme-btn ${theme === 'dark' ? 'active' : ''}`} onClick={() => setTheme('dark')}>🌙 تیره</button>
             </div>
 
-            <div className="drawer-foot">نسخه ۱۴۰۵ · ۱.۰.۲۰</div>
+            <div className="drawer-foot">نسخه ۱۴۰۵ · ۱.۰.۲۱</div>
           </aside>
         </div>
       )}
@@ -1226,6 +1249,14 @@ function App() {
             <p style={{ marginBottom: '12px', fontSize: '13px', color: '#666' }}>
               برای: <strong>{reminderText}</strong>
             </p>
+            <label className="field-label">یادآوری چند روز قبل از سررسید</label>
+            <div className="mini-toggle reminder-offsets">
+              {[0, 1, 2, 3, 7].map((d) => (
+                <button key={d} type="button" className="mini-toggle-btn" onClick={() => setReminderOffset(d)}>
+                  {d === 0 ? 'روزِ سررسید' : `${d} روز`}
+                </button>
+              ))}
+            </div>
             <label className="field-label">تاریخ یادآوری</label>
             <CalendarDateInput value={reminderDateValue} onChange={setReminderDateValue} />
             <label className="field-label">ساعت</label>
