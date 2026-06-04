@@ -2136,3 +2136,9 @@ body.dark .coach-tip { background: #1a2434; }
 body.dark .coach-title { color: #e9eef7; }
 body.dark .coach-text { color: #aeb8cd; }
 body.dark .coach-prev { background: #243049; color: #cfd7e8; }
+
+/* حالتِ خالیِ گزارشِ صندوق */
+.fund-empty { text-align: center; padding: 30px 10px; }
+.fund-empty-icon { font-size: 46px; margin-bottom: 10px; }
+.fund-empty-title { font-size: 16px; font-weight: 800; color: #2c3550; margin-bottom: 6px; }
+body.dark .fund-empty-title { color: #e3e9f4; }

@@ -28,8 +28,23 @@ const SRC = await sharp(resized)
   .toBuffer();
 void NAVY;
 
+// منبعِ آیکونِ تطبیقی (foreground): سیمرغ کوچک‌تر و با حاشیه‌ی بیشتر تا ماسکِ لانچر
+// پایین/لبه‌ها را نبُرد (داخلِ ناحیه‌ی امن بماند)
+const fgInner = await sharp(SRC).resize({ width: Math.round(CANVAS * 0.62), height: Math.round(CANVAS * 0.62), fit: 'inside' }).toBuffer();
+const fim = await sharp(fgInner).metadata();
+const ft = Math.floor((CANVAS - fim.height) / 2);
+const fb = CANVAS - fim.height - ft;
+const fl = Math.floor((CANVAS - fim.width) / 2);
+const fr = CANVAS - fim.width - fl;
+const SRC_FG = await sharp(fgInner).extend({ top: ft, bottom: fb, left: fl, right: fr, extendWith: 'copy' }).png().toBuffer();
+
 function load() {
   return sharp(SRC, { limitInputPixels: false });
+}
+
+async function squareFrom(buf, size, outPath) {
+  mkdirSync(dirname(outPath), { recursive: true });
+  await sharp(buf, { limitInputPixels: false }).resize(size, size, { fit: 'cover' }).png().toFile(outPath);
 }
 
 async function square(size, outPath) {
@@ -52,7 +67,7 @@ for (const d of densities) {
   const base = `${androidRes}/mipmap-${d.dir}`;
   await square(d.launcher, `${base}/ic_launcher.png`);
   await square(d.launcher, `${base}/ic_launcher_round.png`);
-  await square(d.foreground, `${base}/ic_launcher_foreground.png`);
+  await squareFrom(SRC_FG, d.foreground, `${base}/ic_launcher_foreground.png`);
 }
 
 // آیکون‌های وب / PWA
