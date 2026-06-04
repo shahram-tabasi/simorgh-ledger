@@ -77,6 +77,8 @@ interface Fund {
   members: FundMember[];
   rounds: FundRound[];
   carry?: number;          // مانده‌ی جمع‌شده‌ی صندوق (ته‌مانده‌ی روند)
+  autoRound?: boolean;     // روندِ خودکارِ مبلغ‌ها (پیش‌فرض روشن)
+  roundUnit?: number;      // واحدِ روند (۱۰۰۰ / ۱۰۰۰۰ / ۱۰۰۰۰۰)
 }
 
 // مهاجرتِ صندوق‌های قدیمی (اعضای رشته‌ای، برنده‌ی تکی) به مدلِ سهم‌محور
@@ -90,7 +92,7 @@ function normalizeFund(f: any): Fund {
     winners: Array.isArray(r.winners) ? r.winners : (r.winner ? [r.winner] : []),
     pay: typeof r.pay === 'number' ? r.pay : undefined,
   }));
-  return { id: f.id, name: f.name, monthlyAmount: f.monthlyAmount, payoutsPerMonth: f.payoutsPerMonth || 1, members, rounds, carry: typeof f.carry === 'number' ? f.carry : 0 };
+  return { id: f.id, name: f.name, monthlyAmount: f.monthlyAmount, payoutsPerMonth: f.payoutsPerMonth || 1, members, rounds, carry: typeof f.carry === 'number' ? f.carry : 0, autoRound: f.autoRound !== false, roundUnit: typeof f.roundUnit === 'number' ? f.roundUnit : 10000 };
 }
 
 // تابع فرمت عدد با جداکننده سه‌رقمی
@@ -117,12 +119,12 @@ const TOUR_STEPS: CoachStep[] = [
 ];
 
 // نسخه و فهرستِ تغییرات برای پنجره‌ی «تازه‌ها»
-const APP_VERSION = '1.0.29';
+const APP_VERSION = '1.0.30';
 const CHANGELOG: string[] = [
-  'صندوق: مبلغِ هر پرداخت گِرد به ۱۰٬۰۰۰ تومان شد تا «خرده‌پرداختی» نداشته باشید',
-  'ته‌مانده‌ها در «مانده‌ی صندوق» جمع و به‌صورتِ برنده‌ی اضافه پخش می‌شوند؛ در ماهِ آخر پولی در صندوق نمی‌ماند',
-  'گزارشِ صندوق: نمایشِ مانده‌ی صندوق و ماه‌هایی که پرداختِ اضافه داشته‌ایم',
-  'وام: قسط‌ها هم گِرد به ۱۰٬۰۰۰ تومان شدند (ته‌مانده در قسطِ آخر)',
+  'حالتِ پیشرفته‌ی صندوق: می‌توانید روندِ خودکار را روشن/خاموش کنید و واحدِ روند را ۱٬۰۰۰ / ۱۰٬۰۰۰ / ۱۰۰٬۰۰۰ بگذارید',
+  'اگر روند خاموش باشد و مبلغ خرده داشته باشد، برنامه پیغام می‌دهد و با یک دکمه گِردش می‌کنید',
+  'گزارشِ صندوق: «پیش‌بینیِ نوبت‌های پرشلوغ» می‌گوید کدام ماه‌های آینده برنده‌ی اضافه دارند و چند نفر',
+  'وام: تیکِ «روندِ خودکارِ اقساط» با امکانِ خاموش‌کردن و پیغامِ خرده',
 ];
 
 function App() {
@@ -1204,7 +1206,7 @@ function App() {
               <button className={`theme-btn ${theme === 'dark' ? 'active' : ''}`} onClick={() => setTheme('dark')}>🌙 تیره</button>
             </div>
 
-            <div className="drawer-foot">نسخه ۱۴۰۵ · ۱.۰.۲۹</div>
+            <div className="drawer-foot">نسخه ۱۴۰۵ · ۱.۰.۳۰</div>
           </aside>
         </div>
       )}

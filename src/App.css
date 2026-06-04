@@ -2103,6 +2103,38 @@ body.dark .fund-help strong { color: #cfe4fb; }
 body.dark .fund-status.got { background: #2a2410; color: #d9b34e; }
 body.dark .fund-status.wait { background: #243049; color: #aeb8cd; }
 
+/* حالتِ پیشرفته: روندِ خودکار، واحدِ روند، و پیغامِ خرده */
+.fund-adv-toggle {
+  background: none; border: none; color: #1c6fd6; font-size: 13px; font-weight: 700;
+  cursor: pointer; padding: 8px 0; margin: 4px 0; font-family: inherit;
+}
+.fund-adv { background: #f5f8fd; border: 1px solid #e0e9f5; border-radius: 13px; padding: 12px 14px; margin-bottom: 12px; }
+.fund-setting-row { margin: 6px 0 12px; }
+.fund-switch { display: flex; align-items: center; gap: 9px; font-size: 14px; font-weight: 600; color: #2c3550; cursor: pointer; }
+.fund-switch input { width: 18px; height: 18px; accent-color: #1c6fd6; cursor: pointer; }
+.fund-unit-pick { display: flex; gap: 8px; margin: 10px 0; }
+.fund-unit-btn {
+  flex: 1; padding: 9px 0; border: 1px solid #d3deee; border-radius: 10px; background: #fff;
+  color: #4a5774; font-size: 13px; font-weight: 700; cursor: pointer; font-family: inherit;
+}
+.fund-unit-btn.active { background: #1c6fd6; border-color: #1c6fd6; color: #fff; }
+.fund-roundask {
+  background: #fff7e6; border: 1px solid #f3d99a; border-radius: 13px; padding: 12px 14px;
+  margin-bottom: 12px; display: flex; flex-direction: column; gap: 10px;
+  font-size: 13px; line-height: 1.9; color: #7a5b12;
+}
+.fund-roundask strong { color: #6a4f0c; }
+.fund-roundask-btn {
+  align-self: flex-start; background: #e6a417; border: none; color: #fff; font-weight: 800;
+  font-size: 13px; padding: 8px 16px; border-radius: 10px; cursor: pointer; font-family: inherit;
+}
+body.dark .fund-adv { background: #15203244; border-color: #2a3a55; }
+body.dark .fund-switch { color: #dce4f2; }
+body.dark .fund-unit-btn { background: #1b2740; border-color: #314261; color: #b9c5dc; }
+body.dark .fund-unit-btn.active { background: #2f7fe0; border-color: #2f7fe0; color: #fff; }
+body.dark .fund-roundask { background: #2c2410; border-color: #5a4a1e; color: #e3c574; }
+body.dark .fund-roundask strong { color: #f3d98a; }
+
 /* عضو صندوق: بخشِ پرداخت + دکمه‌ی اطلاع‌رسانی */
 .fund-member { padding: 0; overflow: hidden; }
 .fm-main {

@@ -158,6 +158,7 @@ export default function ToolsPanel({ calendarData, currentSystem, currentYear, c
   const [loanFirstDue, setLoanFirstDue] = useState<DateValue>(() => todayValue(currentSystem));
   const [loanEdited, setLoanEdited] = useState<number[] | null>(null);
   const [loanSaved, setLoanSaved] = useState<number>(0);
+  const [loanAutoRound, setLoanAutoRound] = useState<boolean>(true); // روندِ خودکارِ اقساط (پیش‌فرض روشن)
 
   const report = useMemo(() => {
     const startTs = toDate(reportStart.system, reportStart.year, reportStart.month, reportStart.day).getTime();
@@ -245,11 +246,12 @@ export default function ToolsPanel({ calendarData, currentSystem, currentYear, c
     else total = P + P * (r / 100) * years;                        // وام آزاد با نرخ سود
     const extra = Math.round(total - P);
 
-    // تقسیمِ مساوی با روندِ به‌پایینِ هر قسط به ۱۰٬۰۰۰ (بدونِ خرده)؛ ته‌مانده در قسطِ آخر تسویه می‌شود
+    // تقسیمِ مساوی؛ با روندِ خودکار هر قسط به‌پایین به ۱۰٬۰۰۰ گِرد و ته‌مانده در قسطِ آخر تسویه می‌شود
     const ROUND = 10000;
-    const base = Math.floor(total / n / ROUND) * ROUND;
+    const base = loanAutoRound ? Math.floor(total / n / ROUND) * ROUND : Math.round(total / n);
     const baseSchedule: number[] = Array(n).fill(base);
     baseSchedule[n - 1] = Math.round(total) - base * (n - 1);
+    const hasFraction = baseSchedule.some((a) => Math.round(a) % ROUND !== 0); // خرده دارد؟
 
     // سررسیدِ هر قسط
     const dueKeys: string[] = [];
@@ -262,11 +264,11 @@ export default function ToolsPanel({ calendarData, currentSystem, currentYear, c
       dueKeys.push(dateKey(loanFirstDue.system, sh.year, sh.month, day));
       dueLabels.push(`${day} ${dn[sh.month]} ${sh.year}`);
     }
-    return { n, base, baseSchedule, dueKeys, dueLabels, principal: P, extra, total: Math.round(total) };
-  }, [loanType, loanAmount, loanRate, loanCount, loanPeriod, loanFirstDue]);
+    return { n, base, baseSchedule, dueKeys, dueLabels, principal: P, extra, total: Math.round(total), hasFraction };
+  }, [loanType, loanAmount, loanRate, loanCount, loanPeriod, loanFirstDue, loanAutoRound]);
 
   // با تغییرِ پارامترها، ویرایش‌های دستی پاک و دوباره از فرمول پر می‌شود
-  useEffect(() => { setLoanEdited(null); setLoanSaved(0); }, [loanType, loanAmount, loanRate, loanCount, loanPeriod, loanFirstDue]);
+  useEffect(() => { setLoanEdited(null); setLoanSaved(0); }, [loanType, loanAmount, loanRate, loanCount, loanPeriod, loanFirstDue, loanAutoRound]);
 
   const loanSchedule = loanEdited ?? loan?.baseSchedule ?? [];
   const loanScheduleTotal = loanSchedule.reduce((s, a) => s + (a || 0), 0);
@@ -424,6 +426,19 @@ export default function ToolsPanel({ calendarData, currentSystem, currentYear, c
                             )}
                             <div className="tool-result-row closing"><span>مجموع بازپرداخت</span><strong>{formatNumber(loanScheduleTotal)} تومان</strong></div>
                           </div>
+
+                          <div className="fund-setting-row">
+                            <label className="fund-switch">
+                              <input type="checkbox" checked={loanAutoRound} onChange={(e) => setLoanAutoRound(e.target.checked)} />
+                              <span>روندِ خودکارِ اقساط (به ۱۰٬۰۰۰)</span>
+                            </label>
+                          </div>
+                          {!loanAutoRound && loan.hasFraction && (
+                            <div className="fund-roundask">
+                              <span>⚠️ اقساط خرده دارند. می‌خواهید گِرد شوند؟</span>
+                              <button className="fund-roundask-btn" onClick={() => setLoanAutoRound(true)}>روندشان کن به ۱۰٬۰۰۰</button>
+                            </div>
+                          )}
 
                           <div className="loan-sched-head">
                             <span>اقساط ({loan.n})</span>

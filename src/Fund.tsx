@@ -5,13 +5,44 @@ const fmt = (n: number): string => Math.round(n || 0).toLocaleString('en-US');
 const digits = (s: string): number => parseInt(s.replace(/[^0-9]/g, ''), 10) || 0;
 const withSep = (s: string): string => { const d = digits(s); return d ? d.toLocaleString('en-US') : ''; };
 
-// واحدِ روند برای حذفِ «خرده»: مبلغِ هر پرداخت به نزدیک‌ترین ۱۰٬۰۰۰ تومان روند به پایین می‌شود
+// روندِ مبلغ‌ها برای حذفِ «خرده». هر صندوق می‌تواند روندِ خودکار را خاموش/روشن کند و واحدِ روند را انتخاب کند.
 export const FUND_ROUND = 10000;
-const floorTo = (n: number): number => Math.floor((n || 0) / FUND_ROUND) * FUND_ROUND;
+export const ROUND_UNITS = [1000, 10000, 100000];
+// واحدِ مؤثرِ روندِ هر صندوق: اگر روندِ خودکار خاموش باشد ۱ (یعنی بدونِ روند)
+const unitOf = (f: { autoRound?: boolean; roundUnit?: number }): number => (f.autoRound === false ? 1 : (f.roundUnit || FUND_ROUND));
+const floorUnit = (n: number, unit: number): number => (unit > 1 ? Math.floor((n || 0) / unit) * unit : Math.floor(n || 0));
+// آیا مبلغ «خرده» دارد؟ (مضربِ ۱۰٬۰۰۰ نیست)
+const hasFraction = (n: number): boolean => Math.round(n || 0) % FUND_ROUND !== 0;
 
 export interface FundMember { name: string; phone?: string; shares: number; }
 export interface FundRound { paid: { [m: string]: boolean }; winners: string[]; pay?: number; }
-export interface Fund { id: string; name: string; monthlyAmount: number; payoutsPerMonth: number; members: FundMember[]; rounds: FundRound[]; carry?: number; }
+export interface Fund { id: string; name: string; monthlyAmount: number; payoutsPerMonth: number; members: FundMember[]; rounds: FundRound[]; carry?: number; autoRound?: boolean; roundUnit?: number; }
+
+// پیش‌بینیِ نوبت‌های آینده: از وضعیتِ فعلی جلو می‌رود و تعدادِ برنده‌ی هر ماه را می‌دهد (قطعی، مستقل از قرعه)
+function forecastRounds(f: Fund): { month: number; winners: number; extra: number }[] {
+  const ts = totalSharesOf(f);
+  const coll = f.monthlyAmount * ts;
+  const unit = unitOf(f);
+  const basePay = floorUnit(coll / f.payoutsPerMonth, unit);
+  if (basePay <= 0 || ts <= 0) return [];
+  let drawn = f.rounds.reduce((c, r) => c + r.winners.length, 0);
+  let carry = f.carry || 0;
+  let month = f.rounds.filter((r) => r.winners.length > 0).length; // نوبت‌های انجام‌شده
+  const out: { month: number; winners: number; extra: number }[] = [];
+  let guard = 0;
+  while (drawn < ts && guard++ < 1000) {
+    const remaining = ts - drawn;
+    const avail = carry + coll;
+    let n = Math.min(f.payoutsPerMonth + Math.floor(carry / basePay), remaining);
+    if (n < 1) n = 1;
+    const isFinal = n >= remaining;
+    const pay = isFinal ? Math.max(basePay, floorUnit(avail / n, unit)) : basePay;
+    carry = Math.max(0, avail - n * pay);
+    drawn += n; month += 1;
+    out.push({ month, winners: n, extra: Math.max(0, n - f.payoutsPerMonth) });
+  }
+  return out;
+}
 
 interface Props {
   funds: Fund[];
@@ -52,6 +83,10 @@ export default function FundPanel({ funds, onChange, onClose, confirm, onShare, 
   const [mName, setMName] = useState('');
   const [mPhone, setMPhone] = useState('');
   const [mShares, setMShares] = useState('1');
+  // حالتِ پیشرفته: روندِ خودکار (پیش‌فرض روشن) و واحدِ روند
+  const [showAdv, setShowAdv] = useState(false);
+  const [newAutoRound, setNewAutoRound] = useState(true);
+  const [newRoundUnit, setNewRoundUnit] = useState(FUND_ROUND);
 
   // ماشین‌حسابِ صندوق
   const [calcShareAmt, setCalcShareAmt] = useState('');
@@ -76,6 +111,8 @@ export default function FundPanel({ funds, onChange, onClose, confirm, onShare, 
     { icon: '➕', title: 'ساختِ صندوق', text: 'نامِ صندوق، «واریزیِ هر سهم در ماه» و «تعدادِ پرداخت در ماه» را وارد کنید؛ سپس اعضا را با نام، شماره (اختیاری) و تعدادِ سهم اضافه کنید.' },
     { icon: '✅', title: 'هر ماه', text: 'واریزیِ اعضا را با زدن روی نامشان تیک بزنید. وقتی همه واریز کردند، دکمه‌ی «قرعه‌کشی» فعال می‌شود و برندگانِ آن ماه نسبت به سهم‌ها انتخاب می‌شوند.' },
     { icon: '💰', title: 'پرداختِ گِرد و مانده‌ی صندوق', text: 'برای اینکه «خرده‌پرداختی» نداشته باشید، مبلغِ هر برنده به نزدیک‌ترین ۱۰٬۰۰۰ تومان گِرد می‌شود و ته‌مانده‌ها در «مانده‌ی صندوق» جمع می‌شوند. هر وقت مانده به‌اندازه‌ی یک پرداختِ کامل رسید، آن ماه یک برنده‌ی اضافه قرعه می‌خورد؛ و در ماهِ آخر تمامِ مانده بینِ برنده‌ها پخش می‌شود تا پولی در صندوق نماند.' },
+    { icon: '⚙️', title: 'حالتِ پیشرفته (روندِ دلخواه)', text: 'هنگامِ ساختِ صندوق در «تنظیماتِ پیشرفته» می‌توانید روندِ خودکار را روشن/خاموش کنید و واحدِ روند را ۱٬۰۰۰ یا ۱۰٬۰۰۰ یا ۱۰۰٬۰۰۰ بگذارید. اگر روند را خاموش کنید و مبلغی خرده داشته باشد، خودِ برنامه پیغام می‌دهد و با یک دکمه می‌توانید گِردش کنید. این تنظیم را بعداً هم در «گزارشِ کامل» می‌توانید عوض کنید.' },
+    { icon: '🔮', title: 'پیش‌بینیِ نوبت‌های پرشلوغ', text: 'در «گزارشِ کامل» بخشِ «پیش‌بینیِ نوبت‌های پرشلوغ» از پیش می‌گوید کدام ماه‌های آینده برنده‌ی اضافه خواهند داشت و هرکدام چند نفر؛ تا غافلگیر نشوید.' },
     { icon: '📊', title: 'گزارش و معوقات', text: 'در تبِ «گزارشِ کامل» می‌بینید هر نفر چقدر داده، چقدر گرفته، مانده‌ی صندوق چقدر است، کدام ماه‌ها پرداختِ اضافه داشته‌ایم و چند نفر بدهیِ معوق دارند.' },
     { icon: '📤', title: 'یادآوری به اعضا', text: 'با دکمه‌ی کنارِ هر عضو، پیامِ آماده‌ی یادآوریِ پرداخت را با واتساپ، پیامک یا اشتراک‌گذاری (ایتا/تلگرام) برایش بفرستید.' },
     { icon: '🧮', title: 'ماشین‌حساب', text: 'اگر نمی‌دانید چه اعدادی بگذارید، از «ماشین‌حسابِ صندوق» در همین صفحه کمک بگیرید.' },
@@ -114,9 +151,10 @@ export default function FundPanel({ funds, onChange, onClose, confirm, onShare, 
     const amt = digits(newAmount);
     const payouts = Math.max(1, digits(newPayouts) || 1);
     if (!newName.trim() || !amt || members.length < 2) return;
-    const f: Fund = { id: `fund-${Date.now()}`, name: newName.trim(), monthlyAmount: amt, payoutsPerMonth: payouts, members: [...members], rounds: [{ paid: {}, winners: [] }], carry: 0 };
+    const f: Fund = { id: `fund-${Date.now()}`, name: newName.trim(), monthlyAmount: amt, payoutsPerMonth: payouts, members: [...members], rounds: [{ paid: {}, winners: [] }], carry: 0, autoRound: newAutoRound, roundUnit: newRoundUnit };
     onChange([...funds, f]);
     setCreating(false); setNewName(''); setNewAmount(''); setNewPayouts('1'); setMembers([]); setMName(''); setMPhone(''); setMShares('1');
+    setShowAdv(false); setNewAutoRound(true); setNewRoundUnit(FUND_ROUND);
     setSelectedId(f.id);
   };
 
@@ -135,7 +173,8 @@ export default function FundPanel({ funds, onChange, onClose, confirm, onShare, 
     if (!fund) return;
     const ts = totalSharesOf(fund);
     const coll = fund.monthlyAmount * ts;            // جمع‌آوریِ این ماه (همه می‌پردازند)
-    const basePay = floorTo(coll / fund.payoutsPerMonth); // پرداختِ گِردِ هر برنده
+    const unit = unitOf(fund);
+    const basePay = floorUnit(coll / fund.payoutsPerMonth, unit); // پرداختِ هر برنده (در صورتِ روند، گِرد)
     if (basePay <= 0) return;
     const drawn = fund.rounds.reduce((c, r) => c + r.winners.length, 0);
     const remaining = ts - drawn;                    // سهم‌های قرعه‌نخورده
@@ -147,7 +186,7 @@ export default function FundPanel({ funds, onChange, onClose, confirm, onShare, 
     if (n < 1) n = 1;
     const isFinal = n >= remaining;                  // این ماه آخرین سهم‌ها قرعه می‌خورند
     // در ماهِ آخر کلِ مانده بینِ برنده‌ها پخش می‌شود تا پولی در صندوق نماند
-    const pay = isFinal ? Math.max(basePay, floorTo(avail / n)) : basePay;
+    const pay = isFinal ? Math.max(basePay, floorUnit(avail / n, unit)) : basePay;
     const newCarry = Math.max(0, avail - n * pay);
 
     const pool: string[] = [];
@@ -175,7 +214,11 @@ export default function FundPanel({ funds, onChange, onClose, confirm, onShare, 
   if (fund) {
     const totalShares = totalSharesOf(fund);
     const collection = fund.monthlyAmount * totalShares;
-    const payout = floorTo(collection / fund.payoutsPerMonth); // پرداختِ گِردِ هر برنده (بدونِ خرده)
+    const unit = unitOf(fund);
+    const exactPayout = collection / fund.payoutsPerMonth;       // مبلغِ دقیق (بدونِ روند)
+    const payout = floorUnit(exactPayout, unit);                 // پرداختِ هر برنده (در صورتِ روند، گِرد)
+    const roundOff = fund.autoRound === false;                   // روندِ خودکار خاموش است
+    const needsRound = roundOff && hasFraction(payout);          // خرده دارد و روند خاموش است
     const carry = fund.carry || 0;                              // مانده‌ی جمع‌شده‌ی صندوق
     const totalMonths = Math.ceil(totalShares / fund.payoutsPerMonth);
     const drawnTotal = fund.rounds.reduce((c, r) => c + r.winners.length, 0);
@@ -193,6 +236,9 @@ export default function FundPanel({ funds, onChange, onClose, confirm, onShare, 
     const arrearsMembers = fund.members.map((m) => ({ m, unpaid: fund.rounds.filter((r) => !r.paid[m.name]).length })).filter((x) => x.unpaid > 0);
     // ماه‌هایی که پرداختِ اضافه داشتند (بیش از حدِ پایه)
     const extraMonths = fund.rounds.map((r, i) => ({ i, extra: r.winners.length - fund.payoutsPerMonth, count: r.winners.length })).filter((x) => x.extra > 0);
+    // پیش‌بینیِ نوبت‌های آینده که نفراتشان زیاد می‌شود
+    const forecast = forecastRounds(fund);
+    const forecastExtra = forecast.filter((x) => x.extra > 0);
 
     return (
       <>
@@ -213,9 +259,16 @@ export default function FundPanel({ funds, onChange, onClose, confirm, onShare, 
               <div className="tool-result-row"><span>واریزی هر سهم در ماه</span><strong>{fmt(fund.monthlyAmount)} تومان</strong></div>
               <div className="tool-result-row"><span>کلِ سهم‌ها · پرداخت در ماه</span><strong>{totalShares} سهم · {fund.payoutsPerMonth} نفر</strong></div>
               <div className="tool-result-row"><span>جمع‌آوریِ ماهانه</span><strong>{fmt(collection)} تومان</strong></div>
-              <div className="tool-result-row"><span>مبلغِ هر پرداخت (گِرد به ۱۰٬۰۰۰)</span><strong>{fmt(payout)} تومان</strong></div>
+              <div className="tool-result-row"><span>مبلغِ هر پرداخت {roundOff ? '(بدونِ روند)' : `(گِرد به ${fmt(unit)})`}</span><strong>{fmt(payout)} تومان</strong></div>
               <div className="tool-result-row closing"><span>مانده‌ی صندوق</span><strong>{fmt(carry)} تومان</strong></div>
             </div>
+
+            {needsRound && (
+              <div className="fund-roundask">
+                <span>⚠️ مبلغِ هر پرداخت خرده دارد: <strong>{fmt(payout)}</strong> تومان. می‌خواهید گِرد شود؟</span>
+                <button className="fund-roundask-btn" onClick={() => update(fund.id, (f) => ({ ...f, autoRound: true, roundUnit: f.roundUnit || FUND_ROUND }))}>روندش کن به ۱۰٬۰۰۰</button>
+              </div>
+            )}
 
             {view === 'round' ? (
               <>
@@ -255,8 +308,23 @@ export default function FundPanel({ funds, onChange, onClose, confirm, onShare, 
             ) : (
               <>
                 <div className="fund-help">
-                  هر ماه <strong>{fmt(collection)}</strong> جمع و بین <strong>{fund.payoutsPerMonth}</strong> برنده تقسیم می‌شود (هرکدام {fmt(payout)}، گِرد به ۱۰٬۰۰۰ بدونِ خرده).
+                  هر ماه <strong>{fmt(collection)}</strong> جمع و بین <strong>{fund.payoutsPerMonth}</strong> برنده تقسیم می‌شود (هرکدام {fmt(payout)}{roundOff ? '، بدونِ روند' : `، گِرد به ${fmt(unit)} بدونِ خرده`}).
                   دوره <strong>{totalMonths} ماه</strong> است و هر سهم یک‌بار دریافت می‌کند. بدون سود. ته‌مانده‌ها در مانده‌ی صندوق جمع و به‌صورتِ برنده‌ی اضافه پخش می‌شوند.
+                </div>
+
+                <div className="loan-sched-head"><span>روندِ مبلغ‌ها</span><span className="loan-sched-hint">حالتِ پیشرفته</span></div>
+                <div className="fund-setting-row">
+                  <label className="fund-switch">
+                    <input type="checkbox" checked={fund.autoRound !== false} onChange={(e) => update(fund.id, (f) => ({ ...f, autoRound: e.target.checked, roundUnit: f.roundUnit || FUND_ROUND }))} />
+                    <span>روندِ خودکار (حذفِ خرده)</span>
+                  </label>
+                  {fund.autoRound !== false && (
+                    <div className="fund-unit-pick">
+                      {ROUND_UNITS.map((u) => (
+                        <button key={u} type="button" className={`fund-unit-btn ${unit === u ? 'active' : ''}`} onClick={() => update(fund.id, (f) => ({ ...f, roundUnit: u }))}>{fmt(u)}</button>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 <div className="loan-sched-head"><span>مانده‌ی صندوق</span><span className="loan-sched-hint">{carry > 0 ? 'منتظرِ پرداختِ بعدی' : 'خالی'}</span></div>
@@ -264,7 +332,18 @@ export default function FundPanel({ funds, onChange, onClose, confirm, onShare, 
                   <div className="tool-result-row closing"><span>پولِ جمع‌شده در صندوق</span><strong>{fmt(carry)} تومان</strong></div>
                 </div>
 
-                <div className="loan-sched-head"><span>پرداخت‌های اضافه</span><span className="loan-sched-hint">{extraMonths.length} ماه</span></div>
+                <div className="loan-sched-head"><span>پیش‌بینیِ نوبت‌های پرشلوغ</span><span className="loan-sched-hint">{forecastExtra.length ? `${forecastExtra.length} نوبت` : 'ندارد'}</span></div>
+                {forecastExtra.length === 0 ? (
+                  <div className="tool-note">طبقِ روالِ فعلی، نوبتِ آینده‌ای با برنده‌ی اضافه پیش‌بینی نمی‌شود.</div>
+                ) : (
+                  <div className="tool-result">
+                    {forecastExtra.map((x) => (
+                      <div key={x.month} className="tool-result-row"><span>ماهِ {x.month} (پیش‌بینی)</span><strong>{x.winners} برنده (+{x.extra} اضافه)</strong></div>
+                    ))}
+                  </div>
+                )}
+
+                <div className="loan-sched-head"><span>پرداخت‌های اضافه (انجام‌شده)</span><span className="loan-sched-hint">{extraMonths.length} ماه</span></div>
                 {extraMonths.length === 0 ? (
                   <div className="tool-note">تا این‌جا ماهی با پرداختِ اضافه نداشته‌ایم.</div>
                 ) : (
@@ -382,6 +461,32 @@ export default function FundPanel({ funds, onChange, onClose, confirm, onShare, 
               ))}
             </div>
             {members.length < 2 && <div className="tool-note">حداقل ۲ عضو اضافه کنید (هر عضو می‌تواند چند سهم داشته باشد)</div>}
+
+            <button type="button" className="fund-adv-toggle" onClick={() => setShowAdv((v) => !v)}>
+              {showAdv ? '▾' : '▸'} تنظیماتِ پیشرفته
+            </button>
+            {showAdv && (
+              <div className="fund-adv">
+                <label className="fund-switch">
+                  <input type="checkbox" checked={newAutoRound} onChange={(e) => setNewAutoRound(e.target.checked)} />
+                  <span>روندِ خودکارِ مبلغ‌ها (حذفِ خرده)</span>
+                </label>
+                {newAutoRound ? (
+                  <>
+                    <label className="field-label">واحدِ روند</label>
+                    <div className="fund-unit-pick">
+                      {ROUND_UNITS.map((u) => (
+                        <button key={u} type="button" className={`fund-unit-btn ${newRoundUnit === u ? 'active' : ''}`} onClick={() => setNewRoundUnit(u)}>{fmt(u)}</button>
+                      ))}
+                    </div>
+                    <div className="tool-note">مبلغِ هر پرداخت به این مقدار گِرد می‌شود و ته‌مانده در صندوق جمع و به‌صورتِ برنده‌ی اضافه پخش می‌شود.</div>
+                  </>
+                ) : (
+                  <div className="tool-note">روند خاموش است؛ اگر مبلغی خرده داشته باشد، در صفحه‌ی صندوق پیغام می‌آید و می‌توانید همان‌جا روندش کنید.</div>
+                )}
+              </div>
+            )}
+
             <button className="loan-submit" disabled={!newName.trim() || !digits(newAmount) || members.length < 2} onClick={createFund}>ساختِ صندوق</button>
           </div>
         </div>
@@ -454,7 +559,7 @@ export default function FundPanel({ funds, onChange, onClose, confirm, onShare, 
                     const pay = parseInt(calcPayouts, 10) || 0;
                     if (!amt || sh < 2 || pay < 1) return <div className="tool-note">مقادیر را کامل وارد کنید</div>;
                     const collection = amt * sh;
-                    const perWinner = floorTo(collection / pay);
+                    const perWinner = floorUnit(collection / pay, FUND_ROUND);
                     const months = Math.ceil(sh / pay);
                     return (
                       <div className="tool-result">
