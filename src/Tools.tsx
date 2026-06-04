@@ -245,8 +245,9 @@ export default function ToolsPanel({ calendarData, currentSystem, currentYear, c
     else total = P + P * (r / 100) * years;                        // وام آزاد با نرخ سود
     const extra = Math.round(total - P);
 
-    // تقسیمِ مساوی با اصلاحِ روندِ آخرین قسط
-    const base = Math.round(total / n);
+    // تقسیمِ مساوی با روندِ به‌پایینِ هر قسط به ۱۰٬۰۰۰ (بدونِ خرده)؛ ته‌مانده در قسطِ آخر تسویه می‌شود
+    const ROUND = 10000;
+    const base = Math.floor(total / n / ROUND) * ROUND;
     const baseSchedule: number[] = Array(n).fill(base);
     baseSchedule[n - 1] = Math.round(total) - base * (n - 1);
 

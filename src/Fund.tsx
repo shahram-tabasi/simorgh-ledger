@@ -5,9 +5,13 @@ const fmt = (n: number): string => Math.round(n || 0).toLocaleString('en-US');
 const digits = (s: string): number => parseInt(s.replace(/[^0-9]/g, ''), 10) || 0;
 const withSep = (s: string): string => { const d = digits(s); return d ? d.toLocaleString('en-US') : ''; };
 
+// واحدِ روند برای حذفِ «خرده»: مبلغِ هر پرداخت به نزدیک‌ترین ۱۰٬۰۰۰ تومان روند به پایین می‌شود
+export const FUND_ROUND = 10000;
+const floorTo = (n: number): number => Math.floor((n || 0) / FUND_ROUND) * FUND_ROUND;
+
 export interface FundMember { name: string; phone?: string; shares: number; }
-export interface FundRound { paid: { [m: string]: boolean }; winners: string[]; }
-export interface Fund { id: string; name: string; monthlyAmount: number; payoutsPerMonth: number; members: FundMember[]; rounds: FundRound[]; }
+export interface FundRound { paid: { [m: string]: boolean }; winners: string[]; pay?: number; }
+export interface Fund { id: string; name: string; monthlyAmount: number; payoutsPerMonth: number; members: FundMember[]; rounds: FundRound[]; carry?: number; }
 
 interface Props {
   funds: Fund[];
@@ -71,7 +75,8 @@ export default function FundPanel({ funds, onChange, onClose, confirm, onShare, 
     { icon: '🎟️', title: 'سهم', text: 'هر عضو می‌تواند یک یا چند «سهم» داشته باشد. هر سهم یعنی یک واریزیِ ماهانه و یک نوبتِ دریافت؛ پس کسی که سهمِ بیشتری دارد، بیشتر می‌دهد و بیشتر دریافت می‌کند.' },
     { icon: '➕', title: 'ساختِ صندوق', text: 'نامِ صندوق، «واریزیِ هر سهم در ماه» و «تعدادِ پرداخت در ماه» را وارد کنید؛ سپس اعضا را با نام، شماره (اختیاری) و تعدادِ سهم اضافه کنید.' },
     { icon: '✅', title: 'هر ماه', text: 'واریزیِ اعضا را با زدن روی نامشان تیک بزنید. وقتی همه واریز کردند، دکمه‌ی «قرعه‌کشی» فعال می‌شود و برندگانِ آن ماه نسبت به سهم‌ها انتخاب می‌شوند.' },
-    { icon: '📊', title: 'گزارش و معوقات', text: 'در تبِ «گزارشِ کامل» می‌بینید هر نفر چقدر داده، چقدر گرفته و چند نفر از ماه‌های قبل بدهیِ معوق دارند.' },
+    { icon: '💰', title: 'پرداختِ گِرد و مانده‌ی صندوق', text: 'برای اینکه «خرده‌پرداختی» نداشته باشید، مبلغِ هر برنده به نزدیک‌ترین ۱۰٬۰۰۰ تومان گِرد می‌شود و ته‌مانده‌ها در «مانده‌ی صندوق» جمع می‌شوند. هر وقت مانده به‌اندازه‌ی یک پرداختِ کامل رسید، آن ماه یک برنده‌ی اضافه قرعه می‌خورد؛ و در ماهِ آخر تمامِ مانده بینِ برنده‌ها پخش می‌شود تا پولی در صندوق نماند.' },
+    { icon: '📊', title: 'گزارش و معوقات', text: 'در تبِ «گزارشِ کامل» می‌بینید هر نفر چقدر داده، چقدر گرفته، مانده‌ی صندوق چقدر است، کدام ماه‌ها پرداختِ اضافه داشته‌ایم و چند نفر بدهیِ معوق دارند.' },
     { icon: '📤', title: 'یادآوری به اعضا', text: 'با دکمه‌ی کنارِ هر عضو، پیامِ آماده‌ی یادآوریِ پرداخت را با واتساپ، پیامک یا اشتراک‌گذاری (ایتا/تلگرام) برایش بفرستید.' },
     { icon: '🧮', title: 'ماشین‌حساب', text: 'اگر نمی‌دانید چه اعدادی بگذارید، از «ماشین‌حسابِ صندوق» در همین صفحه کمک بگیرید.' },
   ];
@@ -109,7 +114,7 @@ export default function FundPanel({ funds, onChange, onClose, confirm, onShare, 
     const amt = digits(newAmount);
     const payouts = Math.max(1, digits(newPayouts) || 1);
     if (!newName.trim() || !amt || members.length < 2) return;
-    const f: Fund = { id: `fund-${Date.now()}`, name: newName.trim(), monthlyAmount: amt, payoutsPerMonth: payouts, members: [...members], rounds: [{ paid: {}, winners: [] }] };
+    const f: Fund = { id: `fund-${Date.now()}`, name: newName.trim(), monthlyAmount: amt, payoutsPerMonth: payouts, members: [...members], rounds: [{ paid: {}, winners: [] }], carry: 0 };
     onChange([...funds, f]);
     setCreating(false); setNewName(''); setNewAmount(''); setNewPayouts('1'); setMembers([]); setMName(''); setMPhone(''); setMShares('1');
     setSelectedId(f.id);
@@ -128,21 +133,36 @@ export default function FundPanel({ funds, onChange, onClose, confirm, onShare, 
 
   const draw = () => {
     if (!fund) return;
+    const ts = totalSharesOf(fund);
+    const coll = fund.monthlyAmount * ts;            // جمع‌آوریِ این ماه (همه می‌پردازند)
+    const basePay = floorTo(coll / fund.payoutsPerMonth); // پرداختِ گِردِ هر برنده
+    if (basePay <= 0) return;
+    const drawn = fund.rounds.reduce((c, r) => c + r.winners.length, 0);
+    const remaining = ts - drawn;                    // سهم‌های قرعه‌نخورده
+    if (remaining <= 0) return;
+    const carry = fund.carry || 0;                   // مانده‌ی جمع‌شده‌ی صندوق
+    const avail = carry + coll;
+    // تعدادِ برنده‌ها: پایه + برنده‌های اضافه از محلِ مانده، محدود به سهمِ باقی‌مانده
+    let n = Math.min(fund.payoutsPerMonth + Math.floor(carry / basePay), remaining);
+    if (n < 1) n = 1;
+    const isFinal = n >= remaining;                  // این ماه آخرین سهم‌ها قرعه می‌خورند
+    // در ماهِ آخر کلِ مانده بینِ برنده‌ها پخش می‌شود تا پولی در صندوق نماند
+    const pay = isFinal ? Math.max(basePay, floorTo(avail / n)) : basePay;
+    const newCarry = Math.max(0, avail - n * pay);
+
     const pool: string[] = [];
     fund.members.forEach((m) => { const rem = m.shares - wonCount(fund, m.name); for (let i = 0; i < rem; i++) pool.push(m.name); });
-    if (!pool.length) return;
     for (let i = pool.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [pool[i], pool[j]] = [pool[j], pool[i]]; }
-    const n = Math.min(fund.payoutsPerMonth, pool.length);
     const winners = pool.slice(0, n);
     const counts: { [k: string]: number } = {};
     winners.forEach((w) => { counts[w] = (counts[w] || 0) + 1; });
     setDrawMsg(Object.entries(counts).map(([k, c]) => (c > 1 ? `${k} (${c}×)` : k)).join('، '));
     update(fund.id, (f) => {
       const rounds = f.rounds.slice();
-      rounds[rounds.length - 1] = { ...rounds[rounds.length - 1], winners };
+      rounds[rounds.length - 1] = { ...rounds[rounds.length - 1], winners, pay };
       const drawnTotal = rounds.reduce((c, r) => c + r.winners.length, 0);
       if (drawnTotal < totalSharesOf(f)) rounds.push({ paid: {}, winners: [] });
-      return { ...f, rounds };
+      return { ...f, rounds, carry: newCarry };
     });
   };
 
@@ -155,7 +175,8 @@ export default function FundPanel({ funds, onChange, onClose, confirm, onShare, 
   if (fund) {
     const totalShares = totalSharesOf(fund);
     const collection = fund.monthlyAmount * totalShares;
-    const payout = collection / fund.payoutsPerMonth;
+    const payout = floorTo(collection / fund.payoutsPerMonth); // پرداختِ گِردِ هر برنده (بدونِ خرده)
+    const carry = fund.carry || 0;                              // مانده‌ی جمع‌شده‌ی صندوق
     const totalMonths = Math.ceil(totalShares / fund.payoutsPerMonth);
     const drawnTotal = fund.rounds.reduce((c, r) => c + r.winners.length, 0);
     const cur = fund.rounds[fund.rounds.length - 1];
@@ -164,8 +185,14 @@ export default function FundPanel({ funds, onChange, onClose, confirm, onShare, 
     const monthNo = fund.rounds.length;
     const finished = drawnTotal >= totalShares;
     const unpaidThis = fund.members.filter((m) => !cur.paid[m.name]).length;
+    // برنده‌های پیش‌بینی‌شده‌ی این ماه (پایه + اضافه از محلِ مانده)
+    const remainingShares = totalShares - drawnTotal;
+    const projectedWinners = payout > 0 ? Math.min(fund.payoutsPerMonth + Math.floor(carry / payout), remainingShares) : 0;
+    const extraWinners = Math.max(0, projectedWinners - Math.min(fund.payoutsPerMonth, remainingShares));
     // معوقاتِ ماه‌های قبل
     const arrearsMembers = fund.members.map((m) => ({ m, unpaid: fund.rounds.filter((r) => !r.paid[m.name]).length })).filter((x) => x.unpaid > 0);
+    // ماه‌هایی که پرداختِ اضافه داشتند (بیش از حدِ پایه)
+    const extraMonths = fund.rounds.map((r, i) => ({ i, extra: r.winners.length - fund.payoutsPerMonth, count: r.winners.length })).filter((x) => x.extra > 0);
 
     return (
       <>
@@ -186,7 +213,8 @@ export default function FundPanel({ funds, onChange, onClose, confirm, onShare, 
               <div className="tool-result-row"><span>واریزی هر سهم در ماه</span><strong>{fmt(fund.monthlyAmount)} تومان</strong></div>
               <div className="tool-result-row"><span>کلِ سهم‌ها · پرداخت در ماه</span><strong>{totalShares} سهم · {fund.payoutsPerMonth} نفر</strong></div>
               <div className="tool-result-row"><span>جمع‌آوریِ ماهانه</span><strong>{fmt(collection)} تومان</strong></div>
-              <div className="tool-result-row closing"><span>مبلغِ هر پرداخت (به برنده)</span><strong>{fmt(payout)} تومان</strong></div>
+              <div className="tool-result-row"><span>مبلغِ هر پرداخت (گِرد به ۱۰٬۰۰۰)</span><strong>{fmt(payout)} تومان</strong></div>
+              <div className="tool-result-row closing"><span>مانده‌ی صندوق</span><strong>{fmt(carry)} تومان</strong></div>
             </div>
 
             {view === 'round' ? (
@@ -215,8 +243,11 @@ export default function FundPanel({ funds, onChange, onClose, confirm, onShare, 
                         );
                       })}
                     </div>
+                    {allPaid && extraWinners > 0 && (
+                      <div className="fund-draw">💰 مانده‌ی صندوق به یک پرداختِ کامل رسید: این ماه <strong>{extraWinners} برنده‌ی اضافه</strong> قرعه می‌خورد.</div>
+                    )}
                     <button className="loan-submit fund-draw-btn" disabled={!allPaid} onClick={draw}>
-                      {allPaid ? `قرعه‌کشیِ ماه (${Math.min(fund.payoutsPerMonth, totalShares - drawnTotal)} برنده)` : 'تا همه واریز نکنند قرعه‌کشی فعال نیست'}
+                      {allPaid ? `قرعه‌کشیِ ماه (${projectedWinners} برنده${extraWinners > 0 ? ` · +${extraWinners} از مانده` : ''})` : 'تا همه واریز نکنند قرعه‌کشی فعال نیست'}
                     </button>
                   </>
                 )}
@@ -224,9 +255,25 @@ export default function FundPanel({ funds, onChange, onClose, confirm, onShare, 
             ) : (
               <>
                 <div className="fund-help">
-                  هر ماه <strong>{fmt(collection)}</strong> جمع و بین <strong>{fund.payoutsPerMonth}</strong> برنده تقسیم می‌شود (هرکدام {fmt(payout)}).
-                  دوره <strong>{totalMonths} ماه</strong> است و هر سهم یک‌بار دریافت می‌کند. بدون سود.
+                  هر ماه <strong>{fmt(collection)}</strong> جمع و بین <strong>{fund.payoutsPerMonth}</strong> برنده تقسیم می‌شود (هرکدام {fmt(payout)}، گِرد به ۱۰٬۰۰۰ بدونِ خرده).
+                  دوره <strong>{totalMonths} ماه</strong> است و هر سهم یک‌بار دریافت می‌کند. بدون سود. ته‌مانده‌ها در مانده‌ی صندوق جمع و به‌صورتِ برنده‌ی اضافه پخش می‌شوند.
                 </div>
+
+                <div className="loan-sched-head"><span>مانده‌ی صندوق</span><span className="loan-sched-hint">{carry > 0 ? 'منتظرِ پرداختِ بعدی' : 'خالی'}</span></div>
+                <div className="tool-result">
+                  <div className="tool-result-row closing"><span>پولِ جمع‌شده در صندوق</span><strong>{fmt(carry)} تومان</strong></div>
+                </div>
+
+                <div className="loan-sched-head"><span>پرداخت‌های اضافه</span><span className="loan-sched-hint">{extraMonths.length} ماه</span></div>
+                {extraMonths.length === 0 ? (
+                  <div className="tool-note">تا این‌جا ماهی با پرداختِ اضافه نداشته‌ایم.</div>
+                ) : (
+                  <div className="tool-result">
+                    {extraMonths.map((x) => (
+                      <div key={x.i} className="tool-result-row"><span>ماهِ {x.i + 1}</span><strong>{x.count} برنده (+{x.extra} اضافه)</strong></div>
+                    ))}
+                  </div>
+                )}
 
                 <div className="loan-sched-head"><span>معوقات</span><span className="loan-sched-hint">{arrearsMembers.length} نفر بدهیِ معوق دارند</span></div>
                 {arrearsMembers.length === 0 ? (
@@ -244,7 +291,8 @@ export default function FundPanel({ funds, onChange, onClose, confirm, onShare, 
                   {fund.members.map((m) => {
                     const paidMonths = fund.rounds.filter((r) => r.paid[m.name]).length;
                     const due = fund.rounds.length;
-                    const received = wonCount(fund, m.name) * payout;
+                    // دریافتیِ واقعی بر اساسِ پرداختِ هر ماه (ماهِ آخر ممکن است بیشتر باشد)
+                    const received = fund.rounds.reduce((s, r) => s + r.winners.filter((w) => w === m.name).length * (r.pay ?? payout), 0);
                     const remShares = m.shares - wonCount(fund, m.name);
                     return (
                       <div key={m.name} className="loan-detail-row">
@@ -406,7 +454,7 @@ export default function FundPanel({ funds, onChange, onClose, confirm, onShare, 
                     const pay = parseInt(calcPayouts, 10) || 0;
                     if (!amt || sh < 2 || pay < 1) return <div className="tool-note">مقادیر را کامل وارد کنید</div>;
                     const collection = amt * sh;
-                    const perWinner = Math.round(collection / pay);
+                    const perWinner = floorTo(collection / pay);
                     const months = Math.ceil(sh / pay);
                     return (
                       <div className="tool-result">

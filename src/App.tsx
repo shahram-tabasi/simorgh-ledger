@@ -67,6 +67,7 @@ interface FundMember { name: string; phone?: string; shares: number; }
 interface FundRound {
   paid: { [member: string]: boolean };
   winners: string[]; // برندگانِ هر ماه (یک نام می‌تواند چند بار باشد، به‌اندازه‌ی سهم)
+  pay?: number;      // مبلغِ پرداخت به هر برنده در آن ماه (گِرد)
 }
 interface Fund {
   id: string;
@@ -75,6 +76,7 @@ interface Fund {
   payoutsPerMonth: number; // تعداد پرداختی در هر ماه
   members: FundMember[];
   rounds: FundRound[];
+  carry?: number;          // مانده‌ی جمع‌شده‌ی صندوق (ته‌مانده‌ی روند)
 }
 
 // مهاجرتِ صندوق‌های قدیمی (اعضای رشته‌ای، برنده‌ی تکی) به مدلِ سهم‌محور
@@ -86,8 +88,9 @@ function normalizeFund(f: any): Fund {
   const rounds: FundRound[] = (f.rounds && f.rounds.length ? f.rounds : [{ paid: {}, winners: [] }]).map((r: any) => ({
     paid: r.paid || {},
     winners: Array.isArray(r.winners) ? r.winners : (r.winner ? [r.winner] : []),
+    pay: typeof r.pay === 'number' ? r.pay : undefined,
   }));
-  return { id: f.id, name: f.name, monthlyAmount: f.monthlyAmount, payoutsPerMonth: f.payoutsPerMonth || 1, members, rounds };
+  return { id: f.id, name: f.name, monthlyAmount: f.monthlyAmount, payoutsPerMonth: f.payoutsPerMonth || 1, members, rounds, carry: typeof f.carry === 'number' ? f.carry : 0 };
 }
 
 // تابع فرمت عدد با جداکننده سه‌رقمی
@@ -114,11 +117,12 @@ const TOUR_STEPS: CoachStep[] = [
 ];
 
 // نسخه و فهرستِ تغییرات برای پنجره‌ی «تازه‌ها»
-const APP_VERSION = '1.0.28';
+const APP_VERSION = '1.0.29';
 const CHANGELOG: string[] = [
-  'اوقات شرعی با چیدمانِ تازه: شش وقتِ شرعی در یک نگاه (صبح، طلوع، ظهر، غروب، مغرب، نیمه‌شب)',
-  'شمارشِ معکوسِ زنده تا وقتِ شرعیِ بعدی (ساعت/دقیقه/ثانیه)',
-  'امکانِ دیدنِ اوقاتِ روزهای قبل و بعد در همان صفحه',
+  'صندوق: مبلغِ هر پرداخت گِرد به ۱۰٬۰۰۰ تومان شد تا «خرده‌پرداختی» نداشته باشید',
+  'ته‌مانده‌ها در «مانده‌ی صندوق» جمع و به‌صورتِ برنده‌ی اضافه پخش می‌شوند؛ در ماهِ آخر پولی در صندوق نمی‌ماند',
+  'گزارشِ صندوق: نمایشِ مانده‌ی صندوق و ماه‌هایی که پرداختِ اضافه داشته‌ایم',
+  'وام: قسط‌ها هم گِرد به ۱۰٬۰۰۰ تومان شدند (ته‌مانده در قسطِ آخر)',
 ];
 
 function App() {
@@ -1200,7 +1204,7 @@ function App() {
               <button className={`theme-btn ${theme === 'dark' ? 'active' : ''}`} onClick={() => setTheme('dark')}>🌙 تیره</button>
             </div>
 
-            <div className="drawer-foot">نسخه ۱۴۰۵ · ۱.۰.۲۸</div>
+            <div className="drawer-foot">نسخه ۱۴۰۵ · ۱.۰.۲۹</div>
           </aside>
         </div>
       )}
