@@ -62,18 +62,32 @@ interface LoanMeta {
   count: number;
 }
 
-// صندوق خانوادگی (قرض‌الحسنه گردشی)
+// صندوقِ سهم‌محور (قرض‌الحسنه گردشی)
+interface FundMember { name: string; phone?: string; shares: number; }
 interface FundRound {
   paid: { [member: string]: boolean };
-  winner: string | null;
+  winners: string[]; // برندگانِ هر ماه (یک نام می‌تواند چند بار باشد، به‌اندازه‌ی سهم)
 }
 interface Fund {
   id: string;
   name: string;
-  monthlyAmount: number;
-  members: string[];
-  phones?: { [member: string]: string };
+  monthlyAmount: number;   // واریزی به ازای هر سهم در ماه
+  payoutsPerMonth: number; // تعداد پرداختی در هر ماه
+  members: FundMember[];
   rounds: FundRound[];
+}
+
+// مهاجرتِ صندوق‌های قدیمی (اعضای رشته‌ای، برنده‌ی تکی) به مدلِ سهم‌محور
+function normalizeFund(f: any): Fund {
+  const phones = f.phones || {};
+  const members: FundMember[] = Array.isArray(f.members)
+    ? f.members.map((m: any) => (typeof m === 'string' ? { name: m, shares: 1, phone: phones[m] } : { name: m.name, shares: m.shares || 1, phone: m.phone }))
+    : [];
+  const rounds: FundRound[] = (f.rounds && f.rounds.length ? f.rounds : [{ paid: {}, winners: [] }]).map((r: any) => ({
+    paid: r.paid || {},
+    winners: Array.isArray(r.winners) ? r.winners : (r.winner ? [r.winner] : []),
+  }));
+  return { id: f.id, name: f.name, monthlyAmount: f.monthlyAmount, payoutsPerMonth: f.payoutsPerMonth || 1, members, rounds };
 }
 
 // تابع فرمت عدد با جداکننده سه‌رقمی
@@ -100,10 +114,11 @@ const TOUR_STEPS: CoachStep[] = [
 ];
 
 // نسخه و فهرستِ تغییرات برای پنجره‌ی «تازه‌ها»
-const APP_VERSION = '1.0.22';
+const APP_VERSION = '1.0.23';
 const CHANGELOG: string[] = [
-  'راهنمای تصویری: صفحه تیره می‌شود و هر بخش روشن و توضیح داده می‌شود (اختیاری و قابل رد کردن)',
-  'دسترسی به راهنمای تصویری از منوی «درباره ما»',
+  'صندوقِ سهم‌محورِ حرفه‌ای: هر عضو می‌تواند چند سهم داشته باشد و ماهانه به چند نفر پرداخت شود (یک نفر می‌تواند چندبار برنده شود)',
+  'گزارشِ حرفه‌ایِ صندوق: معوقاتِ هر نفر، پرداختی و دریافتی، و وضعیتِ هر سهم',
+  'گزینه‌ی مستقیمِ «گزارش صندوق» در منو',
 ];
 
 function App() {
@@ -128,10 +143,11 @@ function App() {
   const [amount, setAmount] = useState<string>('');
   const [calendarData, setCalendarData] = useState<{ [key: string]: DayData }>({});
   const [loans, setLoans] = useState<LoanMeta[]>(() => { try { return JSON.parse(localStorage.getItem('loans') || '[]'); } catch { return []; } });
-  const [funds, setFunds] = useState<Fund[]>(() => { try { return JSON.parse(localStorage.getItem('funds') || '[]'); } catch { return []; } });
+  const [funds, setFunds] = useState<Fund[]>(() => { try { return (JSON.parse(localStorage.getItem('funds') || '[]')).map(normalizeFund); } catch { return []; } });
   const [showLoansModal, setShowLoansModal] = useState<boolean>(false);
   const [selectedLoanId, setSelectedLoanId] = useState<string | null>(null);
   const [showFundModal, setShowFundModal] = useState<boolean>(false);
+  const [fundStartReport, setFundStartReport] = useState<boolean>(false);
   const [theme, setTheme] = useState<'light' | 'dark'>(() => (localStorage.getItem('theme') as 'light' | 'dark') || 'light');
   const [prayerProvince, setPrayerProvince] = useState<string>(() => localStorage.getItem('prayerProvince') || 'تهران');
   const [prayerCity, setPrayerCity] = useState<string>(() => localStorage.getItem('prayerCity') || 'تهران');
@@ -1162,7 +1178,7 @@ function App() {
 
       {/* صندوق خانوادگی */}
       {showFundModal && (
-        <FundPanel funds={funds} onChange={saveFunds} onClose={() => setShowFundModal(false)} confirm={askConfirm} onAddDeposits={addFundDeposits} onShare={shareText} />
+        <FundPanel funds={funds} onChange={saveFunds} onClose={() => { setShowFundModal(false); setFundStartReport(false); }} confirm={askConfirm} onAddDeposits={addFundDeposits} onShare={shareText} startInReport={fundStartReport} />
       )}
 
       {/* منوی راست: امکانات و ابزارها */}
@@ -1183,7 +1199,8 @@ function App() {
             <div className="drawer-section-label">مالی</div>
             <button className="drawer-item" onClick={() => openTool('loan')}><span className="di-icon"><IconLoan /></span> وام جدید</button>
             <button className="drawer-item" onClick={() => { setShowRightDrawer(false); setShowLoansModal(true); }}><span className="di-icon"><IconReport /></span> وام‌های من</button>
-            <button className="drawer-item" onClick={() => { setShowRightDrawer(false); setShowFundModal(true); }}><span className="di-icon"><IconUsers /></span> صندوق خانوادگی</button>
+            <button className="drawer-item" onClick={() => { setShowRightDrawer(false); setFundStartReport(false); setShowFundModal(true); }}><span className="di-icon"><IconUsers /></span> صندوق خانوادگی</button>
+            <button className="drawer-item" onClick={() => { setShowRightDrawer(false); setFundStartReport(true); setShowFundModal(true); }}><span className="di-icon"><IconReport /></span> گزارش صندوق</button>
             <div className="drawer-section-label">ابزارهای کاربردی</div>
             <button className="drawer-item" onClick={() => openTool('convert')}><span className="di-icon"><IconConvert /></span> تبدیل تاریخ</button>
             <button className="drawer-item" onClick={() => openTool('age')}><span className="di-icon"><IconAge /></span> محاسبه سن</button>
@@ -1218,7 +1235,7 @@ function App() {
               <button className={`theme-btn ${theme === 'dark' ? 'active' : ''}`} onClick={() => setTheme('dark')}>🌙 تیره</button>
             </div>
 
-            <div className="drawer-foot">نسخه ۱۴۰۵ · ۱.۰.۲۲</div>
+            <div className="drawer-foot">نسخه ۱۴۰۵ · ۱.۰.۲۳</div>
           </aside>
         </div>
       )}
