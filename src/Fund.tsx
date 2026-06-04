@@ -239,6 +239,7 @@ export default function FundPanel({ funds, onChange, onClose, confirm, onShare, 
               </>
             )}
 
+            <button className="fund-guide-btn" onClick={() => { setView('round'); setFundTour(true); }}>🎓 نمایشِ دوباره‌ی آموزش</button>
             <button className="fund-delete" onClick={() => deleteFund(fund.id)}>حذف صندوق</button>
           </div>
 

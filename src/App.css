@@ -2142,3 +2142,10 @@ body.dark .coach-prev { background: #243049; color: #cfd7e8; }
 .fund-empty-icon { font-size: 46px; margin-bottom: 10px; }
 .fund-empty-title { font-size: 16px; font-weight: 800; color: #2c3550; margin-bottom: 6px; }
 body.dark .fund-empty-title { color: #e3e9f4; }
+
+.fund-guide-btn {
+  width: 100%; margin-top: 16px; padding: 11px; border: 1px dashed #c9d2e0;
+  border-radius: 12px; background: #f7f9fc; color: #44506a; font-family: inherit;
+  font-weight: 700; font-size: 13px; cursor: pointer;
+}
+body.dark .fund-guide-btn { background: #121a28; border-color: #2a3850; color: #aeb8cd; }
