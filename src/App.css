@@ -1655,18 +1655,53 @@ body {
 .theme-btn.active { background: linear-gradient(135deg, #1b2540, #161d2d); color: #fff; border-color: #161d2d; }
 
 /* ==================== اوقات شرعی ==================== */
-.prayer-body { padding: 16px 18px 18px; }
-.prayer-loc { display: flex; gap: 10px; margin-bottom: 10px; }
+.prayer-body { padding: 14px 16px 18px; }
+
+/* نوارِ پیمایشِ روز (قبل / امروز / بعد) */
+.prayer-navbar {
+  display: flex; align-items: center; justify-content: space-between;
+  background: #0f8a86; color: #fff; border-radius: 14px;
+  padding: 10px 12px; margin-bottom: 14px; font-weight: 800; font-size: 14px;
+}
+.prayer-navbar button {
+  background: transparent; border: none; color: #fff; font-family: inherit;
+  font-weight: 800; font-size: 13px; cursor: pointer; padding: 4px 6px; white-space: nowrap;
+}
+.prayer-navbar span { flex: 1; text-align: center; }
+
+/* شبکه‌ی دو ستونیِ اوقات */
+.prayer-grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 14px 18px;
+  background: #f5f7fb; border: 1px solid #e6ebf3; border-radius: 16px;
+  padding: 18px 16px;
+}
+.prayer-cell { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.pc-label { font-size: 14px; font-weight: 700; color: #44506a; }
+.pc-time {
+  font-size: 19px; font-weight: 800; color: #0f8a86;
+  font-variant-numeric: tabular-nums; letter-spacing: .5px;
+}
+
+/* کارتِ شمارشِ معکوس */
+.prayer-countdown {
+  margin-top: 14px; background: #f5f7fb; border: 1px solid #e6ebf3;
+  border-radius: 16px; padding: 16px; text-align: center;
+}
+.pc-title { font-size: 16px; font-weight: 800; color: #d4a015; margin-bottom: 8px; }
+.pc-clock { font-size: 16px; font-weight: 700; color: #44506a; }
+.pc-clock .pc-num {
+  font-size: 26px; font-weight: 800; color: #2c3650;
+  font-variant-numeric: tabular-nums; margin: 0 2px;
+}
+
+.prayer-loc { display: flex; gap: 10px; margin-top: 14px; }
 .pl-field { flex: 1; }
 .pl-field select {
   width: 100%; padding: 11px 8px; border: 1px solid #ddd; border-radius: 11px;
   font-family: inherit; background: #fff; text-align: center; font-size: 14px;
 }
-.prayer-date { text-align: center; font-size: 12px; color: #8a93a6; margin-bottom: 8px; font-weight: 600; }
-.prayer-list { margin: 4px 0; }
-.prayer-row span { font-size: 14px; color: #555; }
-.prayer-row strong { color: #2c6fc0; }
-.prayer-note { text-align: center; font-size: 11px; color: #9aa3b5; margin-top: 12px; }
+.prayer-hijri { text-align: center; font-size: 13px; color: #8a93a6; margin-top: 14px; font-weight: 700; }
+.prayer-note { text-align: center; font-size: 11px; color: #9aa3b5; margin-top: 6px; }
 
 /* ==================== پوسته‌ی تیره ==================== */
 body.dark { background: #090d15; }
@@ -1731,9 +1766,15 @@ body.dark .about-row { background: #121a28; color: #e3e9f4; }
 body.dark .about-services li { color: #cfd7e8; border-color: #243049; }
 
 /* اوقات شرعی در حالت تیره */
-body.dark .prayer-row { border-color: #243049; }
-body.dark .prayer-row span { color: #aeb8cd; }
-body.dark .prayer-row strong { color: #7aa2e3; }
+body.dark .prayer-grid,
+body.dark .prayer-countdown { background: #121a28; border-color: #2a3850; }
+body.dark .pc-label { color: #c2cce0; }
+body.dark .pc-time { color: #4ec9c3; }
+body.dark .pc-clock { color: #c2cce0; }
+body.dark .pc-clock .pc-num { color: #eef2fa; }
+body.dark .pc-title { color: #f0c75e; }
+body.dark .prayer-navbar { background: #0c6e6a; }
+body.dark .prayer-hijri { color: #8893a7; }
 
 /* فوتر در حالت تیره */
 body.dark .app-footer { background: #0f1623; border-color: #243049; color: #8893a7; }

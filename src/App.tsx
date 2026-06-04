@@ -35,8 +35,8 @@ import {
   IconReport, IconBom, IconLoan, IconConvert, IconAge, IconBio, IconBmi,
   IconToday, IconUsers, IconShare, IconGlobe, IconMenu, IconInfo,
 } from './icons';
-import { PROVINCES, findCity } from './cities';
-import { computePrayerTimes } from './prayer';
+import { PROVINCES } from './cities';
+import PrayerPanel from './PrayerPanel';
 
 interface Transaction {
   id: string;
@@ -114,10 +114,11 @@ const TOUR_STEPS: CoachStep[] = [
 ];
 
 // نسخه و فهرستِ تغییرات برای پنجره‌ی «تازه‌ها»
-const APP_VERSION = '1.0.27';
+const APP_VERSION = '1.0.28';
 const CHANGELOG: string[] = [
-  'آموزشِ صندوق حالا پیش از ساختِ صندوق دیده می‌شود',
-  'دکمه‌ی آموزش در هدرِ صندوق و بنرِ راهنما در بالای صفحه افزوده شد',
+  'اوقات شرعی با چیدمانِ تازه: شش وقتِ شرعی در یک نگاه (صبح، طلوع، ظهر، غروب، مغرب، نیمه‌شب)',
+  'شمارشِ معکوسِ زنده تا وقتِ شرعیِ بعدی (ساعت/دقیقه/ثانیه)',
+  'امکانِ دیدنِ اوقاتِ روزهای قبل و بعد در همان صفحه',
 ];
 
 function App() {
@@ -1033,50 +1034,15 @@ function App() {
         </div>
       )}
 
-      {showPrayerModal && (() => {
-        const pcity = findCity(prayerProvince, prayerCity) || findCity('تهران', 'تهران')!;
-        const pDay = selectedDayNum || getToday(calendarSystem).day;
-        const pDate = toDate(calendarSystem, currentYear, currentMonth, pDay);
-        const pt = computePrayerTimes(pcity.lat, pcity.lng, pDate);
-        const cityList = PROVINCES.find((p) => p.name === prayerProvince)?.cities || [];
-        return (
-          <div className="modal" onClick={() => setShowPrayerModal(false)}>
-            <div className="modal-box prayer-box" onClick={e => e.stopPropagation()}>
-              <div className="tool-panel-head">
-                <span className="tool-panel-icon">🕌</span>
-                <h3>اوقات شرعی</h3>
-                <button className="close-modal" onClick={() => setShowPrayerModal(false)}>✕</button>
-              </div>
-              <div className="prayer-body">
-                <div className="prayer-loc">
-                  <div className="pl-field">
-                    <label className="field-label">استان</label>
-                    <select value={prayerProvince} onChange={e => changePrayerProvince(e.target.value)}>
-                      {PROVINCES.map(p => <option key={p.name} value={p.name}>{p.name}</option>)}
-                    </select>
-                  </div>
-                  <div className="pl-field">
-                    <label className="field-label">شهر</label>
-                    <select value={prayerCity} onChange={e => changePrayerCity(e.target.value)}>
-                      {cityList.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}
-                    </select>
-                  </div>
-                </div>
-                <div className="prayer-date">{pDay} {months[currentMonth]} {currentYear} — {prayerCity}</div>
-                <div className="prayer-list">
-                  <div className="prayer-row"><span>🌅 اذان صبح</span><strong>{pt.fajr}</strong></div>
-                  <div className="prayer-row"><span>☀️ طلوع آفتاب</span><strong>{pt.sunrise}</strong></div>
-                  <div className="prayer-row"><span>🕛 اذان ظهر</span><strong>{pt.dhuhr}</strong></div>
-                  <div className="prayer-row"><span>🌇 اذان عصر</span><strong>{pt.asr}</strong></div>
-                  <div className="prayer-row"><span>🌆 اذان مغرب</span><strong>{pt.maghrib}</strong></div>
-                  <div className="prayer-row"><span>🌙 اذان عشاء</span><strong>{pt.isha}</strong></div>
-                </div>
-                <div className="prayer-note">به وقت ایران · روش مؤسسه ژئوفیزیک دانشگاه تهران</div>
-              </div>
-            </div>
-          </div>
-        );
-      })()}
+      {showPrayerModal && (
+        <PrayerPanel
+          province={prayerProvince}
+          city={prayerCity}
+          onProvinceChange={changePrayerProvince}
+          onCityChange={changePrayerCity}
+          onClose={() => setShowPrayerModal(false)}
+        />
+      )}
 
       {showToolsModal && (
         <ToolsPanel
@@ -1234,7 +1200,7 @@ function App() {
               <button className={`theme-btn ${theme === 'dark' ? 'active' : ''}`} onClick={() => setTheme('dark')}>🌙 تیره</button>
             </div>
 
-            <div className="drawer-foot">نسخه ۱۴۰۵ · ۱.۰.۲۷</div>
+            <div className="drawer-foot">نسخه ۱۴۰۵ · ۱.۰.۲۸</div>
           </aside>
         </div>
       )}
