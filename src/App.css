@@ -2149,3 +2149,31 @@ body.dark .fund-empty-title { color: #e3e9f4; }
   font-weight: 700; font-size: 13px; cursor: pointer;
 }
 body.dark .fund-guide-btn { background: #121a28; border-color: #2a3850; color: #aeb8cd; }
+
+/* دکمه‌ی آموزش در هدرِ صندوق (جایگزینِ آیکونِ قبلی) */
+.fund-guide-icon {
+  border: none;
+  cursor: pointer;
+  font-size: 24px;
+  transition: transform .15s;
+}
+.fund-guide-icon:active { transform: scale(.92); }
+
+/* بنرِ معرفیِ آموزش در بالای فهرستِ صندوق‌ها */
+.fund-guide-banner {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  margin: 0 0 16px; padding: 13px 14px; cursor: pointer;
+  border: 1px solid rgba(240, 199, 94, 0.45);
+  border-radius: 14px; background: rgba(240, 199, 94, 0.12);
+  color: #6b5618; font-family: inherit; font-weight: 800; font-size: 13.5px;
+  text-align: right; line-height: 1.6;
+}
+.fund-guide-banner > span:first-child { font-size: 22px; flex-shrink: 0; }
+.fund-guide-banner > span:nth-child(2) { flex: 1; }
+.fund-guide-banner > span:last-child { font-size: 20px; opacity: .6; flex-shrink: 0; }
+.fund-guide-banner:active { transform: scale(.99); }
+body.dark .fund-guide-banner {
+  border-color: rgba(240, 199, 94, 0.35);
+  background: rgba(240, 199, 94, 0.10);
+  color: #f0c75e;
+}

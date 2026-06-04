@@ -1,6 +1,5 @@
 // صندوقِ سهم‌محورِ قرض‌الحسنه (گردشی) — چند پرداخت در ماه، سهم‌های متفاوت، و گزارشِ حرفه‌ای
 import { useEffect, useState } from 'react';
-import CoachTour, { type CoachStep } from './Coach';
 
 const fmt = (n: number): string => Math.round(n || 0).toLocaleString('en-US');
 const digits = (s: string): number => parseInt(s.replace(/[^0-9]/g, ''), 10) || 0;
@@ -38,7 +37,8 @@ export default function FundPanel({ funds, onChange, onClose, confirm, onShare, 
   const [view, setView] = useState<'round' | 'report'>('round');
   const [notifyFor, setNotifyFor] = useState<string | null>(null);
   const [drawMsg, setDrawMsg] = useState<string | null>(null);
-  const [fundTour, setFundTour] = useState(false);
+  const [showGuide, setShowGuide] = useState(false);
+  const [gi, setGi] = useState(0);
 
   // فرم ساخت
   const [newName, setNewName] = useState('');
@@ -58,21 +58,43 @@ export default function FundPanel({ funds, onChange, onClose, confirm, onShare, 
     if (startInReport && funds.length === 1) { setSelectedId(funds[0].id); setView('report'); }
   }, [startInReport]);
 
-  // آموزشِ تصویریِ صندوق در اولین باز شدنِ یک صندوق
+  // آموزشِ صندوق در اولین باز شدنِ بخش (پیش از ساختِ صندوق)
   useEffect(() => {
-    if (selectedId && view === 'round' && !localStorage.getItem('fundTourSeen')) {
-      const t = setTimeout(() => setFundTour(true), 500);
-      return () => clearTimeout(t);
-    }
-  }, [selectedId]);
+    if (!startInReport && !localStorage.getItem('fundGuideSeen')) { setGi(0); setShowGuide(true); }
+  }, []);
 
-  const FUND_TOUR: CoachStep[] = [
-    { selector: '.fund-tabs', title: 'دو نما', text: 'بین «ماهِ جاری» (ثبت واریزی و قرعه‌کشی) و «گزارشِ کامل» (معوقات و وضعیت هر نفر) جابه‌جا شوید.' },
-    { selector: '.fund-member', title: 'ثبت واریزی', text: 'هر ماه با زدن روی نامِ هر عضو، واریزی‌اش را تیک بزنید. مبلغ نسبت به تعداد سهمِ او محاسبه می‌شود.' },
-    { selector: '.fm-notify', title: 'یادآوری به عضو', text: 'با این دکمه، پیامِ آماده‌ی یادآوریِ پرداخت را با واتساپ، پیامک یا اشتراک‌گذاری برای عضو بفرستید.' },
-    { selector: '.fund-draw-btn', title: 'قرعه‌کشی ماه', text: 'وقتی همه واریز کردند، این دکمه فعال می‌شود و برندگانِ این ماه را نسبت به سهم‌ها انتخاب می‌کند.' },
+  const openGuide = () => { setGi(0); setShowGuide(true); };
+  const closeGuide = () => { setShowGuide(false); localStorage.setItem('fundGuideSeen', '1'); };
+
+  const GUIDE: { icon: string; title: string; text: string }[] = [
+    { icon: '🤝', title: 'صندوقِ قرض‌الحسنه چیست؟', text: 'یک صندوقِ گردشیِ بدونِ سود؛ هر ماه همه واریز می‌کنند و نوبتی یک یا چند نفر کلِ مبلغ را می‌گیرند. مثلِ قرض‌دادنِ دوره‌ای بینِ اعضا.' },
+    { icon: '🎟️', title: 'سهم', text: 'هر عضو می‌تواند یک یا چند «سهم» داشته باشد. هر سهم یعنی یک واریزیِ ماهانه و یک نوبتِ دریافت؛ پس کسی که سهمِ بیشتری دارد، بیشتر می‌دهد و بیشتر دریافت می‌کند.' },
+    { icon: '➕', title: 'ساختِ صندوق', text: 'نامِ صندوق، «واریزیِ هر سهم در ماه» و «تعدادِ پرداخت در ماه» را وارد کنید؛ سپس اعضا را با نام، شماره (اختیاری) و تعدادِ سهم اضافه کنید.' },
+    { icon: '✅', title: 'هر ماه', text: 'واریزیِ اعضا را با زدن روی نامشان تیک بزنید. وقتی همه واریز کردند، دکمه‌ی «قرعه‌کشی» فعال می‌شود و برندگانِ آن ماه نسبت به سهم‌ها انتخاب می‌شوند.' },
+    { icon: '📊', title: 'گزارش و معوقات', text: 'در تبِ «گزارشِ کامل» می‌بینید هر نفر چقدر داده، چقدر گرفته و چند نفر از ماه‌های قبل بدهیِ معوق دارند.' },
+    { icon: '📤', title: 'یادآوری به اعضا', text: 'با دکمه‌ی کنارِ هر عضو، پیامِ آماده‌ی یادآوریِ پرداخت را با واتساپ، پیامک یا اشتراک‌گذاری (ایتا/تلگرام) برایش بفرستید.' },
+    { icon: '🧮', title: 'ماشین‌حساب', text: 'اگر نمی‌دانید چه اعدادی بگذارید، از «ماشین‌حسابِ صندوق» در همین صفحه کمک بگیرید.' },
   ];
 
+  const renderGuide = () => {
+    if (!showGuide) return null;
+    const s = GUIDE[gi];
+    const last = gi === GUIDE.length - 1;
+    return (
+      <div className="onb fund-guide-overlay">
+        <button className="onb-skip" onClick={closeGuide}>رد کردن</button>
+        <div className="onb-card" key={gi}>
+          <div className="onb-icon">{s.icon}</div>
+          <h2 className="onb-title">{s.title}</h2>
+          <p className="onb-text">{s.text}</p>
+        </div>
+        <div className="onb-bottom">
+          <div className="onb-dots">{GUIDE.map((_, k) => <span key={k} className={`onb-dot ${k === gi ? 'active' : ''}`} />)}</div>
+          <button className="onb-next" onClick={() => (last ? closeGuide() : setGi(gi + 1))}>{last ? 'تمام' : 'بعدی'}</button>
+        </div>
+      </div>
+    );
+  };
   const fund = funds.find((f) => f.id === selectedId) || null;
   const update = (id: string, fn: (f: Fund) => Fund) => onChange(funds.map((f) => (f.id === id ? fn(f) : f)));
 
@@ -146,6 +168,7 @@ export default function FundPanel({ funds, onChange, onClose, confirm, onShare, 
     const arrearsMembers = fund.members.map((m) => ({ m, unpaid: fund.rounds.filter((r) => !r.paid[m.name]).length })).filter((x) => x.unpaid > 0);
 
     return (
+      <>
       <div className="modal" onClick={onClose}>
         <div className="modal-box tool-panel" onClick={(e) => e.stopPropagation()}>
           <div className="tool-panel-head">
@@ -239,7 +262,7 @@ export default function FundPanel({ funds, onChange, onClose, confirm, onShare, 
               </>
             )}
 
-            <button className="fund-guide-btn" onClick={() => { setView('round'); setFundTour(true); }}>🎓 نمایشِ دوباره‌ی آموزش</button>
+            <button className="fund-guide-btn" onClick={openGuide}>🎓 نمایشِ دوباره‌ی آموزش</button>
             <button className="fund-delete" onClick={() => deleteFund(fund.id)}>حذف صندوق</button>
           </div>
 
@@ -261,10 +284,10 @@ export default function FundPanel({ funds, onChange, onClose, confirm, onShare, 
               </div>
             );
           })()}
-
-          {fundTour && <CoachTour steps={FUND_TOUR} onClose={() => { setFundTour(false); localStorage.setItem('fundTourSeen', '1'); }} />}
         </div>
       </div>
+      {renderGuide()}
+    </>
     );
   }
 
@@ -320,14 +343,22 @@ export default function FundPanel({ funds, onChange, onClose, confirm, onShare, 
 
   // ---------- فهرستِ صندوق‌ها ----------
   return (
+    <>
     <div className="modal" onClick={onClose}>
       <div className="modal-box tool-panel" onClick={(e) => e.stopPropagation()}>
         <div className="tool-panel-head">
-          <span className="tool-panel-icon">👨‍👩‍👧‍👦</span>
-          <h3>صندوق خانوادگی</h3>
+          <button className="tool-panel-icon fund-guide-icon" title="آموزشِ کار با صندوق" onClick={openGuide}>🎓</button>
+          <h3>{startInReport ? 'گزارش صندوق' : 'صندوق خانوادگی'}</h3>
           <button className="close-modal" onClick={onClose}>✕</button>
         </div>
         <div className="tool-panel-body">
+          {!startInReport && (
+            <button className="fund-guide-banner" onClick={openGuide}>
+              <span>🎓</span>
+              <span>آموزشِ کار با صندوق — قبل از شروع این را بخوانید</span>
+              <span>›</span>
+            </button>
+          )}
           {startInReport && funds.length === 0 ? (
             <div className="fund-empty">
               <div className="fund-empty-icon">📭</div>
@@ -392,5 +423,7 @@ export default function FundPanel({ funds, onChange, onClose, confirm, onShare, 
         </div>
       </div>
     </div>
+    {renderGuide()}
+    </>
   );
 }

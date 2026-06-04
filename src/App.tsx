@@ -114,9 +114,10 @@ const TOUR_STEPS: CoachStep[] = [
 ];
 
 // نسخه و فهرستِ تغییرات برای پنجره‌ی «تازه‌ها»
-const APP_VERSION = '1.0.26';
+const APP_VERSION = '1.0.27';
 const CHANGELOG: string[] = [
-  'دکمه‌ی «نمایشِ دوباره‌ی آموزش» در صندوق، برای دیدنِ دوباره‌ی راهنمای تصویری',
+  'آموزشِ صندوق حالا پیش از ساختِ صندوق دیده می‌شود',
+  'دکمه‌ی آموزش در هدرِ صندوق و بنرِ راهنما در بالای صفحه افزوده شد',
 ];
 
 function App() {
@@ -1233,7 +1234,7 @@ function App() {
               <button className={`theme-btn ${theme === 'dark' ? 'active' : ''}`} onClick={() => setTheme('dark')}>🌙 تیره</button>
             </div>
 
-            <div className="drawer-foot">نسخه ۱۴۰۵ · ۱.۰.۲۶</div>
+            <div className="drawer-foot">نسخه ۱۴۰۵ · ۱.۰.۲۷</div>
           </aside>
         </div>
       )}
