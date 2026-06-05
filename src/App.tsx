@@ -79,6 +79,7 @@ interface Fund {
   carry?: number;          // مانده‌ی جمع‌شده‌ی صندوق (ته‌مانده‌ی روند)
   autoRound?: boolean;     // روندِ خودکارِ مبلغ‌ها (پیش‌فرض روشن)
   roundUnit?: number;      // واحدِ روند (۱۰۰۰ / ۱۰۰۰۰ / ۱۰۰۰۰۰)
+  payOverride?: number;    // مبلغِ پرداختِ تنظیم‌شده‌ی دستی
 }
 
 // مهاجرتِ صندوق‌های قدیمی (اعضای رشته‌ای، برنده‌ی تکی) به مدلِ سهم‌محور
@@ -92,7 +93,9 @@ function normalizeFund(f: any): Fund {
     winners: Array.isArray(r.winners) ? r.winners : (r.winner ? [r.winner] : []),
     pay: typeof r.pay === 'number' ? r.pay : undefined,
   }));
-  return { id: f.id, name: f.name, monthlyAmount: f.monthlyAmount, payoutsPerMonth: f.payoutsPerMonth || 1, members, rounds, carry: typeof f.carry === 'number' ? f.carry : 0, autoRound: f.autoRound !== false, roundUnit: typeof f.roundUnit === 'number' ? f.roundUnit : 10000 };
+  const base: Fund = { id: f.id, name: f.name, monthlyAmount: f.monthlyAmount, payoutsPerMonth: f.payoutsPerMonth || 1, members, rounds, carry: typeof f.carry === 'number' ? f.carry : 0, autoRound: f.autoRound !== false, roundUnit: typeof f.roundUnit === 'number' ? f.roundUnit : 10000 };
+  if (typeof f.payOverride === 'number') base.payOverride = f.payOverride;
+  return base;
 }
 
 // تابع فرمت عدد با جداکننده سه‌رقمی
@@ -119,12 +122,12 @@ const TOUR_STEPS: CoachStep[] = [
 ];
 
 // نسخه و فهرستِ تغییرات برای پنجره‌ی «تازه‌ها»
-const APP_VERSION = '1.0.30';
+const APP_VERSION = '1.0.31';
 const CHANGELOG: string[] = [
-  'حالتِ پیشرفته‌ی صندوق: می‌توانید روندِ خودکار را روشن/خاموش کنید و واحدِ روند را ۱٬۰۰۰ / ۱۰٬۰۰۰ / ۱۰۰٬۰۰۰ بگذارید',
-  'اگر روند خاموش باشد و مبلغ خرده داشته باشد، برنامه پیغام می‌دهد و با یک دکمه گِردش می‌کنید',
-  'گزارشِ صندوق: «پیش‌بینیِ نوبت‌های پرشلوغ» می‌گوید کدام ماه‌های آینده برنده‌ی اضافه دارند و چند نفر',
-  'وام: تیکِ «روندِ خودکارِ اقساط» با امکانِ خاموش‌کردن و پیغامِ خرده',
+  'تنظیمِ تعاملیِ مبلغِ پرداختِ صندوق: با دکمه‌های «−سرریز / +سرریز» مبلغِ هر برنده را کم و زیاد کنید',
+  'برنامه هم‌زمان «سرریزِ» هر پرداخت و اثرش را نشان می‌دهد: از کدام نوبت چند نفرِ اضافه برنده می‌شوند',
+  'دکمه‌ی «بهینه‌سازیِ خودکار» بهترین مبلغ را پیدا می‌کند و با «کپیِ پیغام» نتیجه را می‌فرستید',
+  'گزارش پیشاپیش می‌گوید کدام نوبت‌ها پرشلوغ می‌شوند و هرکدام چند برنده دارند',
 ];
 
 function App() {
@@ -1206,7 +1209,7 @@ function App() {
               <button className={`theme-btn ${theme === 'dark' ? 'active' : ''}`} onClick={() => setTheme('dark')}>🌙 تیره</button>
             </div>
 
-            <div className="drawer-foot">نسخه ۱۴۰۵ · ۱.۰.۳۰</div>
+            <div className="drawer-foot">نسخه ۱۴۰۵ · ۱.۰.۳۱</div>
           </aside>
         </div>
       )}

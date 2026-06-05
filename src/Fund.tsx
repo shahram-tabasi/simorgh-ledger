@@ -16,14 +16,24 @@ const hasFraction = (n: number): boolean => Math.round(n || 0) % FUND_ROUND !== 
 
 export interface FundMember { name: string; phone?: string; shares: number; }
 export interface FundRound { paid: { [m: string]: boolean }; winners: string[]; pay?: number; }
-export interface Fund { id: string; name: string; monthlyAmount: number; payoutsPerMonth: number; members: FundMember[]; rounds: FundRound[]; carry?: number; autoRound?: boolean; roundUnit?: number; }
+export interface Fund { id: string; name: string; monthlyAmount: number; payoutsPerMonth: number; members: FundMember[]; rounds: FundRound[]; carry?: number; autoRound?: boolean; roundUnit?: number; payOverride?: number; }
+
+// مبلغِ پایه‌ی هر پرداخت: اولویت با مبلغِ دستی (payOverride)، وگرنه گِردِ خودکار، وگرنه دقیق
+const exactPayOf = (f: Fund): number => { const c = f.monthlyAmount * totalSharesOf(f); return f.payoutsPerMonth > 0 ? c / f.payoutsPerMonth : 0; };
+const basePayOf = (f: Fund): number => {
+  const exact = exactPayOf(f);
+  if (typeof f.payOverride === 'number' && f.payOverride > 0) return Math.min(f.payOverride, Math.floor(exact));
+  return f.autoRound === false ? exact : floorUnit(exact, unitOf(f));
+};
+// واحدِ گام برای تنظیمِ دستیِ مبلغ (سرریز)
+const stepOf = (f: Fund): number => f.roundUnit || FUND_ROUND;
 
 // پیش‌بینیِ نوبت‌های آینده: از وضعیتِ فعلی جلو می‌رود و تعدادِ برنده‌ی هر ماه را می‌دهد (قطعی، مستقل از قرعه)
 function forecastRounds(f: Fund): { month: number; winners: number; extra: number }[] {
   const ts = totalSharesOf(f);
   const coll = f.monthlyAmount * ts;
   const unit = unitOf(f);
-  const basePay = floorUnit(coll / f.payoutsPerMonth, unit);
+  const basePay = basePayOf(f);
   if (basePay <= 0 || ts <= 0) return [];
   let drawn = f.rounds.reduce((c, r) => c + r.winners.length, 0);
   let carry = f.carry || 0;
@@ -36,12 +46,23 @@ function forecastRounds(f: Fund): { month: number; winners: number; extra: numbe
     let n = Math.min(f.payoutsPerMonth + Math.floor(carry / basePay), remaining);
     if (n < 1) n = 1;
     const isFinal = n >= remaining;
-    const pay = isFinal ? Math.max(basePay, floorUnit(avail / n, unit)) : basePay;
+    const pay = isFinal ? Math.max(basePay, floorUnit(avail / n, Math.max(unit, 1))) : basePay;
     carry = Math.max(0, avail - n * pay);
     drawn += n; month += 1;
     out.push({ month, winners: n, extra: Math.max(0, n - f.payoutsPerMonth) });
   }
   return out;
+}
+
+// پیشنهادِ خودکار: بیشترین مبلغِ پرداخت (کمترین کاهش) که حداقل یک برنده‌ی اضافه بسازد
+function suggestPay(f: Fund): number | null {
+  const exact = exactPayOf(f);
+  const unit = stepOf(f);
+  const start = floorUnit(exact, unit);
+  for (let p = start; p >= exact * 0.5 && p > 0; p -= unit) {
+    if (forecastRounds({ ...f, payOverride: p }).some((x) => x.extra > 0)) return p;
+  }
+  return null;
 }
 
 interface Props {
@@ -112,7 +133,8 @@ export default function FundPanel({ funds, onChange, onClose, confirm, onShare, 
     { icon: '✅', title: 'هر ماه', text: 'واریزیِ اعضا را با زدن روی نامشان تیک بزنید. وقتی همه واریز کردند، دکمه‌ی «قرعه‌کشی» فعال می‌شود و برندگانِ آن ماه نسبت به سهم‌ها انتخاب می‌شوند.' },
     { icon: '💰', title: 'پرداختِ گِرد و مانده‌ی صندوق', text: 'برای اینکه «خرده‌پرداختی» نداشته باشید، مبلغِ هر برنده به نزدیک‌ترین ۱۰٬۰۰۰ تومان گِرد می‌شود و ته‌مانده‌ها در «مانده‌ی صندوق» جمع می‌شوند. هر وقت مانده به‌اندازه‌ی یک پرداختِ کامل رسید، آن ماه یک برنده‌ی اضافه قرعه می‌خورد؛ و در ماهِ آخر تمامِ مانده بینِ برنده‌ها پخش می‌شود تا پولی در صندوق نماند.' },
     { icon: '⚙️', title: 'حالتِ پیشرفته (روندِ دلخواه)', text: 'هنگامِ ساختِ صندوق در «تنظیماتِ پیشرفته» می‌توانید روندِ خودکار را روشن/خاموش کنید و واحدِ روند را ۱٬۰۰۰ یا ۱۰٬۰۰۰ یا ۱۰۰٬۰۰۰ بگذارید. اگر روند را خاموش کنید و مبلغی خرده داشته باشد، خودِ برنامه پیغام می‌دهد و با یک دکمه می‌توانید گِردش کنید. این تنظیم را بعداً هم در «گزارشِ کامل» می‌توانید عوض کنید.' },
-    { icon: '🔮', title: 'پیش‌بینیِ نوبت‌های پرشلوغ', text: 'در «گزارشِ کامل» بخشِ «پیش‌بینیِ نوبت‌های پرشلوغ» از پیش می‌گوید کدام ماه‌های آینده برنده‌ی اضافه خواهند داشت و هرکدام چند نفر؛ تا غافلگیر نشوید.' },
+    { icon: '🎚️', title: 'تنظیمِ مبلغ و سرریز', text: 'در «گزارشِ کامل» بخشِ «تنظیمِ مبلغِ پرداخت و سرریز» مبلغِ هر برنده را با دکمه‌های «−سرریز / +سرریز» کم و زیاد کنید؛ برنامه هم‌زمان «سرریزِ» هر پرداخت و اثرش را نشان می‌دهد و می‌گوید از کدام نوبت چند نفر اضافه می‌شوند. دکمه‌ی «بهینه‌سازیِ خودکار» خودش بهترین مبلغ را پیدا می‌کند و با «کپیِ پیغام» می‌توانید نتیجه را بفرستید.' },
+    { icon: '🔮', title: 'پیش‌بینیِ نوبت‌های پرشلوغ', text: 'بخشِ «پیش‌بینیِ نوبت‌های پرشلوغ» از پیش می‌گوید کدام ماه‌های آینده برنده‌ی اضافه خواهند داشت و هرکدام چند نفر؛ تا غافلگیر نشوید.' },
     { icon: '📊', title: 'گزارش و معوقات', text: 'در تبِ «گزارشِ کامل» می‌بینید هر نفر چقدر داده، چقدر گرفته، مانده‌ی صندوق چقدر است، کدام ماه‌ها پرداختِ اضافه داشته‌ایم و چند نفر بدهیِ معوق دارند.' },
     { icon: '📤', title: 'یادآوری به اعضا', text: 'با دکمه‌ی کنارِ هر عضو، پیامِ آماده‌ی یادآوریِ پرداخت را با واتساپ، پیامک یا اشتراک‌گذاری (ایتا/تلگرام) برایش بفرستید.' },
     { icon: '🧮', title: 'ماشین‌حساب', text: 'اگر نمی‌دانید چه اعدادی بگذارید، از «ماشین‌حسابِ صندوق» در همین صفحه کمک بگیرید.' },
@@ -174,7 +196,7 @@ export default function FundPanel({ funds, onChange, onClose, confirm, onShare, 
     const ts = totalSharesOf(fund);
     const coll = fund.monthlyAmount * ts;            // جمع‌آوریِ این ماه (همه می‌پردازند)
     const unit = unitOf(fund);
-    const basePay = floorUnit(coll / fund.payoutsPerMonth, unit); // پرداختِ هر برنده (در صورتِ روند، گِرد)
+    const basePay = basePayOf(fund);                 // پرداختِ هر برنده (دستی/گِرد/دقیق)
     if (basePay <= 0) return;
     const drawn = fund.rounds.reduce((c, r) => c + r.winners.length, 0);
     const remaining = ts - drawn;                    // سهم‌های قرعه‌نخورده
@@ -215,8 +237,10 @@ export default function FundPanel({ funds, onChange, onClose, confirm, onShare, 
     const totalShares = totalSharesOf(fund);
     const collection = fund.monthlyAmount * totalShares;
     const unit = unitOf(fund);
+    const step = stepOf(fund);                                   // گامِ تنظیمِ دستی
     const exactPayout = collection / fund.payoutsPerMonth;       // مبلغِ دقیق (بدونِ روند)
-    const payout = floorUnit(exactPayout, unit);                 // پرداختِ هر برنده (در صورتِ روند، گِرد)
+    const payout = basePayOf(fund);                             // پرداختِ هر برنده (دستی/گِرد/دقیق)
+    const skim = Math.max(0, exactPayout - payout);             // سرریزِ هر پرداخت
     const roundOff = fund.autoRound === false;                   // روندِ خودکار خاموش است
     const needsRound = roundOff && hasFraction(payout);          // خرده دارد و روند خاموش است
     const carry = fund.carry || 0;                              // مانده‌ی جمع‌شده‌ی صندوق
@@ -239,6 +263,17 @@ export default function FundPanel({ funds, onChange, onClose, confirm, onShare, 
     // پیش‌بینیِ نوبت‌های آینده که نفراتشان زیاد می‌شود
     const forecast = forecastRounds(fund);
     const forecastExtra = forecast.filter((x) => x.extra > 0);
+    // ارقامِ پیش‌بینی برای پیغام
+    const sumExtra = forecastExtra.reduce((s, x) => s + x.extra, 0);
+    const firstExtraMonth = forecastExtra.length ? forecastExtra[0].month : 0;
+    const lastPay = forecast.length ? Math.round(collection + carry) : 0;
+    // تنظیمِ دستیِ مبلغِ پرداخت (سرریز)
+    const setPay = (p: number) => update(fund.id, (f) => ({ ...f, payOverride: Math.max(step, Math.min(Math.floor(exactPayout), p)) }));
+    const autoPay = () => { const s = suggestPay(fund); if (s) setPay(s); };
+    const resetPay = () => update(fund.id, (f) => { const { payOverride, ...rest } = f; return rest as Fund; });
+    const tuneMsg = forecastExtra.length
+      ? `با پرداختِ ${fmt(payout)} (سرریزِ ${fmt(skim)} از هر پرداخت)، از نوبتِ ${firstExtraMonth} به بعد تعدادِ برنده‌ها زیاد می‌شود؛ مجموعاً ${sumExtra} برنده‌ی اضافه و در نوبتِ آخر تا ${fmt(lastPay)} تومان به برنده می‌رسد.`
+      : `با پرداختِ ${fmt(payout)} سرریزِ کافی برای برنده‌ی اضافه جمع نمی‌شود. مبلغ را پایین‌تر بیاورید یا «بهینه‌سازیِ خودکار» را بزنید.`;
 
     return (
       <>
@@ -259,7 +294,7 @@ export default function FundPanel({ funds, onChange, onClose, confirm, onShare, 
               <div className="tool-result-row"><span>واریزی هر سهم در ماه</span><strong>{fmt(fund.monthlyAmount)} تومان</strong></div>
               <div className="tool-result-row"><span>کلِ سهم‌ها · پرداخت در ماه</span><strong>{totalShares} سهم · {fund.payoutsPerMonth} نفر</strong></div>
               <div className="tool-result-row"><span>جمع‌آوریِ ماهانه</span><strong>{fmt(collection)} تومان</strong></div>
-              <div className="tool-result-row"><span>مبلغِ هر پرداخت {roundOff ? '(بدونِ روند)' : `(گِرد به ${fmt(unit)})`}</span><strong>{fmt(payout)} تومان</strong></div>
+              <div className="tool-result-row"><span>مبلغِ هر پرداخت {typeof fund.payOverride === 'number' ? '(تنظیمِ دستی)' : roundOff ? '(بدونِ روند)' : `(گِرد به ${fmt(unit)})`}</span><strong>{fmt(payout)} تومان</strong></div>
               <div className="tool-result-row closing"><span>مانده‌ی صندوق</span><strong>{fmt(carry)} تومان</strong></div>
             </div>
 
@@ -308,7 +343,7 @@ export default function FundPanel({ funds, onChange, onClose, confirm, onShare, 
             ) : (
               <>
                 <div className="fund-help">
-                  هر ماه <strong>{fmt(collection)}</strong> جمع و بین <strong>{fund.payoutsPerMonth}</strong> برنده تقسیم می‌شود (هرکدام {fmt(payout)}{roundOff ? '، بدونِ روند' : `، گِرد به ${fmt(unit)} بدونِ خرده`}).
+                  هر ماه <strong>{fmt(collection)}</strong> جمع و بین <strong>{fund.payoutsPerMonth}</strong> برنده تقسیم می‌شود (هرکدام {fmt(payout)} تومان).
                   دوره <strong>{totalMonths} ماه</strong> است و هر سهم یک‌بار دریافت می‌کند. بدون سود. ته‌مانده‌ها در مانده‌ی صندوق جمع و به‌صورتِ برنده‌ی اضافه پخش می‌شوند.
                 </div>
 
@@ -325,6 +360,23 @@ export default function FundPanel({ funds, onChange, onClose, confirm, onShare, 
                       ))}
                     </div>
                   )}
+                </div>
+
+                <div className="loan-sched-head"><span>تنظیمِ مبلغِ پرداخت و سرریز</span><span className="loan-sched-hint">{typeof fund.payOverride === 'number' ? 'دستی' : 'خودکار'}</span></div>
+                <div className="fund-tuner">
+                  <div className="tool-result-row"><span>مبلغِ دقیق (بدونِ روند)</span><strong>{fmt(exactPayout)} تومان</strong></div>
+                  <div className="fund-tuner-pay">
+                    <button type="button" className="fund-step-btn" onClick={() => setPay(payout + step)} title="کاهشِ سرریز">−&nbsp;سرریز</button>
+                    <div className="fund-tuner-amt"><strong>{fmt(payout)}</strong><small>مبلغِ هر پرداخت</small></div>
+                    <button type="button" className="fund-step-btn" onClick={() => setPay(payout - step)} title="افزایشِ سرریز">+&nbsp;سرریز</button>
+                  </div>
+                  <div className="tool-result-row closing"><span>سرریزِ هر پرداخت</span><strong>{fmt(skim)} تومان</strong></div>
+                  <div className="fund-tuner-msg">{tuneMsg}</div>
+                  <div className="fund-tuner-actions">
+                    <button type="button" className="fund-tuner-auto" onClick={autoPay}>⚙️ بهینه‌سازیِ خودکار</button>
+                    <button type="button" className="fund-tuner-copy" onClick={() => onShare(tuneMsg)}>کپیِ پیغام</button>
+                    {typeof fund.payOverride === 'number' && <button type="button" className="fund-tuner-reset" onClick={resetPay}>بازنشانی</button>}
+                  </div>
                 </div>
 
                 <div className="loan-sched-head"><span>مانده‌ی صندوق</span><span className="loan-sched-hint">{carry > 0 ? 'منتظرِ پرداختِ بعدی' : 'خالی'}</span></div>

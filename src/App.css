@@ -2135,6 +2135,33 @@ body.dark .fund-unit-btn.active { background: #2f7fe0; border-color: #2f7fe0; co
 body.dark .fund-roundask { background: #2c2410; border-color: #5a4a1e; color: #e3c574; }
 body.dark .fund-roundask strong { color: #f3d98a; }
 
+/* تنظیمِ تعاملیِ مبلغِ پرداخت و سرریز */
+.fund-tuner { background: #f5f8fd; border: 1px solid #e0e9f5; border-radius: 13px; padding: 12px 14px; margin-bottom: 14px; }
+.fund-tuner-pay { display: flex; align-items: center; gap: 10px; margin: 10px 0; }
+.fund-step-btn {
+  flex-shrink: 0; min-width: 78px; padding: 11px 8px; border: 1px solid #1c6fd6; border-radius: 11px;
+  background: #fff; color: #1c6fd6; font-size: 13px; font-weight: 800; cursor: pointer; font-family: inherit;
+}
+.fund-step-btn:active { background: #1c6fd6; color: #fff; }
+.fund-tuner-amt { flex: 1; text-align: center; display: flex; flex-direction: column; gap: 2px; }
+.fund-tuner-amt strong { font-size: 19px; color: #173a63; }
+.fund-tuner-amt small { font-size: 11px; color: #6b7a93; }
+.fund-tuner-msg {
+  background: #eef5fe; border: 1px solid #d7e6fb; border-radius: 11px; padding: 11px 12px;
+  font-size: 12.5px; line-height: 2; color: #335a86; margin: 10px 0;
+}
+.fund-tuner-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.fund-tuner-auto { flex: 1; min-width: 130px; background: #1c6fd6; border: none; color: #fff; font-weight: 800; font-size: 13px; padding: 10px 12px; border-radius: 11px; cursor: pointer; font-family: inherit; }
+.fund-tuner-copy { background: #eaf1fb; border: none; color: #1c5aa8; font-weight: 700; font-size: 13px; padding: 10px 14px; border-radius: 11px; cursor: pointer; font-family: inherit; }
+.fund-tuner-reset { background: #f3e7e7; border: none; color: #a3433a; font-weight: 700; font-size: 13px; padding: 10px 14px; border-radius: 11px; cursor: pointer; font-family: inherit; }
+body.dark .fund-tuner { background: #15203244; border-color: #2a3a55; }
+body.dark .fund-step-btn { background: #1b2740; border-color: #2f7fe0; color: #6fb0f5; }
+body.dark .fund-tuner-amt strong { color: #cfe4fb; }
+body.dark .fund-tuner-amt small { color: #93a2bb; }
+body.dark .fund-tuner-msg { background: #12233a; border-color: #234063; color: #aecbe9; }
+body.dark .fund-tuner-copy { background: #1b2c44; color: #9fc4ef; }
+body.dark .fund-tuner-reset { background: #3a1f1f; color: #e09a92; }
+
 /* عضو صندوق: بخشِ پرداخت + دکمه‌ی اطلاع‌رسانی */
 .fund-member { padding: 0; overflow: hidden; }
 .fm-main {
