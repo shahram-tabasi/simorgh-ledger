@@ -76,10 +76,8 @@ interface Fund {
   payoutsPerMonth: number; // تعداد پرداختی در هر ماه
   members: FundMember[];
   rounds: FundRound[];
-  carry?: number;          // مانده‌ی جمع‌شده‌ی صندوق (ته‌مانده‌ی روند)
-  autoRound?: boolean;     // روندِ خودکارِ مبلغ‌ها (پیش‌فرض روشن)
-  roundUnit?: number;      // واحدِ روند (۱۰۰۰ / ۱۰۰۰۰ / ۱۰۰۰۰۰)
-  payOverride?: number;    // مبلغِ پرداختِ تنظیم‌شده‌ی دستی
+  carry?: number;          // خرده‌ی جمع‌شده‌ی نزدِ صاحبِ صندوق
+  roundLevel?: 'off' | 'low' | 'mid' | 'high'; // شدتِ گِرد کردنِ پرداخت‌ها
 }
 
 // مهاجرتِ صندوق‌های قدیمی (اعضای رشته‌ای، برنده‌ی تکی) به مدلِ سهم‌محور
@@ -93,9 +91,11 @@ function normalizeFund(f: any): Fund {
     winners: Array.isArray(r.winners) ? r.winners : (r.winner ? [r.winner] : []),
     pay: typeof r.pay === 'number' ? r.pay : undefined,
   }));
-  const base: Fund = { id: f.id, name: f.name, monthlyAmount: f.monthlyAmount, payoutsPerMonth: f.payoutsPerMonth || 1, members, rounds, carry: typeof f.carry === 'number' ? f.carry : 0, autoRound: f.autoRound !== false, roundUnit: typeof f.roundUnit === 'number' ? f.roundUnit : 10000 };
-  if (typeof f.payOverride === 'number') base.payOverride = f.payOverride;
-  return base;
+  // مهاجرتِ صندوق‌های قدیمی: تنظیماتِ روندِ قبلی → شدتِ ساده‌ی جدید
+  const level: Fund['roundLevel'] = (['off', 'low', 'mid', 'high'].includes(f.roundLevel))
+    ? f.roundLevel
+    : (f.autoRound === false || f.autoRound === undefined ? 'off' : 'low');
+  return { id: f.id, name: f.name, monthlyAmount: f.monthlyAmount, payoutsPerMonth: f.payoutsPerMonth || 1, members, rounds, carry: typeof f.carry === 'number' ? f.carry : 0, roundLevel: level };
 }
 
 // تابع فرمت عدد با جداکننده سه‌رقمی
@@ -122,12 +122,12 @@ const TOUR_STEPS: CoachStep[] = [
 ];
 
 // نسخه و فهرستِ تغییرات برای پنجره‌ی «تازه‌ها»
-const APP_VERSION = '1.0.31';
+const APP_VERSION = '1.0.32';
 const CHANGELOG: string[] = [
-  'تنظیمِ تعاملیِ مبلغِ پرداختِ صندوق: با دکمه‌های «−سرریز / +سرریز» مبلغِ هر برنده را کم و زیاد کنید',
-  'برنامه هم‌زمان «سرریزِ» هر پرداخت و اثرش را نشان می‌دهد: از کدام نوبت چند نفرِ اضافه برنده می‌شوند',
-  'دکمه‌ی «بهینه‌سازیِ خودکار» بهترین مبلغ را پیدا می‌کند و با «کپیِ پیغام» نتیجه را می‌فرستید',
-  'گزارش پیشاپیش می‌گوید کدام نوبت‌ها پرشلوغ می‌شوند و هرکدام چند برنده دارند',
+  'گِرد کردنِ پرداخت‌ها ساده شد: به‌جای اعداد، فقط «بدون / کم / متوسط / زیاد» — همان موقعِ ساختِ صندوق',
+  'صندوق‌های معمولی «بدون» می‌مانند؛ صندوق‌های بزرگ با حذفِ خرده همه مبلغِ رُند و یکسان می‌گیرند',
+  'پولِ خرده به‌جای ماندن، باعثِ «نفراتِ اضافه» می‌شود (نه پولِ اضافه)؛ خرده‌ی ناچیز نزدِ صاحبِ صندوق می‌ماند',
+  'پیش‌نمایشِ زنده: چند نفرِ اضافه، در کدام نوبت‌ها، و چقدر خرده نزدِ شما می‌ماند',
 ];
 
 function App() {
@@ -1209,7 +1209,7 @@ function App() {
               <button className={`theme-btn ${theme === 'dark' ? 'active' : ''}`} onClick={() => setTheme('dark')}>🌙 تیره</button>
             </div>
 
-            <div className="drawer-foot">نسخه ۱۴۰۵ · ۱.۰.۳۱</div>
+            <div className="drawer-foot">نسخه ۱۴۰۵ · ۱.۰.۳۲</div>
           </aside>
         </div>
       )}

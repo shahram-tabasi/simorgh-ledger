@@ -2135,6 +2135,16 @@ body.dark .fund-unit-btn.active { background: #2f7fe0; border-color: #2f7fe0; co
 body.dark .fund-roundask { background: #2c2410; border-color: #5a4a1e; color: #e3c574; }
 body.dark .fund-roundask strong { color: #f3d98a; }
 
+/* انتخابگرِ شدتِ گِرد کردن: بدون / کم / متوسط / زیاد */
+.fund-levels { display: flex; gap: 8px; margin: 8px 0 10px; }
+.fund-level-btn {
+  flex: 1; padding: 11px 0; border: 1px solid #d3deee; border-radius: 11px; background: #fff;
+  color: #4a5774; font-size: 14px; font-weight: 800; cursor: pointer; font-family: inherit;
+}
+.fund-level-btn.active { background: #1c6fd6; border-color: #1c6fd6; color: #fff; }
+body.dark .fund-level-btn { background: #1b2740; border-color: #314261; color: #b9c5dc; }
+body.dark .fund-level-btn.active { background: #2f7fe0; border-color: #2f7fe0; color: #fff; }
+
 /* تنظیمِ تعاملیِ مبلغِ پرداخت و سرریز */
 .fund-tuner { background: #f5f8fd; border: 1px solid #e0e9f5; border-radius: 13px; padding: 12px 14px; margin-bottom: 14px; }
 .fund-tuner-pay { display: flex; align-items: center; gap: 10px; margin: 10px 0; }
