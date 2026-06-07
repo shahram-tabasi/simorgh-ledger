@@ -103,6 +103,14 @@ const formatNumber = (num: number): string => {
   return num.toLocaleString('en-US');
 };
 
+// خلاصه‌ی مبلغ برای خانه‌ی کوچکِ تقویم (که «نصفه» نشود): میلیون → م، هزار → هـ
+const compactAmount = (num: number): string => {
+  const n = Math.round(num || 0);
+  if (n >= 1_000_000) { const v = n / 1_000_000; return `${(n % 1_000_000 === 0 ? v : +v.toFixed(1)).toLocaleString('en-US')}م`; }
+  if (n >= 1_000) { const v = n / 1_000; return `${(n % 1_000 === 0 ? v : +v.toFixed(0)).toLocaleString('en-US')}هـ`; }
+  return n.toLocaleString('en-US');
+};
+
 // تابع تبدیل رشته با جداکننده به عدد
 const parseFormattedNumber = (str: string): number => {
   const cleaned = str.replace(/,/g, '');
@@ -122,12 +130,10 @@ const TOUR_STEPS: CoachStep[] = [
 ];
 
 // نسخه و فهرستِ تغییرات برای پنجره‌ی «تازه‌ها»
-const APP_VERSION = '1.0.32';
+const APP_VERSION = '1.0.33';
 const CHANGELOG: string[] = [
-  'گِرد کردنِ پرداخت‌ها ساده شد: به‌جای اعداد، فقط «بدون / کم / متوسط / زیاد» — همان موقعِ ساختِ صندوق',
-  'صندوق‌های معمولی «بدون» می‌مانند؛ صندوق‌های بزرگ با حذفِ خرده همه مبلغِ رُند و یکسان می‌گیرند',
-  'پولِ خرده به‌جای ماندن، باعثِ «نفراتِ اضافه» می‌شود (نه پولِ اضافه)؛ خرده‌ی ناچیز نزدِ صاحبِ صندوق می‌ماند',
-  'پیش‌نمایشِ زنده: چند نفرِ اضافه، در کدام نوبت‌ها، و چقدر خرده نزدِ شما می‌ماند',
+  'رفعِ بریده‌شدنِ مبلغِ زیرِ روزها در تقویم: حالا خلاصه و خوانا نشان داده می‌شود (مثلاً ۴٫۵م)',
+  'رفعِ بریده‌شدنِ حبابِ راهنمای روز (اعلانِ وام و اقساط) در لبه‌های صفحه',
 ];
 
 function App() {
@@ -730,7 +736,7 @@ function App() {
           <span className="day-num">{d}</span>
           {debt > 0 && (
             <span className="debt-badge" title={`${formatNumber(debt)} تومان`}>
-              {formatNumber(debt)}
+              {compactAmount(debt)}
             </span>
           )}
         </div>
@@ -1209,7 +1215,7 @@ function App() {
               <button className={`theme-btn ${theme === 'dark' ? 'active' : ''}`} onClick={() => setTheme('dark')}>🌙 تیره</button>
             </div>
 
-            <div className="drawer-foot">نسخه ۱۴۰۵ · ۱.۰.۳۲</div>
+            <div className="drawer-foot">نسخه ۱۴۰۵ · ۱.۰.۳۳</div>
           </aside>
         </div>
       )}
