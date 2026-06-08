@@ -103,9 +103,10 @@ const formatNumber = (num: number): string => {
   return num.toLocaleString('en-US');
 };
 
-// خلاصه‌ی مبلغ برای خانه‌ی کوچکِ تقویم (که «نصفه» نشود): میلیون → م، هزار → هـ
+// خلاصه‌ی مبلغ برای خانه‌ی کوچکِ تقویم (که «نصفه» نشود): میلیارد → میلیارد، میلیون → م، هزار → هـ
 const compactAmount = (num: number): string => {
   const n = Math.round(num || 0);
+  if (n >= 1_000_000_000) { const v = n / 1_000_000_000; return `${(n % 1_000_000_000 === 0 ? v : +v.toFixed(1)).toLocaleString('en-US')}میلیارد`; }
   if (n >= 1_000_000) { const v = n / 1_000_000; return `${(n % 1_000_000 === 0 ? v : +v.toFixed(1)).toLocaleString('en-US')}م`; }
   if (n >= 1_000) { const v = n / 1_000; return `${(n % 1_000 === 0 ? v : +v.toFixed(0)).toLocaleString('en-US')}هـ`; }
   return n.toLocaleString('en-US');
@@ -130,10 +131,9 @@ const TOUR_STEPS: CoachStep[] = [
 ];
 
 // نسخه و فهرستِ تغییرات برای پنجره‌ی «تازه‌ها»
-const APP_VERSION = '1.0.33';
+const APP_VERSION = '1.0.34';
 const CHANGELOG: string[] = [
-  'رفعِ بریده‌شدنِ مبلغِ زیرِ روزها در تقویم: حالا خلاصه و خوانا نشان داده می‌شود (مثلاً ۴٫۵م)',
-  'رفعِ بریده‌شدنِ حبابِ راهنمای روز (اعلانِ وام و اقساط) در لبه‌های صفحه',
+  'پشتیبانی از مبلغ‌های میلیاردی در تقویم: حالا خلاصه‌ی مبلغ تا «میلیارد» را هم درست نشان می‌دهد (مثلاً ۱.۵میلیارد)',
 ];
 
 function App() {
@@ -1215,7 +1215,7 @@ function App() {
               <button className={`theme-btn ${theme === 'dark' ? 'active' : ''}`} onClick={() => setTheme('dark')}>🌙 تیره</button>
             </div>
 
-            <div className="drawer-foot">نسخه ۱۴۰۵ · ۱.۰.۳۳</div>
+            <div className="drawer-foot">نسخه ۱۴۰۵ · ۱.۰.۳۴</div>
           </aside>
         </div>
       )}
