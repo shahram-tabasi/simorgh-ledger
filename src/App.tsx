@@ -131,9 +131,10 @@ const TOUR_STEPS: CoachStep[] = [
 ];
 
 // نسخه و فهرستِ تغییرات برای پنجره‌ی «تازه‌ها»
-const APP_VERSION = '1.0.34';
+const APP_VERSION = '1.0.35';
 const CHANGELOG: string[] = [
-  'پشتیبانی از مبلغ‌های میلیاردی در تقویم: حالا خلاصه‌ی مبلغ تا «میلیارد» را هم درست نشان می‌دهد (مثلاً ۱.۵میلیارد)',
+  'عددِ مبلغ داخلِ تقویم خواناتر شد: بزرگ‌تر، پررنگ‌تر و با کنتراستِ بهتر (به‌ویژه در پوسته‌ی تیره)',
+  'پشتیبانی از مبلغ‌های میلیاردی در خلاصه‌ی مبلغ (مثلاً ۱.۵میلیارد)',
 ];
 
 function App() {
@@ -1215,7 +1216,7 @@ function App() {
               <button className={`theme-btn ${theme === 'dark' ? 'active' : ''}`} onClick={() => setTheme('dark')}>🌙 تیره</button>
             </div>
 
-            <div className="drawer-foot">نسخه ۱۴۰۵ · ۱.۰.۳۴</div>
+            <div className="drawer-foot">نسخه ۱۴۰۵ · ۱.۰.۳۵</div>
           </aside>
         </div>
       )}

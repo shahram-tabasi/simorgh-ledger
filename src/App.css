@@ -178,13 +178,14 @@ body {
 }
 
 .debt-badge {
-  font-size: 9px;
-  color: #e67e22;
-  background: #fff0e0;
+  font-size: 11px;
+  line-height: 1.15;
+  color: #a85404;
+  background: #ffe2bd;
   padding: 2px 6px;
-  border-radius: 12px;
-  margin-top: 4px;
-  font-weight: 600;
+  border-radius: 10px;
+  margin-top: 3px;
+  font-weight: 800;
   max-width: 100%;
   white-space: nowrap;     /* عدد در یک خط بماند و به خط بعد نرود */
   overflow: hidden;
@@ -1717,6 +1718,7 @@ body.dark .day { background: #1a2434; }
 body.dark .day-num { color: #d6def0; }
 body.dark .day:hover { background: #233048; }
 body.dark .day.has-debt { background: #2a2718; }
+body.dark .debt-badge { color: #1c130a; background: #f4b860; }
 body.dark .day.empty { background: transparent; }
 
 body.dark .month-nav button { background: #1f2a3e; color: #cfd7e8; }
