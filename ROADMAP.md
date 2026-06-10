@@ -111,6 +111,10 @@ flowchart TD
 - ✓ Payslip (base + overtime + allowances − deductions = net), printable
 - ✓ Access control: groups + permissions + users, device-side gating, admin PIN, worker self-service mode
 - ✓ Admin can edit group permissions (raise/lower access per group)
+- ✓ Leave management (kardex like Kasra): annual entitlement (استحقاقی), carry-in, used/remaining (مانده),
+      required-to-use (ملزم به استفاده), annual carryover/savings (ذخیره‌ی سالیانه); CSV export of the kardex
+- ✓ Leave permits with **multi-level approval** (سطوحِ تایید: سرپرست → مدیر → …) + status (تایید/رد/در انتظار);
+      workers submit their own requests in self-service mode; per-company leave-registration policy
 - ◻ Windows desktop installer (.exe) via Electron + Windows CI  (deferred — not yet)
 - ◻ Attendance device matching: face / fingerprint / RFID-card readers
       - phase 1: device biometric unlock (WebAuthn / Capacitor biometric) for worker self check-in

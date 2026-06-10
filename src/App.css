@@ -2429,6 +2429,13 @@ body.dark .dash-title { color: #eef2fa; }
 .att-wd { padding: 8px 4px; border: 1px solid #d3deee; border-radius: 9px; background: #fff; color: #4a5774; font-size: 12px; font-weight: 700; cursor: pointer; font-family: inherit; }
 .att-wd.on { background: #d2453b; border-color: #d2453b; color: #fff; }
 .att-inlinebtn { background: none; border: none; color: #1c6fd6; font-weight: 700; cursor: pointer; font-family: inherit; font-size: 12px; }
+.att-inlinebtn.ok { color: #2e9d5b; font-size: 16px; }
+.att-inlinebtn.no { color: #d2453b; font-size: 16px; }
+.att-approw { display: inline-flex; align-items: center; gap: 6px; }
+.att-statpill { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 10px; font-weight: 800; color: #fff; vertical-align: middle; }
+.att-statpill.present { background: #2e9d5b; }
+.att-statpill.absent { background: #d2453b; }
+.att-statpill.leave { background: #e0a417; }
 .att-day.weekoff { background: #f6e9e9; border-color: #f0d2d2; }
 .att-dstat.off { color: #d2453b; }
 .att-dstat.early { color: #1c6fd6; }
