@@ -151,10 +151,10 @@ function resolveAcc(accs: AccLite[], defName: { [k in AccType]: string }, t: Acc
   return a.id;
 }
 
-const APP_VERSION = '1.0.48';
+const APP_VERSION = '1.0.49';
 const CHANGELOG: string[] = [
-  'داشبوردِ مدرن (گرافیکِ ۲۰۲۶): روی نام/لوگوی برنامه بزنید تا صفحه‌ی تمیز با کارتِ مجزا برای هر بخش باز شود',
-  'هر بخش محیطِ مستقلِ خودش را دارد و شلوغ نیست؛ کارت‌ها بر اساسِ سطحِ دسترسیِ کاربر نمایش داده می‌شوند',
+  'حکم کارگزینی: سمت، تاریخِ استخدام و حقوقِ پایه — قابلِ چاپ؛ هر کارگر حکمِ خودش را هم می‌بیند',
+  'خروجیِ اکسل (CSV) برای گزارش‌های حسابداری، حضور و غیاب و انبار (سازگار با اکسلِ فارسی)',
 ];
 
 function App() {
@@ -1557,7 +1557,7 @@ function App() {
               <button className={`theme-btn ${theme === 'dark' ? 'active' : ''}`} onClick={() => setTheme('dark')}>🌙 تیره</button>
             </div>
 
-            <div className="drawer-foot">نسخه ۱۴۰۵ · ۱.۰.۴۸</div>
+            <div className="drawer-foot">نسخه ۱۴۰۵ · ۱.۰.۴۹</div>
           </aside>
         </div>
       )}

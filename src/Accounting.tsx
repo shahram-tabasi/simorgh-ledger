@@ -2,6 +2,7 @@
 // دفترِ روزنامه (اسناد) + تراز آزمایشی + دفترِ معین + صورتِ سود و زیان + چاپ/PDF
 import { useState } from 'react';
 import { getToday, getMonthNames } from './calendar';
+import { downloadCsv } from './csv';
 
 const fmt = (n: number): string => Math.round(n || 0).toLocaleString('en-US');
 const digits = (s: string): number => parseInt((s || '').replace(/[^0-9]/g, ''), 10) || 0;
@@ -261,6 +262,7 @@ export default function AccountingPanel({ state, onChange, onClose, confirm }: P
                 </table>
               </div>
               <button className="loan-submit acc-noprint" onClick={printReport}>🖨️ چاپ / ذخیره‌ی PDF</button>
+              <button className="acc-addline acc-noprint" onClick={() => downloadCsv('trial-balance.csv', [['حساب', 'بدهکار', 'بستانکار', 'مانده'], ...sums.map((x) => [`${x.a.code} ${x.a.name}`, x.debit, x.credit, x.bal]), ['جمع', grandDebit, grandCredit, '']])}>📤 خروجیِ اکسل (CSV)</button>
             </>
           )}
 

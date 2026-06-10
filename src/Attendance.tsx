@@ -4,6 +4,7 @@
 // مدل عمداً ساده است تا صاحبِ کسب‌وکارِ کوچک بدونِ آموزش بتواند کار کند.
 import { useState } from 'react';
 import { getToday, getMonthNames, getMonthDays } from './calendar';
+import { downloadCsv } from './csv';
 import type { AccType } from './Accounting';
 
 const fmt = (n: number): string => Math.round(n || 0).toLocaleString('en-US');
@@ -11,7 +12,7 @@ const digits = (s: string): number => parseInt((s || '').replace(/[^0-9]/g, ''),
 const withSep = (s: string): string => { const d = digits(s); return d ? d.toLocaleString('en-US') : ''; };
 
 export type DayStatus = 'present' | 'absent' | 'leave' | 'holiday';
-export interface Employee { id: string; name: string; code?: string; dailyRate?: number; hourlyRate?: number; }
+export interface Employee { id: string; name: string; code?: string; dailyRate?: number; hourlyRate?: number; position?: string; hire?: string; }
 export interface AttendanceState {
   employees: Employee[];
   standardHours: number;                                   // ساعتِ کاریِ استانداردِ روز (پیش‌فرض ۸)
@@ -39,7 +40,7 @@ interface Props {
   selfMode?: boolean;
   selfEmpId?: string;
 }
-type Tab = 'log' | 'report' | 'slip' | 'staff';
+type Tab = 'log' | 'report' | 'slip' | 'decree' | 'staff';
 
 export default function AttendancePanel({ state, onChange, onClose, confirm, onPostJournal, selfMode, selfEmpId }: Props) {
   const employees = state.employees || [];
@@ -114,6 +115,7 @@ export default function AttendancePanel({ state, onChange, onClose, confirm, onP
     setEName(''); setECode(''); setEDaily(''); setEHourly('');
     if (!empId) setEmpId(emp.id);
   };
+  const updateEmployee = (id: string, patch: Partial<Employee>) => onChange({ ...state, employees: employees.map((e) => (e.id === id ? { ...e, ...patch } : e)), standardHours, records, overtime });
   const delEmployee = (id: string) => confirm('این کارمند و سوابقش حذف شود؟', () => {
     const recs = { ...records }; delete recs[id];
     const ots = { ...overtime }; delete ots[id];
@@ -139,6 +141,7 @@ export default function AttendancePanel({ state, onChange, onClose, confirm, onP
             <button type="button" className={`mini-toggle-btn ${tab === 'log' ? 'active' : ''}`} onClick={() => setTab('log')}>{selfMode ? 'حضورِ من' : 'ثبتِ ماهانه'}</button>
             {!selfMode && <button type="button" className={`mini-toggle-btn ${tab === 'report' ? 'active' : ''}`} onClick={() => setTab('report')}>گزارش</button>}
             <button type="button" className={`mini-toggle-btn ${tab === 'slip' ? 'active' : ''}`} onClick={() => setTab('slip')}>{selfMode ? 'فیشِ من' : 'فیش'}</button>
+            <button type="button" className={`mini-toggle-btn ${tab === 'decree' ? 'active' : ''}`} onClick={() => setTab('decree')}>حکم</button>
             {!selfMode && <button type="button" className={`mini-toggle-btn ${tab === 'staff' ? 'active' : ''}`} onClick={() => setTab('staff')}>کارمندان</button>}
           </div>
 
@@ -222,6 +225,7 @@ export default function AttendancePanel({ state, onChange, onClose, confirm, onP
                 </table>
               </div>
               <button className="loan-submit acc-noprint" onClick={() => window.print()}>🖨️ چاپ / ذخیره‌ی PDF</button>
+              <button className="acc-addline acc-noprint" onClick={() => downloadCsv(`payroll-${ym}.csv`, [['کارمند', 'حاضر', 'غایب', 'مرخصی', 'کارکرد(ساعت)', 'اضافه‌کار(ساعت)', 'حقوقِ تخمینی'], ...employees.map((e) => { const c = calc(e); return [e.name, c.present, c.absent, c.leave, c.workedHours, c.ot, c.pay]; })])}>📤 خروجیِ اکسل (CSV)</button>
               {onPostJournal && employees.length > 0 && (
                 <button className="acc-addline acc-noprint" onClick={() => {
                   const total = employees.reduce((s, e) => s + calc(e).pay, 0);
@@ -273,6 +277,45 @@ export default function AttendancePanel({ state, onChange, onClose, confirm, onP
                     </div>
                   )}
                   <button className="loan-submit acc-noprint" onClick={() => window.print()}>🖨️ چاپِ فیش / PDF</button>
+                </>
+              )}
+            </>
+          ))}
+
+          {/* ---------------- personnel order (حکم کارگزینی) ---------------- */}
+          {tab === 'decree' && (employees.length === 0 ? (
+            <div className="tool-note">اول از تبِ «کارمندان» چند نفر اضافه کنید.</div>
+          ) : (
+            <>
+              {selfMode ? (
+                <div className="acc-ledger-name">{curEmp?.name || '—'}</div>
+              ) : (
+                <select className="tool-text-input" value={empId} onChange={(e) => setEmpId(e.target.value)}>
+                  {employees.map((e) => <option key={e.id} value={e.id}>{e.name}</option>)}
+                </select>
+              )}
+              {curEmp && (
+                <>
+                  <div className="acc-print">
+                    <div className="acc-print-title">حکم کارگزینی</div>
+                    <table className="acc-table">
+                      <tbody>
+                        <tr><td>نام و نام‌خانوادگی</td><td>{curEmp.name}</td></tr>
+                        {curEmp.code ? <tr><td>کدِ پرسنلی</td><td>{curEmp.code}</td></tr> : null}
+                        <tr><td>سمت / پست</td><td>{curEmp.position || '—'}</td></tr>
+                        <tr><td>تاریخِ استخدام</td><td>{curEmp.hire || '—'}</td></tr>
+                        <tr><td>حقوقِ پایه</td><td>{curEmp.dailyRate ? `روزانه ${fmt(curEmp.dailyRate)}` : ''}{curEmp.hourlyRate ? ` · ساعتی ${fmt(curEmp.hourlyRate)}` : ''}{(!curEmp.dailyRate && !curEmp.hourlyRate) ? '—' : ''}</td></tr>
+                        <tr><td>ساعتِ کاریِ روز</td><td>{standardHours} ساعت</td></tr>
+                      </tbody>
+                    </table>
+                  </div>
+                  {!selfMode && (
+                    <div className="att-addgrid acc-noprint">
+                      <input className="tool-text-input" type="text" placeholder="سمت / پست" value={curEmp.position || ''} onChange={(e) => updateEmployee(curEmp.id, { position: e.target.value })} />
+                      <input className="tool-text-input" type="text" placeholder="تاریخِ استخدام (مثلاً ۱۴۰۲/۰۵/۰۱)" value={curEmp.hire || ''} onChange={(e) => updateEmployee(curEmp.id, { hire: e.target.value })} />
+                    </div>
+                  )}
+                  <button className="loan-submit acc-noprint" onClick={() => window.print()}>🖨️ چاپِ حکم / PDF</button>
                 </>
               )}
             </>

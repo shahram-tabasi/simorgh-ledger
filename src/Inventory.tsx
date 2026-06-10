@@ -4,6 +4,7 @@
 // every purchase/sale auto-posts a balanced journal entry (and is removed if the txn is deleted).
 import { useState } from 'react';
 import { getToday, getMonthNames } from './calendar';
+import { downloadCsv } from './csv';
 import type { AccType } from './Accounting';
 
 const fmt = (n: number): string => Math.round(n || 0).toLocaleString('en-US');
@@ -163,6 +164,7 @@ export default function InventoryPanel({ state, onChange, onClose, confirm, onPo
                 </table>
               </div>
               <button className="loan-submit acc-noprint" onClick={() => window.print()}>🖨️ چاپ / ذخیره‌ی PDF</button>
+              <button className="acc-addline acc-noprint" onClick={() => downloadCsv('inventory.csv', [['کالا', 'واحد', 'موجودی', 'قیمتِ خرید', 'ارزش'], ...items.map((i) => [i.name, i.unit || '', stockOf(i.id), i.buy || 0, stockOf(i.id) * (i.buy || 0)]), ['جمع', '', '', '', totalValue]])}>📤 خروجیِ اکسل (CSV)</button>
             </>
           )}
 
