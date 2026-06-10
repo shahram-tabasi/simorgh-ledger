@@ -151,11 +151,11 @@ function resolveAcc(accs: AccLite[], defName: { [k in AccType]: string }, t: Acc
   return a.id;
 }
 
-const APP_VERSION = '1.0.53';
+const APP_VERSION = '1.0.54';
 const CHANGELOG: string[] = [
-  'مدیریتِ مرخصی (مانندِ کسری): کاردکسِ سالانه (استحقاقی، ذخیره، کسرشده، مانده)، ملزم به استفاده و ذخیره‌ی سالیانه',
-  'مجوزهای مرخصی با سطوحِ تاییدِ چندگانه (سرپرست، مدیر، …) و وضعیتِ تایید/رد — کارگر خودش ثبت می‌کند',
-  'قوانینِ ثبتِ مرخصی قابلِ تعریف برای هر شرکت + خروجیِ اکسلِ کاردکس',
+  'کارتابلِ مدیران: هر مدیر فقط درخواست‌هایی را می‌بیند که نوبتِ تاییدِ اوست؛ تعریفِ «سرپرست» برای هر کارمند، سلسله‌مراتبِ تایید را می‌سازد',
+  'انواعِ درخواست: مرخصیِ استحقاقی/روزانه/ساعتی، استعلاجی، بدون حقوق، مأموریت و ثبتِ تردد — هرکدام قوانینِ مخصوصِ خود',
+  'مسیرِ تاییدِ خودکار از سرپرست تا بالاترین مدیر + سوابقِ رسیدگی در کارتابل',
 ];
 
 function App() {
@@ -1676,7 +1676,7 @@ function App() {
       )}
 
       {showAttModal && (
-        <AttendancePanel state={attendance} onChange={saveAttendance} onClose={() => setShowAttModal(false)} confirm={askConfirm} onPostJournal={postJournal} selfMode={selfMode} selfEmpId={selfEmpId} />
+        <AttendancePanel state={attendance} onChange={saveAttendance} onClose={() => setShowAttModal(false)} confirm={askConfirm} onPostJournal={postJournal} selfMode={selfMode} selfEmpId={selfEmpId} viewerEmpId={orgActive ? orgInfo!.empId : activeUser?.empId} />
       )}
 
       {showInvModal && (
@@ -1796,7 +1796,7 @@ function App() {
               <button className={`theme-btn ${theme === 'dark' ? 'active' : ''}`} onClick={() => setTheme('dark')}>🌙 تیره</button>
             </div>
 
-            <div className="drawer-foot">نسخه ۱۴۰۵ · ۱.۰.۵۳</div>
+            <div className="drawer-foot">نسخه ۱۴۰۵ · ۱.۰.۵۴</div>
           </aside>
         </div>
       )}

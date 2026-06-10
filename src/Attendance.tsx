@@ -12,7 +12,7 @@ const digits = (s: string): number => parseInt((s || '').replace(/[^0-9]/g, ''),
 const withSep = (s: string): string => { const d = digits(s); return d ? d.toLocaleString('en-US') : ''; };
 
 export type DayStatus = 'present' | 'absent' | 'leave' | 'holiday';
-export interface Employee { id: string; name: string; code?: string; dailyRate?: number; hourlyRate?: number; position?: string; hire?: string; }
+export interface Employee { id: string; name: string; code?: string; dailyRate?: number; hourlyRate?: number; position?: string; hire?: string; managerId?: string; }
 // Per-company work rules (each company defines its own schedule).
 // weekend: weekday indices that are weekly day-off (0=شنبه … 5=پنجشنبه … 6=جمعه).
 // thuPolicy: Thursday is 'off' (full), 'early' (come but leave earlier by thuEarlyMin), or 'normal'.
@@ -28,43 +28,57 @@ export interface WorkRules {
 }
 export const DEFAULT_RULES: WorkRules = { start: '08:00', end: '16:00', weekend: [6], thuPolicy: 'normal', thuEarlyMin: 90, shift2: null, altWeeksOff: false, note: '' };
 
-// ---- Leave management (modeled on Kasra's kardex + permits) ----
-// kind: entitled = استحقاقی, sick = استعلاجی, unpaid = بدون حقوق, hourly = ساعتی, mission = مأموریت.
-// Only 'entitled' leave is drawn from the annual balance (kardex). Others are tracked but not deducted.
-export type LeaveKind = 'entitled' | 'sick' | 'unpaid' | 'hourly' | 'mission';
+// ---- Leave / permits workflow (modeled on Kasra's kardex + کارتابل) ----
+// kind: entitled = استحقاقی (drawn from the annual balance), daily = روزانه, hourly = ساعتی,
+//       sick = استعلاجی, unpaid = بدون حقوق, mission = مأموریت, entry = ثبتِ تردد (punch correction).
+// Only 'entitled' leave is deducted from the annual kardex. Others are tracked but not deducted.
+export type LeaveKind = 'entitled' | 'daily' | 'hourly' | 'sick' | 'unpaid' | 'mission' | 'entry';
 export type LeaveStatus = 'pending' | 'approved' | 'rejected';
 export const LEAVE_KIND_LABEL: { [k in LeaveKind]: string } = {
-  entitled: 'استحقاقی', sick: 'استعلاجی', unpaid: 'بدون حقوق', hourly: 'ساعتی', mission: 'مأموریت',
+  entitled: 'مرخصیِ استحقاقی', daily: 'مرخصیِ روزانه', hourly: 'مرخصیِ ساعتی', sick: 'استعلاجی',
+  unpaid: 'بدون حقوق', mission: 'مأموریت', entry: 'ثبتِ تردد',
 };
-// A single approval action taken at one level (سطحِ تایید).
-export interface LeaveApproval { level: number; by: string; at: string; result: 'approved' | 'rejected'; }
-// A leave request / permit (مجوز). Multi-level approval: `level` is how many levels have approved so far.
+export const LEAVE_KINDS: LeaveKind[] = ['entitled', 'daily', 'hourly', 'sick', 'unpaid', 'mission', 'entry'];
+// A single approval action taken by one approver in the chain (کارتابل).
+export interface LeaveApproval { by: string; at: string; result: 'approved' | 'rejected'; }
+// A request / permit (مجوز). Routed up a chain of approvers (managers) defined by the org hierarchy.
 export interface LeaveRequest {
   id: string;
   empId: string;
   kind: LeaveKind;
-  year: number;            // Jalali year the leave belongs to (for the annual kardex)
-  from: string;            // free Jalali date text e.g. "۱۴۰۵/۰۳/۱۲"
+  year: number;            // Jalali year the request belongs to (for the annual kardex)
+  from: string;            // free Jalali date/time text e.g. "۱۴۰۵/۰۳/۱۲" (or "08:00" for تردد)
   to: string;
   days: number;            // working days (fractional allowed for hourly)
   reason?: string;
   status: LeaveStatus;
-  level: number;           // approvals collected so far (0..policy.approvalLevels)
+  chain: string[];         // ordered approver employee-ids (the manager hierarchy, bottom→top)
+  level: number;           // index into chain of the approver currently expected to act
   approvals: LeaveApproval[];
   createdAt: string;
 }
-// Company leave policy (قوانینِ ثبتِ مرخصی + سطوحِ تایید).
+// Per request-type rule (قوانینِ مخصوصِ هر نوع درخواست).
+export interface KindRule { enabled?: boolean; requireReason?: boolean; maxDays?: number; }
+// Company leave policy (قوانینِ ثبتِ مرخصی).
 export interface LeavePolicy {
   annualEntitled: number;  // استحقاقیِ سالانه (روز) — Iranian labor law ≈ 26 working days
   carryMax: number;        // سقفِ ذخیره‌ی سالیانه به سالِ بعد (روز)
   mustUseMin: number;      // ملزم به استفاده: حداقل روزی که باید در سال مصرف شود
-  levelNames: string[];    // نامِ هر سطحِ تایید؛ طولِ آرایه = تعدادِ سطوح
   minNoticeDays?: number;  // حداقل روزِ پیش از شروعِ مرخصی برای ثبت (قانون)
   maxConsecutive?: number; // حداکثر روزِ پیوسته در یک مجوز
+  kindRules?: { [k in LeaveKind]?: KindRule }; // each request type has its own rules
 }
 export const DEFAULT_LEAVE_POLICY: LeavePolicy = {
-  annualEntitled: 26, carryMax: 9, mustUseMin: 5,
-  levelNames: ['سرپرست', 'مدیر'], minNoticeDays: 0, maxConsecutive: 0,
+  annualEntitled: 26, carryMax: 9, mustUseMin: 5, minNoticeDays: 0, maxConsecutive: 0,
+  kindRules: {
+    entitled: { enabled: true, requireReason: false, maxDays: 0 },
+    daily: { enabled: true, requireReason: false, maxDays: 0 },
+    hourly: { enabled: true, requireReason: false, maxDays: 0 },
+    sick: { enabled: true, requireReason: true, maxDays: 0 },
+    unpaid: { enabled: true, requireReason: true, maxDays: 0 },
+    mission: { enabled: true, requireReason: true, maxDays: 0 },
+    entry: { enabled: true, requireReason: true, maxDays: 0 },
+  },
 };
 export interface LeaveState {
   policy: LeavePolicy;
@@ -104,10 +118,12 @@ interface Props {
   // Worker self-service: lock the panel to one employee, allow only viewing + registering leave.
   selfMode?: boolean;
   selfEmpId?: string;
+  // The current user's own employee id (if linked) — used to default their کارتابل (manager inbox).
+  viewerEmpId?: string;
 }
-type Tab = 'log' | 'report' | 'slip' | 'decree' | 'leave' | 'rules' | 'staff';
+type Tab = 'log' | 'report' | 'slip' | 'decree' | 'leave' | 'inbox' | 'rules' | 'staff';
 
-export default function AttendancePanel({ state, onChange, onClose, confirm, onPostJournal, selfMode, selfEmpId }: Props) {
+export default function AttendancePanel({ state, onChange, onClose, confirm, onPostJournal, selfMode, selfEmpId, viewerEmpId }: Props) {
   const employees = state.employees || [];
   const standardHours = state.standardHours || 8;
   const records = state.records || {};
@@ -176,12 +192,23 @@ export default function AttendancePanel({ state, onChange, onClose, confirm, onP
     onChange({ ...state, adjust: { ...adjust, [empId]: empAdj }, employees, standardHours, records, overtime });
   };
 
-  // ---------- مرخصی: کاردکس و مجوزها ----------
+  // ---------- مرخصی: کاردکس، مجوزها و کارتابلِ مدیران ----------
   const leave = state.leave || emptyLeave();
   const policy = leave.policy || DEFAULT_LEAVE_POLICY;
-  const levelCount = Math.max(1, (policy.levelNames || []).length);
   const setLeave = (patch: Partial<LeaveState>) => onChange({ ...state, leave: { ...leave, ...patch } });
   const setPolicy = (patch: Partial<LeavePolicy>) => setLeave({ policy: { ...policy, ...patch } });
+  const nameOf = (id: string) => employees.find((e) => e.id === id)?.name || '—';
+  // Build the approver chain (manager hierarchy) for an employee: their سرپرست, then that manager's
+  // manager, and so on to the top. This drives both routing and each manager's کارتابل.
+  const managerChain = (id: string): string[] => {
+    const chain: string[] = []; const seen = new Set<string>();
+    let cur = employees.find((e) => e.id === id)?.managerId;
+    while (cur && !seen.has(cur)) { seen.add(cur); chain.push(cur); cur = employees.find((e) => e.id === cur)?.managerId; }
+    return chain;
+  };
+  // Managers = anyone who is someone else's سرپرست (appears as a managerId).
+  const managerIds = [...new Set(employees.map((e) => e.managerId).filter(Boolean) as string[])];
+  const kindRule = (k: LeaveKind): KindRule => (policy.kindRules || {})[k] || { enabled: true };
   // Annual kardex for one employee in the selected year `y`.
   // entitled (استحقاقی) = yearly grant + carry-in; used (کسر شده) = approved entitled-leave days;
   // remaining (مانده) = entitled − used; saveable (ذخیره‌ی سالیانه) = min(remaining, carryMax).
@@ -204,30 +231,39 @@ export default function AttendancePanel({ state, onChange, onClose, confirm, onP
   const [lkDays, setLkDays] = useState(''); const [lkReason, setLkReason] = useState('');
   const submitLeave = () => {
     if (!empId || !lkDays) return;
+    const rule = kindRule(lkKind);
+    const days = parseFloat(lkDays.replace(/[^0-9.]/g, '')) || 0;
+    if (days <= 0) return;
+    if (rule.requireReason && !lkReason.trim()) { confirm('برای این نوعِ درخواست، نوشتنِ علت الزامی است.', () => {}); return; }
+    if (rule.maxDays && days > rule.maxDays) { confirm(`حداکثرِ مجازِ این نوعِ درخواست ${rule.maxDays} روز است.`, () => {}); return; }
+    const chain = managerChain(empId); // route up the manager hierarchy
     const req: LeaveRequest = {
       id: `lv-${Date.now()}`, empId, kind: lkKind, year: y,
-      from: lkFrom.trim(), to: lkTo.trim(), days: parseFloat(lkDays.replace(/[^0-9.]/g, '')) || 0,
-      reason: lkReason.trim() || undefined, status: 'pending', level: 0, approvals: [], createdAt: new Date().toISOString(),
+      from: lkFrom.trim(), to: lkTo.trim(), days,
+      reason: lkReason.trim() || undefined, status: 'pending', chain, level: 0, approvals: [], createdAt: new Date().toISOString(),
     };
-    if (req.days <= 0) return;
     setLeave({ requests: [req, ...(leave.requests || [])] });
     setLkFrom(''); setLkTo(''); setLkDays(''); setLkReason('');
   };
-  // Approve/reject one level. Approving the final level marks the whole request approved.
-  const actLeave = (id: string, result: 'approved' | 'rejected') => {
-    const who = policy.levelNames[Math.min((leave.requests.find((r) => r.id === id)?.level || 0), levelCount - 1)] || 'مدیر';
+  // Approve/reject by the current approver. Approving advances up the chain; the last approver finalizes.
+  const actLeave = (id: string, result: 'approved' | 'rejected', byEmpId?: string) => {
     setLeave({
       requests: (leave.requests || []).map((r) => {
         if (r.id !== id || r.status !== 'pending') return r;
-        const ap: LeaveApproval = { level: r.level + 1, by: who, at: new Date().toISOString().slice(0, 10), result };
+        const approver = byEmpId ? nameOf(byEmpId) : (r.chain[r.level] ? nameOf(r.chain[r.level]) : 'مدیر');
+        const ap: LeaveApproval = { by: approver, at: new Date().toISOString().slice(0, 10), result };
         if (result === 'rejected') return { ...r, status: 'rejected', approvals: [...r.approvals, ap] };
         const nextLevel = r.level + 1;
-        const done = nextLevel >= levelCount;
+        const done = nextLevel >= Math.max(1, r.chain.length); // empty chain → single admin approval finalizes
         return { ...r, level: nextLevel, status: done ? 'approved' : 'pending', approvals: [...r.approvals, ap] };
       }),
     });
   };
   const delLeave = (id: string) => setLeave({ requests: (leave.requests || []).filter((r) => r.id !== id) });
+  // Current approver employee-id of a pending request (empty chain → handled by admin/مدیرِ ارشد).
+  const currentApprover = (r: LeaveRequest): string | null => (r.chain && r.chain.length ? (r.chain[r.level] || null) : null);
+  // کارتابل selector: which manager's inbox is shown. Default to the viewer if they are a manager.
+  const [inboxMgr, setInboxMgr] = useState<string>(() => (viewerEmpId && employees.some((e) => e.managerId === viewerEmpId)) ? viewerEmpId! : 'all');
 
   // ---------- مدیریتِ کارمندان ----------
   const [eName, setEName] = useState(''); const [eCode, setECode] = useState('');
@@ -266,7 +302,8 @@ export default function AttendancePanel({ state, onChange, onClose, confirm, onP
             {!selfMode && <button type="button" className={`mini-toggle-btn ${tab === 'report' ? 'active' : ''}`} onClick={() => setTab('report')}>گزارش</button>}
             <button type="button" className={`mini-toggle-btn ${tab === 'slip' ? 'active' : ''}`} onClick={() => setTab('slip')}>{selfMode ? 'فیشِ من' : 'فیش'}</button>
             <button type="button" className={`mini-toggle-btn ${tab === 'decree' ? 'active' : ''}`} onClick={() => setTab('decree')}>حکم</button>
-            <button type="button" className={`mini-toggle-btn ${tab === 'leave' ? 'active' : ''}`} onClick={() => setTab('leave')}>مرخصی</button>
+            <button type="button" className={`mini-toggle-btn ${tab === 'leave' ? 'active' : ''}`} onClick={() => setTab('leave')}>{selfMode ? 'درخواست‌ها' : 'مرخصی'}</button>
+            {!selfMode && <button type="button" className={`mini-toggle-btn ${tab === 'inbox' ? 'active' : ''}`} onClick={() => setTab('inbox')}>کارتابل</button>}
             {!selfMode && <button type="button" className={`mini-toggle-btn ${tab === 'rules' ? 'active' : ''}`} onClick={() => setTab('rules')}>قوانین</button>}
             {!selfMode && <button type="button" className={`mini-toggle-btn ${tab === 'staff' ? 'active' : ''}`} onClick={() => setTab('staff')}>کارمندان</button>}
           </div>
@@ -504,7 +541,7 @@ export default function AttendancePanel({ state, onChange, onClose, confirm, onP
               {/* new permit form (ثبتِ مجوزِ مرخصی) */}
               <div className="loan-sched-head"><span>ثبتِ مرخصیِ جدید</span></div>
               <div className="mini-toggle fund-tabs">
-                {(Object.keys(LEAVE_KIND_LABEL) as LeaveKind[]).map((kk) => (
+                {LEAVE_KINDS.filter((kk) => kindRule(kk).enabled !== false).map((kk) => (
                   <button key={kk} type="button" className={`mini-toggle-btn ${lkKind === kk ? 'active' : ''}`} onClick={() => setLkKind(kk)}>{LEAVE_KIND_LABEL[kk]}</button>
                 ))}
               </div>
@@ -514,8 +551,8 @@ export default function AttendancePanel({ state, onChange, onClose, confirm, onP
                 <input className="tool-text-input" type="text" inputMode="decimal" dir="ltr" placeholder="تعداد روز" value={lkDays} onChange={(e) => setLkDays(e.target.value.replace(/[^0-9.]/g, ''))} />
               </div>
               <input className="tool-text-input" type="text" placeholder="توضیح / علتِ مرخصی (اختیاری)" value={lkReason} onChange={(e) => setLkReason(e.target.value)} />
-              <button className="loan-submit" disabled={!lkDays || parseFloat(lkDays) <= 0} onClick={submitLeave}>ثبتِ درخواستِ مرخصی</button>
-              <div className="tool-note">پس از ثبت، درخواست در «{policy.levelNames[0] || 'سطحِ ۱'}» منتظرِ تایید می‌ماند؛ این مرخصی پس از تاییدِ {levelCount} سطح، نهایی می‌شود.</div>
+              <button className="loan-submit" disabled={!lkDays || parseFloat(lkDays) <= 0} onClick={submitLeave}>ثبتِ درخواست</button>
+              <div className="tool-note">{(() => { const ch = managerChain(empId); return ch.length ? `این درخواست به کارتابلِ «${nameOf(ch[0])}» می‌رود و به‌ترتیب تا «${nameOf(ch[ch.length - 1])}» تایید می‌شود (${ch.length} سطح).` : 'برای این کارمند سرپرستی تعریف نشده؛ درخواست در کارتابلِ مدیرِ ارشد قرار می‌گیرد. سرپرست را در تبِ «کارمندان» مشخص کنید.'; })()}</div>
 
               {/* permit list (فهرستِ مجوزها) with multi-level approval */}
               <div className="loan-sched-head"><span>مجوزها — سالِ {y}</span></div>
@@ -524,7 +561,8 @@ export default function AttendancePanel({ state, onChange, onClose, confirm, onP
                   <div className="tool-note">مجوزی ثبت نشده.</div>
                 )}
                 {(leave.requests || []).filter((r) => r.empId === empId && r.year === y).map((r) => {
-                  const statusText = r.status === 'approved' ? 'تایید شد' : r.status === 'rejected' ? 'رد شد' : `در انتظارِ ${policy.levelNames[r.level] || `سطحِ ${r.level + 1}`} (${r.level}/${levelCount})`;
+                  const appr = currentApprover(r);
+                  const statusText = r.status === 'approved' ? 'تایید شد' : r.status === 'rejected' ? 'رد شد' : `در انتظارِ ${appr ? nameOf(appr) : 'مدیرِ ارشد'}`;
                   const cls = r.status === 'approved' ? 'present' : r.status === 'rejected' ? 'absent' : 'leave';
                   return (
                     <div key={r.id} className="loan-detail-row">
@@ -558,14 +596,82 @@ export default function AttendancePanel({ state, onChange, onClose, confirm, onP
                     <div><label className="field-label">ملزم به استفاده</label>
                       <input className="tool-text-input" type="text" inputMode="numeric" dir="ltr" value={String(policy.mustUseMin)} onChange={(e) => setPolicy({ mustUseMin: digits(e.target.value) })} /></div>
                   </div>
-                  <label className="field-label">سطوحِ تاییدِ مرخصی (نامِ هر سطح، با ویرگول)</label>
-                  <input className="tool-text-input" type="text" placeholder="سرپرست، مدیر" value={(policy.levelNames || []).join('، ')} onChange={(e) => setPolicy({ levelNames: e.target.value.split(/[،,]/).map((s) => s.trim()).filter(Boolean) })} />
-                  <div className="tool-note">تعدادِ سطوحِ تایید: <b>{levelCount}</b>. هر مرخصی باید همه‌ی این سطوح را پشتِ سر بگذارد تا نهایی شود (مانندِ «کسری»).</div>
+                  <div className="tool-note">سطوحِ تایید از «سرپرست»‌های تعریف‌شده در تبِ «کارمندان» ساخته می‌شوند: هر درخواست از سرپرستِ کارمند تا بالاترین مدیر بالا می‌رود و در «کارتابل»ِ هر مدیر دیده می‌شود.</div>
+
+                  <div className="loan-sched-head"><span>قوانینِ هر نوعِ درخواست</span></div>
+                  <div className="att-kindrules">
+                    {LEAVE_KINDS.map((kk) => { const r = kindRule(kk); return (
+                      <div key={kk} className="att-kindrow">
+                        <label className="fund-switch">
+                          <input type="checkbox" checked={r.enabled !== false} onChange={(e) => setPolicy({ kindRules: { ...(policy.kindRules || {}), [kk]: { ...r, enabled: e.target.checked } } })} />
+                          <span>{LEAVE_KIND_LABEL[kk]}</span>
+                        </label>
+                        <label className="att-kindopt"><input type="checkbox" checked={!!r.requireReason} onChange={(e) => setPolicy({ kindRules: { ...(policy.kindRules || {}), [kk]: { ...r, requireReason: e.target.checked } } })} /> علتِ اجباری</label>
+                        <input className="tool-text-input att-kindmax" type="text" inputMode="numeric" dir="ltr" placeholder="حداکثر روز" value={r.maxDays ? String(r.maxDays) : ''} onChange={(e) => setPolicy({ kindRules: { ...(policy.kindRules || {}), [kk]: { ...r, maxDays: digits(e.target.value) } } })} />
+                      </div>
+                    ); })}
+                  </div>
                   <button className="acc-addline acc-noprint" onClick={() => downloadCsv(`leave-${y}.csv`, [['کارمند', 'استحقاقی', 'ذخیره', 'کسرشده', 'مانده', 'قابلِ ذخیره'], ...employees.map((e) => { const k = leaveKardex(e); return [e.name, policy.annualEntitled, k.carryIn, k.used, k.remaining, k.saveable]; })])}>📤 خروجیِ اکسلِ کاردکس (CSV)</button>
                 </>
               )}
             </>
           ))}
+
+          {/* ---------------- manager inbox (کارتابل) ---------------- */}
+          {tab === 'inbox' && (() => {
+            // Pending requests routed to the selected manager (or all, for مدیرِ ارشد / admin oversight).
+            const pend = (leave.requests || []).filter((r) => {
+              if (r.status !== 'pending') return false;
+              if (inboxMgr === 'all') return true;          // admin sees every pending request
+              return currentApprover(r) === inboxMgr;       // this manager's turn to act
+            });
+            // History the selected manager already acted on (for traceability).
+            const acted = (leave.requests || []).filter((r) => r.status !== 'pending' && r.approvals.some((a) => inboxMgr === 'all' || a.by === nameOf(inboxMgr)));
+            return (
+              <>
+                <div className="fund-help">کارتابلِ مدیران: هر مدیر فقط درخواست‌هایی را می‌بیند که نوبتِ تاییدِ اوست. «سرپرست»ِ هر کارمند در تبِ «کارمندان» تعریف می‌شود.</div>
+                <label className="field-label">کارتابلِ مدیر</label>
+                <select className="tool-text-input" value={inboxMgr} onChange={(e) => setInboxMgr(e.target.value)}>
+                  <option value="all">مدیرِ ارشد (همه‌ی درخواست‌ها)</option>
+                  {managerIds.map((mid) => <option key={mid} value={mid}>{nameOf(mid)} ({employees.filter((e) => e.managerId === mid).length} زیرمجموعه)</option>)}
+                </select>
+                <div className="tool-note">{managerIds.length === 0 ? 'هنوز هیچ سرپرستی تعریف نشده. در تبِ «کارمندان» برای هر فرد یک سرپرست مشخص کنید.' : `${managerIds.length} مدیر تعریف شده است.`}</div>
+
+                <div className="loan-sched-head"><span>در انتظارِ تایید</span><span className="loan-sched-hint">{pend.length}</span></div>
+                <div className="loan-detail-list">
+                  {pend.length === 0 && <div className="tool-note">درخواستی در انتظارِ این کارتابل نیست.</div>}
+                  {pend.map((r) => {
+                    const appr = currentApprover(r);
+                    return (
+                      <div key={r.id} className="loan-detail-row">
+                        <div className="ld-info">
+                          <span className="ld-amt">{nameOf(r.empId)} · {LEAVE_KIND_LABEL[r.kind]} · {fmt(r.days)} روز <span className="att-statpill leave">در انتظارِ {appr ? nameOf(appr) : 'مدیرِ ارشد'}</span></span>
+                          <span className="ld-date">{r.from || '—'}{r.to ? ` تا ${r.to}` : ''}{r.reason ? ` · ${r.reason}` : ''} · سالِ {r.year}</span>
+                        </div>
+                        <div className="att-approw">
+                          <button className="att-inlinebtn ok" title="تایید" onClick={() => actLeave(r.id, 'approved', inboxMgr === 'all' ? (appr || undefined) : inboxMgr)}>✔</button>
+                          <button className="att-inlinebtn no" title="رد" onClick={() => actLeave(r.id, 'rejected', inboxMgr === 'all' ? (appr || undefined) : inboxMgr)}>✖</button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div className="loan-sched-head"><span>سوابقِ رسیدگی‌شده</span><span className="loan-sched-hint">{acted.length}</span></div>
+                <div className="loan-detail-list">
+                  {acted.length === 0 && <div className="tool-note">سابقه‌ای نیست.</div>}
+                  {acted.slice(0, 30).map((r) => (
+                    <div key={r.id} className="loan-detail-row">
+                      <div className="ld-info">
+                        <span className="ld-amt">{nameOf(r.empId)} · {LEAVE_KIND_LABEL[r.kind]} · {fmt(r.days)} روز <span className={`att-statpill ${r.status === 'approved' ? 'present' : 'absent'}`}>{r.status === 'approved' ? 'تایید شد' : 'رد شد'}</span></span>
+                        <span className="ld-date">{r.approvals.map((a) => `${a.by}: ${a.result === 'approved' ? '✔' : '✖'}`).join(' · ')}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </>
+            );
+          })()}
 
           {/* ---------------- work rules (قوانینِ کاری) ---------------- */}
           {tab === 'rules' && (() => {
@@ -643,15 +749,21 @@ export default function AttendancePanel({ state, onChange, onClose, confirm, onP
               <div className="loan-sched-head"><span>فهرستِ کارمندان</span><span className="loan-sched-hint">{employees.length} نفر</span></div>
               <div className="loan-detail-list">
                 {employees.map((e) => (
-                  <div key={e.id} className="loan-detail-row">
+                  <div key={e.id} className="loan-detail-row att-emprow">
                     <div className="ld-info">
-                      <span className="ld-amt">{e.name} {e.code ? <span className="fm-shares">#{e.code}</span> : null}</span>
+                      <span className="ld-amt">{e.name} {e.code ? <span className="fm-shares">#{e.code}</span> : null}{employees.some((x) => x.managerId === e.id) ? <span className="att-statpill present">مدیر</span> : null}</span>
                       <span className="ld-date">{e.dailyRate ? `روزانه ${fmt(e.dailyRate)}` : ''}{e.hourlyRate ? ` · ساعتی ${fmt(e.hourlyRate)}` : ''}</span>
+                      {/* Assign the employee's سرپرست (manager) — this builds the approval hierarchy / کارتابل routing. */}
+                      <select className="tool-text-input att-mgrsel" value={e.managerId || ''} onChange={(ev) => updateEmployee(e.id, { managerId: ev.target.value || undefined })}>
+                        <option value="">سرپرست: ندارد</option>
+                        {employees.filter((m) => m.id !== e.id).map((m) => <option key={m.id} value={m.id}>سرپرست: {m.name}</option>)}
+                      </select>
                     </div>
                     <button className="fm-notify" title="حذف" onClick={() => delEmployee(e.id)}>🗑</button>
                   </div>
                 ))}
               </div>
+              <div className="tool-note">با تعیینِ «سرپرست» برای هر فرد، سلسله‌مراتبِ تایید ساخته می‌شود: درخواست‌ها از سرپرست تا بالاترین مدیر در «کارتابلِ» هر مدیر بالا می‌روند. هر کس زیرمجموعه داشته باشد، «مدیر» محسوب می‌شود.</div>
             </>
           )}
         </div>

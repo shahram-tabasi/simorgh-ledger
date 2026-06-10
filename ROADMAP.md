@@ -115,6 +115,10 @@ flowchart TD
       required-to-use (ملزم به استفاده), annual carryover/savings (ذخیره‌ی سالیانه); CSV export of the kardex
 - ✓ Leave permits with **multi-level approval** (سطوحِ تایید: سرپرست → مدیر → …) + status (تایید/رد/در انتظار);
       workers submit their own requests in self-service mode; per-company leave-registration policy
+- ✓ Manager hierarchy + **کارتابل** (manager inbox): each employee has a سرپرست; requests route up the chain
+      (سرپرست → مدیر → …) and each manager sees only requests awaiting them; admin (مدیرِ ارشد) sees all + history
+- ✓ Request types beyond leave: روزانه / ساعتی / استعلاجی / بدون حقوق / مأموریت / **ثبتِ تردد** (punch correction),
+      each with its own rules (enabled, reason-required, max-days)
 - ◻ Windows desktop installer (.exe) via Electron + Windows CI  (deferred — not yet)
 - ◻ Attendance device matching: face / fingerprint / RFID-card readers
       - phase 1: device biometric unlock (WebAuthn / Capacitor biometric) for worker self check-in
