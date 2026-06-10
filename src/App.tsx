@@ -131,10 +131,10 @@ const TOUR_STEPS: CoachStep[] = [
 ];
 
 // نسخه و فهرستِ تغییرات برای پنجره‌ی «تازه‌ها»
-const APP_VERSION = '1.0.38';
+const APP_VERSION = '1.0.39';
 const CHANGELOG: string[] = [
-  'نسخه‌ی وب (PWA): حالا برنامه را روی آیفون/ویندوز/مک از داخلِ مرورگر باز و «به صفحه‌ی اصلی اضافه» می‌کنید — بدونِ اپ‌استور',
-  'پشتیبانیِ آفلاین و نصبِ مستقیم از سایت',
+  'حسابِ کاربری و همگام‌سازیِ ابری: با شماره‌موبایل و رمز وارد شوید و داده‌ها را بینِ گوشی و کامپیوتر سینک کنید',
+  'از منوی «درباره ما» → بخشِ «حسابِ کاربری و همگام‌سازی»',
 ];
 
 function App() {
@@ -573,6 +573,12 @@ function App() {
   const BACKUP_KEYS = ['calendarData', 'funds', 'loans', 'calendarSystem', 'theme', 'prayerProvince', 'prayerCity'];
   const [ghRepo, setGhRepo] = useState<string>(() => localStorage.getItem('ghBackupRepo') || '');
   const [ghToken, setGhToken] = useState<string>(() => localStorage.getItem('ghBackupToken') || '');
+  // حساب کاربری و همگام‌سازیِ ابری (سرورِ خودمان)
+  const API_BASE = localStorage.getItem('apiBase') || 'https://ledger.simorghai.com';
+  const [authToken, setAuthToken] = useState<string>(() => localStorage.getItem('authToken') || '');
+  const [authPhone, setAuthPhone] = useState<string>(() => localStorage.getItem('authPhone') || '');
+  const [acctPhone, setAcctPhone] = useState<string>('');
+  const [acctPw, setAcctPw] = useState<string>('');
 
   // ساختِ متنِ پشتیبان از داده‌های فعلی
   const buildBackup = (): string => {
@@ -670,6 +676,52 @@ function App() {
       ghSaveCreds(repo, token);
       applyBackup(parsed && parsed.data);
     } catch { notify('اتصال به گیت‌هاب برقرار نشد (احتمالاً فیلتر/اینترنت). با VPN امتحان کنید.'); }
+  };
+
+  // ---------- حساب کاربری و همگام‌سازی با سرورِ خودمان ----------
+  const backupDataObject = (): { [k: string]: string } => {
+    const o: { [k: string]: string } = {};
+    BACKUP_KEYS.forEach((k) => { const v = localStorage.getItem(k); if (v !== null) o[k] = v; });
+    return o;
+  };
+  const saveAuth = (token: string, phone: string) => {
+    localStorage.setItem('authToken', token); localStorage.setItem('authPhone', phone);
+    setAuthToken(token); setAuthPhone(phone);
+  };
+  const apiAuth = async (kind: 'login' | 'register') => {
+    const phone = acctPhone.trim(), password = acctPw;
+    if (phone.replace(/[^0-9+]/g, '').length < 8 || password.length < 4) { notify('شماره‌موبایل و رمز (حداقل ۴ کاراکتر) را درست وارد کنید.'); return; }
+    try {
+      const r = await fetch(`${API_BASE}/api/${kind}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone, password }) });
+      const j = await r.json().catch(() => ({}));
+      if (r.ok && j.token) { saveAuth(j.token, j.phone || phone); setAcctPw(''); notify(kind === 'register' ? 'حساب ساخته شد و وارد شدید ✅' : 'خوش آمدید ✅'); }
+      else if (r.status === 409) notify('این شماره قبلاً ثبت شده؛ «ورود» را بزنید.');
+      else if (r.status === 401) notify('شماره یا رمز درست نیست.');
+      else notify('خطا (کد ' + r.status + ').');
+    } catch { notify('اتصال به سرور برقرار نشد. اینترنت/آدرسِ سرور را بررسی کنید.'); }
+  };
+  const apiLogout = () => { localStorage.removeItem('authToken'); localStorage.removeItem('authPhone'); setAuthToken(''); setAuthPhone(''); };
+  const cloudPush = async () => {
+    if (!authToken) return;
+    notify('در حالِ ارسال به سرور…');
+    try {
+      const r = await fetch(`${API_BASE}/api/data`, { method: 'PUT', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${authToken}` }, body: JSON.stringify({ blob: backupDataObject() }) });
+      if (r.ok) notify('داده‌ها روی سرور ذخیره شد ✅');
+      else if (r.status === 401) { notify('نشستِ شما منقضی شده؛ دوباره وارد شوید.'); apiLogout(); }
+      else notify('ارسال ناموفق بود (کد ' + r.status + ').');
+    } catch { notify('اتصال به سرور برقرار نشد.'); }
+  };
+  const cloudPull = async () => {
+    if (!authToken) return;
+    notify('در حالِ دریافت از سرور…');
+    try {
+      const r = await fetch(`${API_BASE}/api/data`, { headers: { Authorization: `Bearer ${authToken}` } });
+      if (r.status === 401) { notify('نشستِ شما منقضی شده؛ دوباره وارد شوید.'); apiLogout(); return; }
+      if (!r.ok) { notify('دریافت ناموفق بود (کد ' + r.status + ').'); return; }
+      const j = await r.json();
+      if (!j.blob) { notify('هنوز داده‌ای روی سرور نیست؛ اول «ارسال» را بزنید.'); return; }
+      applyBackup(j.blob);
+    } catch { notify('اتصال به سرور برقرار نشد.'); }
   };
 
   // اشتراک‌گذاریِ یک متنِ دلخواه (برای پیامِ یادآوریِ صندوق)
@@ -1315,6 +1367,29 @@ function App() {
             <button className="drawer-item" onClick={shareApp}><span className="di-icon"><IconShare /></span> ارسال نرم‌افزار</button>
             <a className="drawer-item" href="https://www.simorghai.com" target="_blank" rel="noopener noreferrer"><span className="di-icon"><IconGlobe /></span> وب‌سایت سیمرغ</a>
 
+            <div className="drawer-section-label">حسابِ کاربری و همگام‌سازیِ ابری</div>
+            {authToken ? (
+              <div className="gh-sync">
+                <div className="acct-row">واردشده: <b dir="ltr">{authPhone}</b></div>
+                <div className="gh-actions">
+                  <button className="gh-btn up" onClick={cloudPush}>⬆️ ارسالِ داده‌ها</button>
+                  <button className="gh-btn down" onClick={cloudPull}>⬇️ دریافتِ داده‌ها</button>
+                </div>
+                <button className="drawer-item acct-logout" onClick={apiLogout}>خروج از حساب</button>
+                <div className="drawer-hint">برای چنددستگاهه‌شدن: روی دستگاهِ اول «ارسال» و روی دستگاهِ دوم «دریافت» را بزنید.</div>
+              </div>
+            ) : (
+              <div className="gh-sync">
+                <input className="gh-input" type="tel" inputMode="tel" dir="ltr" placeholder="شماره موبایل" value={acctPhone} onChange={(e) => setAcctPhone(e.target.value)} />
+                <input className="gh-input" type="password" dir="ltr" placeholder="رمز عبور" value={acctPw} onChange={(e) => setAcctPw(e.target.value)} />
+                <div className="gh-actions">
+                  <button className="gh-btn up" onClick={() => apiAuth('login')}>ورود</button>
+                  <button className="gh-btn down" onClick={() => apiAuth('register')}>ثبت‌نام</button>
+                </div>
+                <div className="drawer-hint">با حساب می‌توانید داده‌ها را در سرورِ سیمرغ نگه دارید و بینِ گوشی/کامپیوتر سینک کنید.</div>
+              </div>
+            )}
+
             <div className="drawer-section-label">پشتیبان‌گیری</div>
             <button className="drawer-item" onClick={shareBackup}><span className="di-icon"><IconShare /></span> ارسالِ پشتیبان (بله/ایتا/تلگرام)</button>
             <button className="drawer-item" onClick={exportBackup}><span className="di-icon"><IconReport /></span> ذخیره‌ی فایلِ پشتیبان در دستگاه</button>
@@ -1339,7 +1414,7 @@ function App() {
               <button className={`theme-btn ${theme === 'dark' ? 'active' : ''}`} onClick={() => setTheme('dark')}>🌙 تیره</button>
             </div>
 
-            <div className="drawer-foot">نسخه ۱۴۰۵ · ۱.۰.۳۸</div>
+            <div className="drawer-foot">نسخه ۱۴۰۵ · ۱.۰.۳۹</div>
           </aside>
         </div>
       )}

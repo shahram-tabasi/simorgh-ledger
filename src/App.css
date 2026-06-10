@@ -1281,6 +1281,10 @@ body.dark .drawer-hint { color: #7f8aa3; }
 .gh-btn.down { background: #eaf1fb; color: #1c5aa8; }
 body.dark .gh-input { background: #1b2740; border-color: #314261; color: #dce4f2; }
 body.dark .gh-btn.down { background: #1b2c44; color: #9fc4ef; }
+.acct-row { font-size: 13px; color: #2c3550; padding: 4px 2px 8px; }
+.acct-logout { color: #a3433a; font-size: 13px; padding: 8px 2px; margin-top: 4px; }
+body.dark .acct-row { color: #dce4f2; }
+body.dark .acct-logout { color: #e09a92; }
 
 .drawer-item {
   display: flex;
