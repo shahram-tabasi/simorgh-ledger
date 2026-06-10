@@ -37,26 +37,22 @@ jobs:
     - name: Sync Capacitor (iOS)
       run: npx cap sync ios
 
-    - name: Install CocoaPods (creates App.xcworkspace)
-      run: |
-        cd ios/App
-        pod install --repo-update
-        ls -la
-
-    - name: Build unsigned archive
+    - name: Build unsigned archive (Swift Package Manager)
       run: |
         cd ios/App
         xcodebuild \
-          -workspace App.xcworkspace \
+          -project App.xcodeproj \
           -scheme App \
           -configuration Release \
           -sdk iphoneos \
+          -destination 'generic/platform=iOS' \
           -archivePath "$PWD/build/App.xcarchive" \
           archive \
           CODE_SIGNING_ALLOWED=NO \
           CODE_SIGNING_REQUIRED=NO \
           CODE_SIGN_IDENTITY="" \
-          DEVELOPMENT_TEAM=""
+          DEVELOPMENT_TEAM="" \
+          -allowProvisioningUpdates
 
     - name: Package unsigned IPA
       run: |
