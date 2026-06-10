@@ -131,10 +131,10 @@ const TOUR_STEPS: CoachStep[] = [
 ];
 
 // نسخه و فهرستِ تغییرات برای پنجره‌ی «تازه‌ها»
-const APP_VERSION = '1.0.35';
+const APP_VERSION = '1.0.36';
 const CHANGELOG: string[] = [
-  'عددِ مبلغ داخلِ تقویم خواناتر شد: بزرگ‌تر، پررنگ‌تر و با کنتراستِ بهتر (به‌ویژه در پوسته‌ی تیره)',
-  'پشتیبانی از مبلغ‌های میلیاردی در خلاصه‌ی مبلغ (مثلاً ۱.۵میلیارد)',
+  'پشتیبان‌گیری و بازیابی اضافه شد: از منوی «درباره ما» می‌توانید از داده‌ها (صندوق، وام، تقویم) یک فایلِ پشتیبان بسازید و بعداً بازیابی کنید',
+  'این‌طوری قبل از حذف‌و‌نصبِ برنامه، داده‌هایتان از بین نمی‌رود',
 ];
 
 function App() {
@@ -196,6 +196,7 @@ function App() {
   const longPressTimer = useRef<number | null>(null);
   const suppressClick = useRef<boolean>(false);
   const lastBack = useRef<number>(0);
+  const restoreInputRef = useRef<HTMLInputElement | null>(null);
 
   // دیالوگ‌های سفارشی به‌جای alert/confirm زشتِ سیستم
   const notify = (message: string) => setDialog({ type: 'alert', message });
@@ -565,6 +566,48 @@ function App() {
         }
       } catch { /* کاربر منصرف شد */ }
     }
+  };
+
+  // ---------- پشتیبان‌گیری و بازیابی ----------
+  // کلیدهایی که در فایلِ پشتیبان ذخیره می‌شوند (داده‌ها + تنظیمات)
+  const BACKUP_KEYS = ['calendarData', 'funds', 'loans', 'calendarSystem', 'theme', 'prayerProvince', 'prayerCity'];
+
+  const exportBackup = () => {
+    const payload: { [k: string]: string } = {};
+    BACKUP_KEYS.forEach((k) => { const v = localStorage.getItem(k); if (v !== null) payload[k] = v; });
+    const blob = new Blob([JSON.stringify({ app: 'simorgh-ledger', version: APP_VERSION, date: new Date().toISOString(), data: payload }, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const stamp = new Date().toISOString().slice(0, 10);
+    a.href = url; a.download = `simorgh-backup-${stamp}.json`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    setShowLeftDrawer(false);
+    notify('پشتیبان ساخته شد. فایلِ «simorgh-backup» را جایی امن نگه دارید. 🗂️');
+  };
+
+  const onRestoreFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = ''; // اجازه‌ی انتخابِ دوباره‌ی همان فایل
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const parsed = JSON.parse(String(reader.result || '{}'));
+        const data = parsed && parsed.data ? parsed.data : null;
+        if (!data || typeof data !== 'object' || (!data.calendarData && !data.funds && !data.loans)) {
+          notify('این فایل پشتیبانِ معتبری نیست.'); return;
+        }
+        askConfirm('بازیابیِ پشتیبان جایگزینِ داده‌های فعلی می‌شود. ادامه می‌دهید؟', () => {
+          BACKUP_KEYS.forEach((k) => { if (typeof data[k] === 'string') localStorage.setItem(k, data[k]); });
+          notify('پشتیبان بازیابی شد. برنامه دوباره باز می‌شود…');
+          setTimeout(() => window.location.reload(), 900);
+        });
+      } catch {
+        notify('خواندنِ فایل ناموفق بود؛ فایلِ پشتیبانِ درست را انتخاب کنید.');
+      }
+    };
+    reader.readAsText(file);
   };
 
   // اشتراک‌گذاریِ یک متنِ دلخواه (برای پیامِ یادآوریِ صندوق)
@@ -1210,13 +1253,19 @@ function App() {
             <button className="drawer-item" onClick={shareApp}><span className="di-icon"><IconShare /></span> ارسال نرم‌افزار</button>
             <a className="drawer-item" href="https://www.simorghai.com" target="_blank" rel="noopener noreferrer"><span className="di-icon"><IconGlobe /></span> وب‌سایت سیمرغ</a>
 
+            <div className="drawer-section-label">پشتیبان‌گیری</div>
+            <button className="drawer-item" onClick={exportBackup}><span className="di-icon"><IconShare /></span> ساختِ فایلِ پشتیبان (ذخیره)</button>
+            <button className="drawer-item" onClick={() => restoreInputRef.current?.click()}><span className="di-icon"><IconReport /></span> بازیابی از فایلِ پشتیبان</button>
+            <input ref={restoreInputRef} type="file" accept="application/json,.json" style={{ display: 'none' }} onChange={onRestoreFile} />
+            <div className="drawer-hint">قبل از حذف‌و‌نصبِ برنامه، یک پشتیبان بسازید تا داده‌ها (صندوق، وام، تقویم) از بین نرود.</div>
+
             <div className="drawer-section-label">پوسته</div>
             <div className="theme-switch">
               <button className={`theme-btn ${theme === 'light' ? 'active' : ''}`} onClick={() => setTheme('light')}>☀️ روشن</button>
               <button className={`theme-btn ${theme === 'dark' ? 'active' : ''}`} onClick={() => setTheme('dark')}>🌙 تیره</button>
             </div>
 
-            <div className="drawer-foot">نسخه ۱۴۰۵ · ۱.۰.۳۵</div>
+            <div className="drawer-foot">نسخه ۱۴۰۵ · ۱.۰.۳۶</div>
           </aside>
         </div>
       )}

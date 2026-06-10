@@ -1261,6 +1261,14 @@ body {
   padding: 14px 18px 6px;
 }
 
+.drawer-hint {
+  font-size: 11px;
+  line-height: 1.8;
+  color: #9aa3b5;
+  padding: 6px 18px 4px;
+}
+body.dark .drawer-hint { color: #7f8aa3; }
+
 .drawer-item {
   display: flex;
   align-items: center;
