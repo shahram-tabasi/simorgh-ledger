@@ -2315,3 +2315,45 @@ body.dark .fund-guide-banner {
   background: rgba(240, 199, 94, 0.10);
   color: #f0c75e;
 }
+
+/* ==================== حسابداریِ دوطرفه ==================== */
+.acc-date { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+.acc-lines { margin: 6px 0; }
+.acc-line { display: grid; grid-template-columns: 1.6fr 1fr 1fr 26px; gap: 6px; align-items: center; margin-bottom: 6px; }
+.acc-line-head { font-size: 11px; color: #8a93a8; font-weight: 700; }
+.acc-line select, .acc-line input { width: 100%; box-sizing: border-box; padding: 8px; border: 1px solid #d3deee; border-radius: 9px; font-size: 12.5px; font-family: inherit; background: #fff; color: #2c3550; }
+.acc-line input { direction: ltr; }
+.acc-line-del { background: none; border: none; color: #a3433a; font-size: 15px; cursor: pointer; }
+.acc-addline { background: #eef2f8; border: none; color: #2c3550; font-weight: 700; font-size: 13px; padding: 8px; border-radius: 9px; width: 100%; cursor: pointer; font-family: inherit; margin-bottom: 10px; }
+.acc-form-actions { display: flex; gap: 8px; }
+.acc-form-actions .loan-submit { flex: 1; }
+.acc-cancel { background: #f3e7e7; border: none; color: #a3433a; font-weight: 700; padding: 0 18px; border-radius: 11px; cursor: pointer; font-family: inherit; }
+.acc-addacc { display: grid; grid-template-columns: 90px 1fr; gap: 8px; }
+.acc-type-pick { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0; }
+.acc-type-pick .fund-level-btn { flex: 1 1 28%; padding: 8px 0; font-size: 12.5px; }
+.acc-entry .ld-date { line-height: 1.7; }
+.acc-ledger-pick { margin: 8px 0; }
+.acc-ledger-name { font-weight: 800; font-size: 13px; margin: 8px 0 4px; color: #2c3550; }
+.acc-table { width: 100%; border-collapse: collapse; font-size: 12px; margin-bottom: 14px; }
+.acc-table th, .acc-table td { border: 1px solid #e0e6f0; padding: 6px 7px; text-align: right; }
+.acc-table th { background: #f1f5fb; color: #46506a; font-weight: 800; }
+.acc-table td:not(:first-child) { direction: ltr; }
+.acc-table .acc-total td { background: #fff7e6; font-weight: 800; }
+.acc-print-title { font-weight: 800; font-size: 14px; margin: 12px 0 6px; color: #1c4a7e; }
+body.dark .acc-line select, body.dark .acc-line input { background: #1b2740; border-color: #314261; color: #dce4f2; }
+body.dark .acc-addline { background: #243049; color: #cfd7e8; }
+body.dark .acc-cancel { background: #3a1f1f; color: #e09a92; }
+body.dark .acc-ledger-name { color: #dce4f2; }
+body.dark .acc-table th { background: #1f2a40; color: #aeb8cd; }
+body.dark .acc-table th, body.dark .acc-table td { border-color: #2c3850; }
+body.dark .acc-table .acc-total td { background: #2a2410; }
+body.dark .acc-print-title { color: #cfe4fb; }
+
+/* چاپ: فقط ناحیه‌ی گزارش چاپ شود */
+@media print {
+  body * { visibility: hidden !important; }
+  .acc-print, .acc-print * { visibility: visible !important; }
+  .acc-print { position: absolute; inset: 0; width: 100%; padding: 12px; background: #fff; color: #000; }
+  .acc-noprint { display: none !important; }
+  .acc-table th { background: #eee !important; -webkit-print-color-adjust: exact; }
+}

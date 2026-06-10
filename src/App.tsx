@@ -30,6 +30,7 @@ import ToolsPanel, { CalendarDateInput, type DateValue } from './Tools';
 import WelcomeScreen from './WelcomeScreen';
 import { Onboarding, WhatsNew } from './Onboarding';
 import FundPanel from './Fund';
+import AccountingPanel, { type AccountingState, emptyAccounting } from './Accounting';
 import CoachTour, { type CoachStep } from './Coach';
 import {
   IconReport, IconBom, IconLoan, IconConvert, IconAge, IconBio, IconBmi,
@@ -131,10 +132,10 @@ const TOUR_STEPS: CoachStep[] = [
 ];
 
 // نسخه و فهرستِ تغییرات برای پنجره‌ی «تازه‌ها»
-const APP_VERSION = '1.0.39';
+const APP_VERSION = '1.0.40';
 const CHANGELOG: string[] = [
-  'حسابِ کاربری و همگام‌سازیِ ابری: با شماره‌موبایل و رمز وارد شوید و داده‌ها را بینِ گوشی و کامپیوتر سینک کنید',
-  'از منوی «درباره ما» → بخشِ «حسابِ کاربری و همگام‌سازی»',
+  'ماژولِ حسابداریِ دوطرفه (Double-entry): ثبتِ سند با بدهکار/بستانکار، دفترِ معین، تراز آزمایشی و صورتِ سود و زیان',
+  'گزارش‌ها قابلِ چاپ و ذخیره به PDF هستند — از منوی «حسابداری»',
 ];
 
 function App() {
@@ -163,6 +164,9 @@ function App() {
   const [showLoansModal, setShowLoansModal] = useState<boolean>(false);
   const [selectedLoanId, setSelectedLoanId] = useState<string | null>(null);
   const [showFundModal, setShowFundModal] = useState<boolean>(false);
+  const [showAccModal, setShowAccModal] = useState<boolean>(false);
+  const [accounting, setAccounting] = useState<AccountingState>(() => { try { const s = localStorage.getItem('accounting'); return s ? JSON.parse(s) : emptyAccounting(); } catch { return emptyAccounting(); } });
+  const saveAccounting = (s: AccountingState) => { localStorage.setItem('accounting', JSON.stringify(s)); setAccounting(s); };
   const [fundStartReport, setFundStartReport] = useState<boolean>(false);
   const [theme, setTheme] = useState<'light' | 'dark'>(() => (localStorage.getItem('theme') as 'light' | 'dark') || 'light');
   const [prayerProvince, setPrayerProvince] = useState<string>(() => localStorage.getItem('prayerProvince') || 'تهران');
@@ -260,6 +264,7 @@ function App() {
       [!!selectedLoanId, () => setSelectedLoanId(null)],
       [showLoansModal, () => setShowLoansModal(false)],
       [showFundModal, () => setShowFundModal(false)],
+      [showAccModal, () => setShowAccModal(false)],
       [showAboutModal, () => setShowAboutModal(false)],
       [showYearMonthModal, () => setShowYearMonthModal(false)],
       [showDayModal, () => setShowDayModal(false)],
@@ -276,7 +281,7 @@ function App() {
       else { lastBack.current = now; setExitHint(true); setTimeout(() => setExitHint(false), 2000); }
     });
     return () => { sub.then((h) => h.remove()); };
-  }, [showTour, dialog, showAddModal, showReminderModal, showPrayerModal, showToolsModal, selectedLoanId, showLoansModal, showFundModal, showAboutModal, showYearMonthModal, showDayModal, showRightDrawer, showLeftDrawer, showWhatsNew, showOnboarding]);
+  }, [showTour, dialog, showAddModal, showReminderModal, showPrayerModal, showToolsModal, selectedLoanId, showLoansModal, showFundModal, showAccModal, showAboutModal, showYearMonthModal, showDayModal, showRightDrawer, showLeftDrawer, showWhatsNew, showOnboarding]);
 
   // هنگام تغییر تقویم، انتخابِ نظام را ذخیره و ماهِ در حال نمایش را تبدیل می‌کنیم
   const switchCalendar = (system: CalendarSystem) => {
@@ -570,7 +575,7 @@ function App() {
 
   // ---------- پشتیبان‌گیری و بازیابی ----------
   // کلیدهایی که در فایلِ پشتیبان ذخیره می‌شوند (داده‌ها + تنظیمات)
-  const BACKUP_KEYS = ['calendarData', 'funds', 'loans', 'calendarSystem', 'theme', 'prayerProvince', 'prayerCity'];
+  const BACKUP_KEYS = ['calendarData', 'funds', 'loans', 'accounting', 'calendarSystem', 'theme', 'prayerProvince', 'prayerCity'];
   const [ghRepo, setGhRepo] = useState<string>(() => localStorage.getItem('ghBackupRepo') || '');
   const [ghToken, setGhToken] = useState<string>(() => localStorage.getItem('ghBackupToken') || '');
   // حساب کاربری و همگام‌سازیِ ابری (سرورِ خودمان)
@@ -1319,6 +1324,10 @@ function App() {
         <FundPanel funds={funds} onChange={saveFunds} onClose={() => { setShowFundModal(false); setFundStartReport(false); }} confirm={askConfirm} onAddDeposits={addFundDeposits} onShare={shareText} startInReport={fundStartReport} />
       )}
 
+      {showAccModal && (
+        <AccountingPanel state={accounting} onChange={saveAccounting} onClose={() => setShowAccModal(false)} confirm={askConfirm} />
+      )}
+
       {/* منوی راست: امکانات و ابزارها */}
       {showRightDrawer && (
         <div className="drawer-overlay" onClick={() => setShowRightDrawer(false)}>
@@ -1339,6 +1348,7 @@ function App() {
             <button className="drawer-item" onClick={() => { setShowRightDrawer(false); setShowLoansModal(true); }}><span className="di-icon"><IconReport /></span> وام‌های من</button>
             <button className="drawer-item" onClick={() => { setShowRightDrawer(false); setFundStartReport(false); setShowFundModal(true); }}><span className="di-icon"><IconUsers /></span> صندوق خانوادگی</button>
             <button className="drawer-item" onClick={() => { setShowRightDrawer(false); setFundStartReport(true); setShowFundModal(true); }}><span className="di-icon"><IconReport /></span> گزارش صندوق</button>
+            <button className="drawer-item" onClick={() => { setShowRightDrawer(false); setShowAccModal(true); }}><span className="di-icon"><IconBom /></span> حسابداری (دفترداریِ دوطرفه)</button>
             <div className="drawer-section-label">ابزارهای کاربردی</div>
             <button className="drawer-item" onClick={() => openTool('convert')}><span className="di-icon"><IconConvert /></span> تبدیل تاریخ</button>
             <button className="drawer-item" onClick={() => openTool('age')}><span className="di-icon"><IconAge /></span> محاسبه سن</button>
@@ -1414,7 +1424,7 @@ function App() {
               <button className={`theme-btn ${theme === 'dark' ? 'active' : ''}`} onClick={() => setTheme('dark')}>🌙 تیره</button>
             </div>
 
-            <div className="drawer-foot">نسخه ۱۴۰۵ · ۱.۰.۳۹</div>
+            <div className="drawer-foot">نسخه ۱۴۰۵ · ۱.۰.۴۰</div>
           </aside>
         </div>
       )}
