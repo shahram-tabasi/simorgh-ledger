@@ -17,9 +17,11 @@ export interface AttendanceState {
   standardHours: number;                                   // ساعتِ کاریِ استانداردِ روز (پیش‌فرض ۸)
   records: { [empId: string]: { [dayKey: string]: DayStatus } }; // وضعیتِ هر روز؛ dayKey = "y-m-d" (شمسی، ماه ۰مبنا)
   overtime: { [empId: string]: { [ym: string]: number } };       // ساعتِ اضافه‌کارِ هر ماه؛ ym = "y-m"
+  // Per-month allowances/deductions for the payslip (bonuses, insurance, advances, ...).
+  adjust?: { [empId: string]: { [ym: string]: { allow?: number; deduct?: number } } };
 }
 
-export function emptyAttendance(): AttendanceState { return { employees: [], standardHours: 8, records: {}, overtime: {} }; }
+export function emptyAttendance(): AttendanceState { return { employees: [], standardHours: 8, records: {}, overtime: {}, adjust: {} }; }
 
 // چرخه‌ی وضعیت با هر لمس: خالی → حاضر → غایب → مرخصی → تعطیل → خالی
 const CYCLE: (DayStatus | '')[] = ['', 'present', 'absent', 'leave', 'holiday'];
@@ -34,7 +36,7 @@ interface Props {
   // Accounting hook: auto-posts the month's payroll as a double-entry journal (optional).
   onPostJournal?: (ref: string, date: { y: number; m: number; d: number }, desc: string, spec: { type: AccType; name?: string; debit?: number; credit?: number }[]) => void;
 }
-type Tab = 'log' | 'report' | 'staff';
+type Tab = 'log' | 'report' | 'slip' | 'staff';
 
 export default function AttendancePanel({ state, onChange, onClose, confirm, onPostJournal }: Props) {
   const employees = state.employees || [];
@@ -78,12 +80,23 @@ export default function AttendancePanel({ state, onChange, onClose, confirm, onP
     }
     const ot = overtime[e.id]?.[ym] || 0;
     const workedHours = present * standardHours + ot;
-    // نرخِ روز و ساعت را از روی هر کدام که پر شده استخراج می‌کنیم
+    // Derive day-rate and hour-rate from whichever the user filled in.
     const dayRate = e.dailyRate || (e.hourlyRate ? e.hourlyRate * standardHours : 0);
     const hrRate = e.hourlyRate || (e.dailyRate ? e.dailyRate / standardHours : 0);
     const base = dayRate * present;
-    const otPay = hrRate * 1.4 * ot;                       // اضافه‌کار ۱.۴ برابر (عرفِ قانونِ کار)
-    return { present, absent, leave, holiday, ot, workedHours, pay: base + otPay };
+    const otPay = hrRate * 1.4 * ot;                       // overtime at 1.4x (common labor-law factor)
+    const adj = (state.adjust || {})[e.id]?.[ym] || {};
+    const allow = adj.allow || 0;                          // allowances / bonuses
+    const deduct = adj.deduct || 0;                        // deductions (insurance, advances, ...)
+    const pay = Math.max(0, base + otPay + allow - deduct);
+    return { present, absent, leave, holiday, ot, workedHours, base, otPay, allow, deduct, pay };
+  };
+  const setAdjust = (field: 'allow' | 'deduct', val: string) => {
+    if (!empId) return;
+    const adjust = state.adjust || {};
+    const empAdj = { ...(adjust[empId] || {}) };
+    empAdj[ym] = { ...(empAdj[ym] || {}), [field]: digits(val) };
+    onChange({ ...state, adjust: { ...adjust, [empId]: empAdj }, employees, standardHours, records, overtime });
   };
 
   // ---------- مدیریتِ کارمندان ----------
@@ -120,6 +133,7 @@ export default function AttendancePanel({ state, onChange, onClose, confirm, onP
           <div className="mini-toggle fund-tabs">
             <button type="button" className={`mini-toggle-btn ${tab === 'log' ? 'active' : ''}`} onClick={() => setTab('log')}>ثبتِ ماهانه</button>
             <button type="button" className={`mini-toggle-btn ${tab === 'report' ? 'active' : ''}`} onClick={() => setTab('report')}>گزارش</button>
+            <button type="button" className={`mini-toggle-btn ${tab === 'slip' ? 'active' : ''}`} onClick={() => setTab('slip')}>فیش</button>
             <button type="button" className={`mini-toggle-btn ${tab === 'staff' ? 'active' : ''}`} onClick={() => setTab('staff')}>کارمندان</button>
           </div>
 
@@ -206,6 +220,45 @@ export default function AttendancePanel({ state, onChange, onClose, confirm, onP
               )}
             </>
           )}
+
+          {/* ---------------- payslip ---------------- */}
+          {tab === 'slip' && (employees.length === 0 ? (
+            <div className="tool-note">اول از تبِ «کارمندان» چند نفر اضافه کنید.</div>
+          ) : (
+            <>
+              <div className="att-monthnav">
+                <button onClick={() => shiftMonth(-1)}>‹</button>
+                <span>{monthLabel}</span>
+                <button onClick={() => shiftMonth(1)}>›</button>
+              </div>
+              <select className="tool-text-input" value={empId} onChange={(e) => setEmpId(e.target.value)}>
+                {employees.map((e) => <option key={e.id} value={e.id}>{e.name}</option>)}
+              </select>
+              {curEmp && curCalc && (
+                <>
+                  <div className="acc-print">
+                    <div className="acc-print-title">فیشِ حقوقی — {monthLabel}</div>
+                    <table className="acc-table">
+                      <tbody>
+                        <tr><td>کارمند</td><td>{curEmp.name}{curEmp.code ? ` (#${curEmp.code})` : ''}</td></tr>
+                        <tr><td>روزهای کارکرد</td><td>{curCalc.present} روز ({fmt(curCalc.workedHours)} ساعت)</td></tr>
+                        <tr><td>حقوقِ پایه</td><td>{fmt(curCalc.base)}</td></tr>
+                        <tr><td>اضافه‌کار ({fmt(curCalc.ot)} ساعت × ۱.۴)</td><td>{fmt(curCalc.otPay)}</td></tr>
+                        <tr><td>مزایا</td><td>{fmt(curCalc.allow)}</td></tr>
+                        <tr><td>کسورات</td><td>−{fmt(curCalc.deduct)}</td></tr>
+                        <tr className="acc-total"><td>خالصِ پرداختی</td><td>{fmt(curCalc.pay)} تومان</td></tr>
+                      </tbody>
+                    </table>
+                  </div>
+                  <div className="att-addgrid acc-noprint">
+                    <input className="tool-text-input" type="text" inputMode="numeric" dir="ltr" placeholder="مزایا (پاداش…)" value={(state.adjust?.[empId]?.[ym]?.allow) ? String(state.adjust[empId][ym].allow) : ''} onChange={(e) => setAdjust('allow', e.target.value)} />
+                    <input className="tool-text-input" type="text" inputMode="numeric" dir="ltr" placeholder="کسورات (بیمه…)" value={(state.adjust?.[empId]?.[ym]?.deduct) ? String(state.adjust[empId][ym].deduct) : ''} onChange={(e) => setAdjust('deduct', e.target.value)} />
+                  </div>
+                  <button className="loan-submit acc-noprint" onClick={() => window.print()}>🖨️ چاپِ فیش / PDF</button>
+                </>
+              )}
+            </>
+          ))}
 
           {/* ---------------- کارمندان ---------------- */}
           {tab === 'staff' && (

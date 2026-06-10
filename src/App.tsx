@@ -150,11 +150,10 @@ function resolveAcc(accs: AccLite[], defName: { [k in AccType]: string }, t: Acc
   return a.id;
 }
 
-const APP_VERSION = '1.0.44';
+const APP_VERSION = '1.0.45';
 const CHANGELOG: string[] = [
-  'ماژولِ انبار: تعریفِ کالا، ورود/خروج (خرید/فروش)، موجودی و ارزشِ انبار، و گزارشِ قابلِ چاپ',
-  'یکپارچگیِ کامل: هر خرید/فروشِ انبار خودکار سندِ حسابداری می‌زند (خرید→موجودی؛ فروش→درآمد + بهای تمام‌شده)',
-  'وام هم به حسابداری وصل شد: ثبتِ وامِ دریافتی با اصل و سود',
+  'فیشِ حقوقیِ کامل در «حضور و غیاب»: حقوقِ پایه + اضافه‌کار + مزایا − کسورات = خالصِ پرداختی، قابلِ چاپ/PDF',
+  'مزایا و کسوراتِ ماهانه برای هر کارمند، که در گزارش و سندِ حقوق هم اعمال می‌شود',
 ];
 
 function App() {
@@ -1504,7 +1503,7 @@ function App() {
               <button className={`theme-btn ${theme === 'dark' ? 'active' : ''}`} onClick={() => setTheme('dark')}>🌙 تیره</button>
             </div>
 
-            <div className="drawer-foot">نسخه ۱۴۰۵ · ۱.۰.۴۴</div>
+            <div className="drawer-foot">نسخه ۱۴۰۵ · ۱.۰.۴۵</div>
           </aside>
         </div>
       )}
