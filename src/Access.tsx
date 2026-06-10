@@ -82,12 +82,20 @@ export default function AccessPanel({ state, onChange, onClose, confirm, employe
   const setActive = (id: string | null) => onChange({ ...state, activeUserId: id });
 
   // ---------- groups ----------
+  // Admin can create AND edit groups (raise/lower their access by toggling permissions).
   const [gName, setGName] = useState(''); const [gPerms, setGPerms] = useState<string[]>([]);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const togglePerm = (k: string) => setGPerms((p) => p.includes(k) ? p.filter((x) => x !== k) : [...p, k]);
-  const addGroup = () => {
+  const resetGroupForm = () => { setGName(''); setGPerms([]); setEditingId(null); };
+  const editGroup = (g: Group) => { setEditingId(g.id); setGName(g.name); setGPerms([...g.perms]); };
+  const saveGroup = () => {
     if (!gName.trim()) return;
-    const g: Group = { id: `g-${Date.now()}`, name: gName.trim(), perms: [...gPerms] };
-    onChange({ ...state, groups: [...groups, g] }); setGName(''); setGPerms([]);
+    if (editingId) {
+      onChange({ ...state, groups: groups.map((g) => (g.id === editingId ? { ...g, name: gName.trim(), perms: [...gPerms] } : g)) });
+    } else {
+      onChange({ ...state, groups: [...groups, { id: `g-${Date.now()}`, name: gName.trim(), perms: [...gPerms] }] });
+    }
+    resetGroupForm();
   };
   const delGroup = (id: string) => {
     if (users.some((u) => u.groupId === id)) { confirm('این گروه کاربر دارد و حذف نمی‌شود.', () => {}); return; }
@@ -146,9 +154,9 @@ export default function AccessPanel({ state, onChange, onClose, confirm, employe
           {/* ---------------- groups ---------------- */}
           {tab === 'groups' && (
             <>
-              <div className="loan-sched-head"><span>گروهِ جدید</span></div>
+              <div className="loan-sched-head"><span>{editingId ? 'ویرایشِ گروه' : 'گروهِ جدید'}</span>{editingId && <span className="loan-sched-hint">در حالِ ویرایش</span>}</div>
               <input className="tool-text-input" type="text" placeholder="نامِ گروه (مثلاً حسابدار)" value={gName} onChange={(e) => setGName(e.target.value)} />
-              <label className="field-label">دسترسی‌ها</label>
+              <label className="field-label">دسترسی‌ها (تیک بزنید تا کم/زیاد شود)</label>
               <div className="acc-perms">
                 {PERMISSIONS.map((perm) => (
                   <label key={perm.key} className="fund-switch acc-perm">
@@ -157,16 +165,19 @@ export default function AccessPanel({ state, onChange, onClose, confirm, employe
                   </label>
                 ))}
               </div>
-              <button className="loan-submit" disabled={!gName.trim()} onClick={addGroup}>افزودنِ گروه</button>
+              <div className="acc-form-actions">
+                <button className="loan-submit" disabled={!gName.trim()} onClick={saveGroup}>{editingId ? 'ذخیره‌ی تغییرات' : 'افزودنِ گروه'}</button>
+                {editingId && <button className="acc-cancel" onClick={resetGroupForm}>انصراف</button>}
+              </div>
 
-              <div className="loan-sched-head"><span>گروه‌ها</span><span className="loan-sched-hint">{groups.length} گروه</span></div>
+              <div className="loan-sched-head"><span>گروه‌ها</span><span className="loan-sched-hint">{groups.length} گروه — برای ویرایش بزنید</span></div>
               <div className="loan-detail-list">
                 {groups.map((g) => (
-                  <div key={g.id} className="loan-detail-row">
-                    <div className="ld-info">
-                      <span className="ld-amt">{g.name}</span>
+                  <div key={g.id} className={`loan-detail-row ${editingId === g.id ? 'paid' : ''}`}>
+                    <button className="ld-info acc-group-edit" onClick={() => editGroup(g)}>
+                      <span className="ld-amt">{g.name} ✎</span>
                       <span className="ld-date">{g.perms.length ? g.perms.map((k) => PERMISSIONS.find((p) => p.key === k)?.label).join('، ') : 'بدون دسترسی'}</span>
-                    </div>
+                    </button>
                     <button className="fm-notify" title="حذف" onClick={() => delGroup(g.id)}>🗑</button>
                   </div>
                 ))}

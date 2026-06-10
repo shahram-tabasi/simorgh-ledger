@@ -151,11 +151,10 @@ function resolveAcc(accs: AccLite[], defName: { [k in AccType]: string }, t: Acc
   return a.id;
 }
 
-const APP_VERSION = '1.0.46';
+const APP_VERSION = '1.0.47';
 const CHANGELOG: string[] = [
-  'کنترلِ دسترسی: گروه با سطحِ دسترسی تعریف کنید و کاربرها را در گروه بگذارید (نه تنظیمِ تک‌تک)',
-  'حالتِ کارگر: هر کارمند فقط حضور/مرخصی و فیشِ حقوقِ خودش را می‌بیند؛ با رمزِ مدیر محافظت می‌شود',
-  'این کنترل سمتِ دستگاه است؛ امنیتِ کاملِ چنددستگاهه در نسخه‌ی سرور می‌آید',
+  'ادمین می‌تواند سطحِ دسترسیِ گروه‌ها را ویرایش کند: روی گروه بزنید، دسترسی‌ها را کم/زیاد کنید و نامش را عوض کنید',
+  'نقشه‌ی راه به‌روز شد: تطبیقِ دستگاه‌های چهره/اثرانگشت/کارت، اولویتِ SaaS، و گرافیکِ مدرنِ ۲۰۲۶ با محیط‌های مجزا',
 ];
 
 function App() {
@@ -1530,7 +1529,7 @@ function App() {
               <button className={`theme-btn ${theme === 'dark' ? 'active' : ''}`} onClick={() => setTheme('dark')}>🌙 تیره</button>
             </div>
 
-            <div className="drawer-foot">نسخه ۱۴۰۵ · ۱.۰.۴۶</div>
+            <div className="drawer-foot">نسخه ۱۴۰۵ · ۱.۰.۴۷</div>
           </aside>
         </div>
       )}

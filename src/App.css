@@ -2379,3 +2379,10 @@ body.dark .att-monthnav span { color: #e3e9f4; }
 body.dark .att-monthnav button { background: #243049; color: #cfd7e8; }
 body.dark .att-day { background: #1b2740; border-color: #2c3850; }
 body.dark .att-dnum { color: #cfd7e8; }
+
+/* ==================== کاربران و دسترسی ==================== */
+.acc-perms { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 12px; margin: 8px 0 12px; }
+.acc-perm { font-size: 12.5px; }
+.acc-perm span { font-weight: 600; }
+.acc-group-edit { background: none; border: none; text-align: right; cursor: pointer; font-family: inherit; padding: 0; display: flex; flex-direction: column; gap: 3px; flex: 1; }
+@media (max-width: 360px){ .acc-perms { grid-template-columns: 1fr; } }

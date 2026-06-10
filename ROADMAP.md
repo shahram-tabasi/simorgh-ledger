@@ -110,10 +110,20 @@ flowchart TD
 - ✓ Inventory module (items, in/out, stock, value, report) with auto-accounting (purchase/sale → journal)
 - ✓ Payslip (base + overtime + allowances − deductions = net), printable
 - ✓ Access control: groups + permissions + users, device-side gating, admin PIN, worker self-service mode
-- ◻ Windows desktop installer (.exe) via Electron + Windows CI  ← NEXT
+- ✓ Admin can edit group permissions (raise/lower access per group)
+- ◻ Windows desktop installer (.exe) via Electron + Windows CI  (deferred — not yet)
+- ◻ Attendance device matching: face / fingerprint / RFID-card readers
+      - phase 1: device biometric unlock (WebAuthn / Capacitor biometric) for worker self check-in
+      - phase 2: integrate external hardware (e.g. ZKTeco) via the SaaS server (push logs to /api)
 - ◻ CSV/Excel export of all reports
-- ◻ Server-enforced multi-user auth & permissions (real security) + relational journal storage
-- ◻ Multi-company/multi-book, statutory reports, personnel order (حکم کارگزینی)
+- ◻ Server-enforced multi-user auth & permissions (REAL security) + relational journal storage
+- ◻ Personnel order / employment decree (حکم کارگزینی): printable per employee
+- ◻ Multi-company/multi-book, statutory reports
+
+## Product principles (owner directives)
+- **SaaS first**: the cloud multi-tenant service is the core product; the standalone apps (Android/iOS/Windows) are companions to it.
+- **Modern 2026 look**: great fonts, polished dialogs/messages, refined graphics — a complete, premium feel.
+- **Separated, uncluttered environments**: keep each area (accounting / attendance / inventory / fund) in its own clean space; avoid a crowded single screen so users don't get confused. Prefer focused modules and a clean entry/dashboard over piling everything into one menu.
 
 ## Coding conventions
 - Each module is a self-contained component with `state / onChange / onClose / confirm` props.
