@@ -32,6 +32,7 @@ import { Onboarding, WhatsNew } from './Onboarding';
 import FundPanel from './Fund';
 import AccountingPanel, { type AccountingState, type AccType, emptyAccounting } from './Accounting';
 import AttendancePanel, { type AttendanceState, emptyAttendance } from './Attendance';
+import InventoryPanel, { type InventoryState, emptyInventory } from './Inventory';
 import CoachTour, { type CoachStep } from './Coach';
 import {
   IconReport, IconBom, IconLoan, IconConvert, IconAge, IconBio, IconBmi,
@@ -133,10 +134,27 @@ const TOUR_STEPS: CoachStep[] = [
 ];
 
 // نسخه و فهرستِ تغییرات برای پنجره‌ی «تازه‌ها»
-const APP_VERSION = '1.0.43';
+// Resolve an account id for an auto-posted journal line.
+// If `name` is given: find by (type+name) else CREATE that named account (never fall back to a
+// different account of the same type — that previously caused e.g. COGS to credit Cash).
+// If `name` is omitted: use the first account of that type, else create a default.
+type AccLite = { id: string; code: string; name: string; type: AccType };
+function resolveAcc(accs: AccLite[], defName: { [k in AccType]: string }, t: AccType, name?: string): string {
+  if (name) {
+    let a = accs.find((x) => x.type === t && x.name === name);
+    if (!a) { a = { id: `a-${t}-${Date.now()}-${accs.length}`, code: '', name, type: t }; accs.push(a); }
+    return a.id;
+  }
+  let a = accs.find((x) => x.type === t);
+  if (!a) { a = { id: `a-${t}-${Date.now()}-${accs.length}`, code: '', name: defName[t], type: t }; accs.push(a); }
+  return a.id;
+}
+
+const APP_VERSION = '1.0.44';
 const CHANGELOG: string[] = [
-  'یکپارچگیِ صندوق با حسابداری: از گزارشِ صندوق، وضعیتِ نقدیِ صندوق را با یک دکمه به‌صورتِ سندِ خودکار ثبت/به‌روزرسانی کنید',
-  'ثبتِ خودکار حالا «به‌روزرسانی» هم می‌کند: اگر دوباره بزنی، همان سند با مبلغِ تازه به‌روز می‌شود (نه سندِ تکراری)',
+  'ماژولِ انبار: تعریفِ کالا، ورود/خروج (خرید/فروش)، موجودی و ارزشِ انبار، و گزارشِ قابلِ چاپ',
+  'یکپارچگیِ کامل: هر خرید/فروشِ انبار خودکار سندِ حسابداری می‌زند (خرید→موجودی؛ فروش→درآمد + بهای تمام‌شده)',
+  'وام هم به حسابداری وصل شد: ثبتِ وامِ دریافتی با اصل و سود',
 ];
 
 function App() {
@@ -174,14 +192,7 @@ function App() {
   const postJournal = (ref: string, date: { y: number; m: number; d: number }, desc: string, spec: { type: AccType; name?: string; debit?: number; credit?: number }[]) => {
     const defName: { [k in AccType]: string } = { asset: 'صندوق (نقد)', liability: 'حساب‌های پرداختنی', equity: 'سرمایه', income: 'درآمد', expense: 'هزینه‌ها' };
     const accs = accounting.accounts.slice();
-    // Resolve an account id by exact name within a type, then by type, else create one.
-    const resolve = (t: AccType, name?: string) => {
-      let a = name ? accs.find((x) => x.type === t && x.name === name) : undefined;
-      if (!a) a = accs.find((x) => x.type === t);
-      if (!a) { a = { id: `a-${t}-${Date.now()}-${accs.length}`, code: '', name: name || defName[t], type: t }; accs.push(a); }
-      return a.id;
-    };
-    const lines = spec.map((l) => ({ accountId: resolve(l.type, l.name), debit: l.debit || 0, credit: l.credit || 0 }));
+    const lines = spec.map((l) => ({ accountId: resolveAcc(accs, defName, l.type, l.name), debit: l.debit || 0, credit: l.credit || 0 }));
     const exists = accounting.entries.some((e) => e.ref === ref);
     const entries = exists
       ? accounting.entries.map((e) => (e.ref === ref ? { ...e, y: date.y, m: date.m, d: date.d, desc, lines } : e))
@@ -189,9 +200,28 @@ function App() {
     saveAccounting({ accounts: accs, entries });
     notify(exists ? 'سندِ حسابداری به‌روزرسانی شد ✅' : 'سندِ حسابداری ثبت شد ✅ (در منوی «حسابداری»)');
   };
+  // Silent variant for modules that auto-post on every change (no toast) — used by inventory.
+  const upsertJournal = (ref: string, date: { y: number; m: number; d: number }, desc: string, spec: { type: AccType; name?: string; debit?: number; credit?: number }[]) => {
+    const defName: { [k in AccType]: string } = { asset: 'صندوق (نقد)', liability: 'حساب‌های پرداختنی', equity: 'سرمایه', income: 'درآمد', expense: 'هزینه‌ها' };
+    const accs = accounting.accounts.slice();
+    const lines = spec.filter((l) => (l.debit || 0) || (l.credit || 0)).map((l) => ({ accountId: resolveAcc(accs, defName, l.type, l.name), debit: l.debit || 0, credit: l.credit || 0 }));
+    const exists = accounting.entries.some((e) => e.ref === ref);
+    const entries = exists
+      ? accounting.entries.map((e) => (e.ref === ref ? { ...e, y: date.y, m: date.m, d: date.d, desc, lines } : e))
+      : [...accounting.entries, { id: `je-${Date.now()}`, ref, y: date.y, m: date.m, d: date.d, desc, lines }];
+    saveAccounting({ accounts: accs, entries });
+  };
+  // Remove an auto-posted entry by ref (e.g. when its source inventory transaction is deleted).
+  const removeJournal = (ref: string) => {
+    if (!accounting.entries.some((e) => e.ref === ref)) return;
+    saveAccounting({ accounts: accounting.accounts, entries: accounting.entries.filter((e) => e.ref !== ref) });
+  };
   const [showAttModal, setShowAttModal] = useState<boolean>(false);
   const [attendance, setAttendance] = useState<AttendanceState>(() => { try { const s = localStorage.getItem('attendance'); return s ? JSON.parse(s) : emptyAttendance(); } catch { return emptyAttendance(); } });
   const saveAttendance = (s: AttendanceState) => { localStorage.setItem('attendance', JSON.stringify(s)); setAttendance(s); };
+  const [showInvModal, setShowInvModal] = useState<boolean>(false);
+  const [inventory, setInventory] = useState<InventoryState>(() => { try { const s = localStorage.getItem('inventory'); return s ? JSON.parse(s) : emptyInventory(); } catch { return emptyInventory(); } });
+  const saveInventory = (s: InventoryState) => { localStorage.setItem('inventory', JSON.stringify(s)); setInventory(s); };
   const [fundStartReport, setFundStartReport] = useState<boolean>(false);
   const [theme, setTheme] = useState<'light' | 'dark'>(() => (localStorage.getItem('theme') as 'light' | 'dark') || 'light');
   const [prayerProvince, setPrayerProvince] = useState<string>(() => localStorage.getItem('prayerProvince') || 'تهران');
@@ -291,6 +321,7 @@ function App() {
       [showFundModal, () => setShowFundModal(false)],
       [showAccModal, () => setShowAccModal(false)],
       [showAttModal, () => setShowAttModal(false)],
+      [showInvModal, () => setShowInvModal(false)],
       [showAboutModal, () => setShowAboutModal(false)],
       [showYearMonthModal, () => setShowYearMonthModal(false)],
       [showDayModal, () => setShowDayModal(false)],
@@ -307,7 +338,7 @@ function App() {
       else { lastBack.current = now; setExitHint(true); setTimeout(() => setExitHint(false), 2000); }
     });
     return () => { sub.then((h) => h.remove()); };
-  }, [showTour, dialog, showAddModal, showReminderModal, showPrayerModal, showToolsModal, selectedLoanId, showLoansModal, showFundModal, showAccModal, showAttModal, showAboutModal, showYearMonthModal, showDayModal, showRightDrawer, showLeftDrawer, showWhatsNew, showOnboarding]);
+  }, [showTour, dialog, showAddModal, showReminderModal, showPrayerModal, showToolsModal, selectedLoanId, showLoansModal, showFundModal, showAccModal, showAttModal, showInvModal, showAboutModal, showYearMonthModal, showDayModal, showRightDrawer, showLeftDrawer, showWhatsNew, showOnboarding]);
 
   // هنگام تغییر تقویم، انتخابِ نظام را ذخیره و ماهِ در حال نمایش را تبدیل می‌کنیم
   const switchCalendar = (system: CalendarSystem) => {
@@ -601,7 +632,7 @@ function App() {
 
   // ---------- پشتیبان‌گیری و بازیابی ----------
   // کلیدهایی که در فایلِ پشتیبان ذخیره می‌شوند (داده‌ها + تنظیمات)
-  const BACKUP_KEYS = ['calendarData', 'funds', 'loans', 'accounting', 'attendance', 'calendarSystem', 'theme', 'prayerProvince', 'prayerCity'];
+  const BACKUP_KEYS = ['calendarData', 'funds', 'loans', 'accounting', 'attendance', 'inventory', 'calendarSystem', 'theme', 'prayerProvince', 'prayerCity'];
   const [ghRepo, setGhRepo] = useState<string>(() => localStorage.getItem('ghBackupRepo') || '');
   const [ghToken, setGhToken] = useState<string>(() => localStorage.getItem('ghBackupToken') || '');
   // حساب کاربری و همگام‌سازیِ ابری (سرورِ خودمان)
@@ -1338,6 +1369,19 @@ function App() {
                     );
                   })}
                 </div>
+                <button className="acc-addline" onClick={() => {
+                  // Borrower-side loan accounting (initial recognition):
+                  // Debit Cash (principal received) + Debit Finance cost (interest = total - principal)
+                  // Credit Loan payable (total to repay). Re-posting upserts the same ref.
+                  const interest = Math.max(0, ln.total - ln.principal);
+                  const t = getToday('jalali');
+                  const spec: { type: AccType; name?: string; debit?: number; credit?: number }[] = [
+                    { type: 'asset', name: 'صندوق (نقد)', debit: ln.principal },
+                    ...(interest > 0 ? [{ type: 'expense' as AccType, name: 'هزینه‌ی مالی (سود وام)', debit: interest }] : []),
+                    { type: 'liability', name: 'وامِ دریافتی', credit: ln.total },
+                  ];
+                  postJournal(`loan-${ln.id}`, { y: t.year, m: t.month, d: t.day }, `وامِ ${ln.name}`, spec);
+                }}>🧾 ثبتِ وام در حسابداری</button>
                 <button className="fund-delete" onClick={() => deleteLoan(ln.id)}>حذف وام</button>
               </div>
             </div>
@@ -1356,6 +1400,10 @@ function App() {
 
       {showAttModal && (
         <AttendancePanel state={attendance} onChange={saveAttendance} onClose={() => setShowAttModal(false)} confirm={askConfirm} onPostJournal={postJournal} />
+      )}
+
+      {showInvModal && (
+        <InventoryPanel state={inventory} onChange={saveInventory} onClose={() => setShowInvModal(false)} confirm={askConfirm} onPostJournal={upsertJournal} onRemoveJournal={removeJournal} />
       )}
 
       {/* منوی راست: امکانات و ابزارها */}
@@ -1380,6 +1428,7 @@ function App() {
             <button className="drawer-item" onClick={() => { setShowRightDrawer(false); setFundStartReport(true); setShowFundModal(true); }}><span className="di-icon"><IconReport /></span> گزارش صندوق</button>
             <button className="drawer-item" onClick={() => { setShowRightDrawer(false); setShowAccModal(true); }}><span className="di-icon"><IconBom /></span> حسابداری (دفترداریِ دوطرفه)</button>
             <button className="drawer-item" onClick={() => { setShowRightDrawer(false); setShowAttModal(true); }}><span className="di-icon"><IconToday /></span> حضور و غیاب</button>
+            <button className="drawer-item" onClick={() => { setShowRightDrawer(false); setShowInvModal(true); }}><span className="di-icon"><IconBom /></span> انبار</button>
             <div className="drawer-section-label">ابزارهای کاربردی</div>
             <button className="drawer-item" onClick={() => openTool('convert')}><span className="di-icon"><IconConvert /></span> تبدیل تاریخ</button>
             <button className="drawer-item" onClick={() => openTool('age')}><span className="di-icon"><IconAge /></span> محاسبه سن</button>
@@ -1455,7 +1504,7 @@ function App() {
               <button className={`theme-btn ${theme === 'dark' ? 'active' : ''}`} onClick={() => setTheme('dark')}>🌙 تیره</button>
             </div>
 
-            <div className="drawer-foot">نسخه ۱۴۰۵ · ۱.۰.۴۳</div>
+            <div className="drawer-foot">نسخه ۱۴۰۵ · ۱.۰.۴۴</div>
           </aside>
         </div>
       )}
