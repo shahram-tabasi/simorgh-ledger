@@ -12,7 +12,7 @@ const digits = (s: string): number => parseInt((s || '').replace(/[^0-9]/g, ''),
 const withSep = (s: string): string => { const d = digits(s); return d ? d.toLocaleString('en-US') : ''; };
 
 export type DayStatus = 'present' | 'absent' | 'leave' | 'holiday';
-export interface Employee { id: string; name: string; code?: string; dailyRate?: number; hourlyRate?: number; position?: string; hire?: string; managerId?: string; }
+export interface Employee { id: string; name: string; code?: string; dailyRate?: number; hourlyRate?: number; position?: string; hire?: string; managerId?: string; pay?: { [componentId: string]: number }; }
 // Per-company work rules (each company defines its own schedule).
 // weekend: weekday indices that are weekly day-off (0=شنبه … 5=پنجشنبه … 6=جمعه).
 // thuPolicy: Thursday is 'off' (full), 'early' (come but leave earlier by thuEarlyMin), or 'normal'.
@@ -101,19 +101,34 @@ export function emptyLeave(): LeaveState { return { policy: { ...DEFAULT_LEAVE_P
 // Daily punch (تردد): one clock-in / clock-out pair per day. dayKey = "y-m-d" (Jalali, 0-based month).
 export interface Punch { in: string; out: string; } // "HH:MM"
 
+// Fixed monthly salary components defined per company (اجزای حکمِ کارگزینی): housing, food, child,
+// seniority, job allowance, marriage, … plus worker-side deductions (e.g. insurance share).
+// Each employee's حکم holds an amount per component id; they flow into the payslip and payroll.
+export interface SalaryComponent { id: string; label: string; kind: 'earning' | 'deduction'; builtin?: boolean; }
+export const DEFAULT_PAY_COMPONENTS: SalaryComponent[] = [
+  { id: 'housing', label: 'حق مسکن', kind: 'earning', builtin: true },
+  { id: 'food', label: 'بنِ کارگری (خواربار)', kind: 'earning', builtin: true },
+  { id: 'child', label: 'حق اولاد', kind: 'earning', builtin: true },
+  { id: 'seniority', label: 'حق سنوات (پایهٔ سنواتی)', kind: 'earning', builtin: true },
+  { id: 'job', label: 'فوق‌العادهٔ شغل', kind: 'earning', builtin: true },
+  { id: 'marriage', label: 'حق تأهل', kind: 'earning', builtin: true },
+  { id: 'insurance', label: 'بیمه (سهمِ کارگر)', kind: 'deduction', builtin: true },
+];
+
 export interface AttendanceState {
   employees: Employee[];
   standardHours: number;                                   // ساعتِ کاریِ استانداردِ روز (پیش‌فرض ۸)
   records: { [empId: string]: { [dayKey: string]: DayStatus } }; // وضعیتِ هر روز؛ dayKey = "y-m-d" (شمسی، ماه ۰مبنا)
   overtime: { [empId: string]: { [ym: string]: number } };       // ساعتِ اضافه‌کارِ هر ماه؛ ym = "y-m"
   punches?: { [empId: string]: { [dayKey: string]: Punch } };    // ورود/خروجِ روزانه (کاردکسِ ساعتی)
+  payComponents?: SalaryComponent[];                       // company salary-component catalogue (اجزای حکم)
   // Per-month allowances/deductions for the payslip (bonuses, insurance, advances, ...).
   adjust?: { [empId: string]: { [ym: string]: { allow?: number; deduct?: number } } };
   rules?: WorkRules;                                       // company work-schedule rules
   leave?: LeaveState;                                      // leave kardex + permits + policy
 }
 
-export function emptyAttendance(): AttendanceState { return { employees: [], standardHours: 8, records: {}, overtime: {}, punches: {}, adjust: {}, rules: { ...DEFAULT_RULES }, leave: emptyLeave() }; }
+export function emptyAttendance(): AttendanceState { return { employees: [], standardHours: 8, records: {}, overtime: {}, punches: {}, payComponents: DEFAULT_PAY_COMPONENTS.map((c) => ({ ...c })), adjust: {}, rules: { ...DEFAULT_RULES }, leave: emptyLeave() }; }
 // Hours between two "HH:MM" times.
 const hoursBetween = (a: string, b: string) => { const p = (s: string) => { const [h, m] = (s || '0:0').split(':').map(Number); return (h || 0) * 60 + (m || 0); }; return Math.max(0, (p(b) - p(a)) / 60); };
 // Minutes for a "HH:MM" time.
@@ -153,6 +168,7 @@ export default function AttendancePanel({ state, onChange, onClose, confirm, onP
   const records = state.records || {};
   const overtime = state.overtime || {};
   const punches = state.punches || {};
+  const payComponents = state.payComponents && state.payComponents.length ? state.payComponents : DEFAULT_PAY_COMPONENTS;
   const monthNames = getMonthNames('jalali');
   const today = getToday('jalali');
 
@@ -257,12 +273,18 @@ export default function AttendancePanel({ state, onChange, onClose, confirm, onP
     const adj = (state.adjust || {})[e.id]?.[ym] || {};
     const allow = adj.allow || 0;                          // allowances / bonuses
     const manualDeduct = adj.deduct || 0;                  // manual deductions (insurance, advances…)
+    // Fixed monthly salary components from the حکم (housing, food, child, …) split into earnings/deductions.
+    let compEarn = 0, compDeduct = 0;
+    for (const c of payComponents) {
+      const v = e.pay?.[c.id] || 0;
+      if (c.kind === 'deduction') compDeduct += v; else compEarn += v;
+    }
     // Shortfall (تأخیر/تعجیل/کسرِ کار) and unpaid hourly leave reduce the salary.
     const shortfallPay = hrRate * (shortfallH + unpaidHours);
-    const deduct = manualDeduct + shortfallPay;
-    const pay = Math.max(0, base + otPay + allow - deduct);
+    const deduct = manualDeduct + shortfallPay + compDeduct;
+    const pay = Math.max(0, base + otPay + allow + compEarn - deduct);
     return { present, absent, leave, holiday, ot, manualOt, workedHours, workedDays, base, otPay, allow, deduct, manualDeduct, pay,
-      punchDays, lateH, earlyH, shortfallH, surplusH, paidLeaveDays, paidLeaveHours, unpaidDays, unpaidHours, shortfallPay };
+      punchDays, lateH, earlyH, shortfallH, surplusH, paidLeaveDays, paidLeaveHours, unpaidDays, unpaidHours, shortfallPay, compEarn, compDeduct };
   };
   const setAdjust = (field: 'allow' | 'deduct', val: string) => {
     if (!empId) return;
@@ -365,6 +387,13 @@ export default function AttendancePanel({ state, onChange, onClose, confirm, onP
     if (!empId) setEmpId(emp.id);
   };
   const updateEmployee = (id: string, patch: Partial<Employee>) => onChange({ ...state, employees: employees.map((e) => (e.id === id ? { ...e, ...patch } : e)), standardHours, records, overtime });
+  // Set one salary-component amount on an employee's حکم.
+  const setEmpPay = (id: string, compId: string, val: number) => updateEmployee(id, { pay: { ...(employees.find((e) => e.id === id)?.pay || {}), [compId]: val } });
+  // Company salary-component catalogue management (اجزای حکم).
+  const setComponents = (payComponents2: SalaryComponent[]) => onChange({ ...state, payComponents: payComponents2 });
+  const addComponent = (label: string, kind: 'earning' | 'deduction') => setComponents([...payComponents, { id: `pc-${Date.now()}`, label: label.trim(), kind }]);
+  const delComponent = (id: string) => setComponents(payComponents.filter((c) => c.id !== id));
+  const [pcLabel, setPcLabel] = useState(''); const [pcKind, setPcKind] = useState<'earning' | 'deduction'>('earning');
   const delEmployee = (id: string) => confirm('این کارمند و سوابقش حذف شود؟', () => {
     const recs = { ...records }; delete recs[id];
     const ots = { ...overtime }; delete ots[id];
@@ -577,7 +606,11 @@ export default function AttendancePanel({ state, onChange, onClose, confirm, onP
                         {curCalc.unpaidDays > 0 && <tr><td>مرخصیِ بدون حقوق</td><td>{curCalc.unpaidDays} روز</td></tr>}
                         <tr><td>حقوقِ پایه (شاملِ مرخصیِ با حقوق)</td><td>{fmt(curCalc.base)}</td></tr>
                         <tr><td>اضافه‌کار ({fmt(curCalc.ot)} ساعت × ۱.۴)</td><td>{fmt(curCalc.otPay)}</td></tr>
-                        <tr><td>مزایا</td><td>{fmt(curCalc.allow)}</td></tr>
+                        {/* Fixed حکم components, itemized */}
+                        {payComponents.filter((c) => (curEmp.pay?.[c.id] || 0) > 0).map((c) => (
+                          <tr key={c.id}><td>{c.label}</td><td>{c.kind === 'deduction' ? '−' : ''}{fmt(curEmp.pay![c.id])}</td></tr>
+                        ))}
+                        <tr><td>مزایای متغیر</td><td>{fmt(curCalc.allow)}</td></tr>
                         {curCalc.shortfallPay > 0 && <tr><td>کسرِ کار (تأخیر/تعجیل {(curCalc.shortfallH + curCalc.unpaidHours).toFixed(1)} ساعت)</td><td>−{fmt(curCalc.shortfallPay)}</td></tr>}
                         <tr><td>کسوراتِ دستی</td><td>−{fmt(curCalc.manualDeduct)}</td></tr>
                         <tr className="acc-total"><td>خالصِ پرداختی</td><td>{fmt(curCalc.pay)} تومان</td></tr>
@@ -620,14 +653,36 @@ export default function AttendancePanel({ state, onChange, onClose, confirm, onP
                         <tr><td>تاریخِ استخدام</td><td>{curEmp.hire || '—'}</td></tr>
                         <tr><td>حقوقِ پایه</td><td>{curEmp.dailyRate ? `روزانه ${fmt(curEmp.dailyRate)}` : ''}{curEmp.hourlyRate ? ` · ساعتی ${fmt(curEmp.hourlyRate)}` : ''}{(!curEmp.dailyRate && !curEmp.hourlyRate) ? '—' : ''}</td></tr>
                         <tr><td>ساعتِ کاریِ روز</td><td>{standardHours} ساعت</td></tr>
+                        {/* Fixed monthly salary components (اجزای حکم) that carry an amount */}
+                        {payComponents.filter((c) => (curEmp.pay?.[c.id] || 0) > 0).map((c) => (
+                          <tr key={c.id}><td>{c.label}{c.kind === 'deduction' ? ' (کسر)' : ''}</td><td>{c.kind === 'deduction' ? '−' : ''}{fmt(curEmp.pay![c.id])}</td></tr>
+                        ))}
                       </tbody>
                     </table>
                   </div>
                   {!selfMode && (
-                    <div className="att-addgrid acc-noprint">
-                      <input className="tool-text-input" type="text" placeholder="سمت / پست" value={curEmp.position || ''} onChange={(e) => updateEmployee(curEmp.id, { position: e.target.value })} />
-                      <input className="tool-text-input" type="text" placeholder="تاریخِ استخدام (مثلاً ۱۴۰۲/۰۵/۰۱)" value={curEmp.hire || ''} onChange={(e) => updateEmployee(curEmp.id, { hire: e.target.value })} />
-                    </div>
+                    <>
+                      <div className="att-addgrid acc-noprint">
+                        <input className="tool-text-input" type="text" placeholder="سمت / پست" value={curEmp.position || ''} onChange={(e) => updateEmployee(curEmp.id, { position: e.target.value })} />
+                        <input className="tool-text-input" type="text" placeholder="تاریخِ استخدام (مثلاً ۱۴۰۲/۰۵/۰۱)" value={curEmp.hire || ''} onChange={(e) => updateEmployee(curEmp.id, { hire: e.target.value })} />
+                      </div>
+                      <div className="loan-sched-head acc-noprint"><span>اجزای حکم (مزایا/کسوراتِ ماهانه)</span></div>
+                      <div className="att-comp-grid acc-noprint">
+                        {payComponents.map((c) => (
+                          <label key={c.id} className="att-comp-row">
+                            <span className={`att-comp-lbl ${c.kind === 'deduction' ? 'ded' : ''}`}>{c.label}</span>
+                            <input className="tool-text-input" type="text" inputMode="numeric" dir="ltr" value={(curEmp.pay?.[c.id]) ? withSep(String(curEmp.pay[c.id])) : ''} onChange={(e) => setEmpPay(curEmp.id, c.id, digits(e.target.value))} placeholder="0" />
+                            {!c.builtin && <button className="fm-notify" title="حذفِ این جزء از همه" onClick={() => delComponent(c.id)}>🗑</button>}
+                          </label>
+                        ))}
+                      </div>
+                      <div className="att-addgrid acc-noprint">
+                        <input className="tool-text-input" type="text" placeholder="نامِ جزءِ جدید (مثلاً حق فنی)" value={pcLabel} onChange={(e) => setPcLabel(e.target.value)} />
+                        <select className="tool-text-input" value={pcKind} onChange={(e) => setPcKind(e.target.value as 'earning' | 'deduction')}><option value="earning">مزایا (افزاینده)</option><option value="deduction">کسورات (کاهنده)</option></select>
+                        <button className="loan-submit" disabled={!pcLabel.trim()} onClick={() => { addComponent(pcLabel, pcKind); setPcLabel(''); }}>افزودنِ جزء</button>
+                      </div>
+                      <div className="tool-note">این اجزا در همه‌ی حکم‌ها مشترک‌اند؛ مبلغِ هر کارمند جداست و در فیش و حقوقِ ماهانه و حسابداری اعمال می‌شود.</div>
+                    </>
                   )}
                   <button className="loan-submit acc-noprint" onClick={() => window.print()}>🖨️ چاپِ حکم / PDF</button>
                 </>

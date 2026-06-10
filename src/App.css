@@ -2454,6 +2454,11 @@ body.dark .dash-title { color: #eef2fa; }
 .att-ktime { width: 92px; border: 1px solid #d3deee; border-radius: 6px; padding: 2px 4px; font-family: inherit; font-size: 12px; }
 .att-kbad { color: #d2453b; font-weight: 700; }
 .att-kgood { color: #2e9d5b; font-weight: 700; }
+.att-comp-grid { display: flex; flex-direction: column; gap: 6px; margin: 6px 0; }
+.att-comp-row { display: flex; align-items: center; gap: 8px; }
+.att-comp-lbl { flex: 1 1 auto; font-size: 13px; color: #2b3654; }
+.att-comp-lbl.ded { color: #d2453b; }
+.att-comp-row .tool-text-input { width: 130px; }
 .att-day.weekoff { background: #f6e9e9; border-color: #f0d2d2; }
 .att-dstat.off { color: #d2453b; }
 .att-dstat.early { color: #1c6fd6; }
