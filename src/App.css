@@ -2357,3 +2357,25 @@ body.dark .acc-print-title { color: #cfe4fb; }
   .acc-noprint { display: none !important; }
   .acc-table th { background: #eee !important; -webkit-print-color-adjust: exact; }
 }
+
+/* ==================== حضور و غیاب ==================== */
+.att-monthnav { display: flex; align-items: center; justify-content: space-between; margin: 8px 0; }
+.att-monthnav span { font-weight: 800; font-size: 15px; color: #2c3550; }
+.att-monthnav button { width: 38px; height: 38px; border-radius: 10px; border: none; background: #eef2f8; color: #2c3550; font-size: 18px; cursor: pointer; }
+.att-legend { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 11.5px; color: #6b7a93; margin: 10px 0 6px; }
+.att-hint { opacity: .8; }
+.att-chip { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; border-radius: 5px; font-size: 10px; font-weight: 800; color: #fff; }
+.att-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px; margin: 6px 0 12px; }
+.att-day { position: relative; aspect-ratio: 1; border: 1px solid #e0e6f0; border-radius: 9px; background: #fff; cursor: pointer; display: flex; align-items: center; justify-content: center; font-family: inherit; }
+.att-dnum { font-size: 13px; font-weight: 700; color: #2c3550; }
+.att-dstat { position: absolute; bottom: 2px; left: 0; right: 0; font-size: 9px; font-weight: 800; color: #fff; }
+.att-day.present, .att-chip.present { background: #2e9d5b; border-color: #2e9d5b; }
+.att-day.absent, .att-chip.absent { background: #d2453b; border-color: #d2453b; }
+.att-day.leave, .att-chip.leave { background: #e0a417; border-color: #e0a417; }
+.att-day.holiday, .att-chip.holiday { background: #8893a8; border-color: #8893a8; }
+.att-day.present .att-dnum, .att-day.absent .att-dnum, .att-day.leave .att-dnum, .att-day.holiday .att-dnum { color: #fff; }
+.att-addgrid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-top: 8px; }
+body.dark .att-monthnav span { color: #e3e9f4; }
+body.dark .att-monthnav button { background: #243049; color: #cfd7e8; }
+body.dark .att-day { background: #1b2740; border-color: #2c3850; }
+body.dark .att-dnum { color: #cfd7e8; }

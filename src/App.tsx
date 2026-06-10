@@ -31,6 +31,7 @@ import WelcomeScreen from './WelcomeScreen';
 import { Onboarding, WhatsNew } from './Onboarding';
 import FundPanel from './Fund';
 import AccountingPanel, { type AccountingState, emptyAccounting } from './Accounting';
+import AttendancePanel, { type AttendanceState, emptyAttendance } from './Attendance';
 import CoachTour, { type CoachStep } from './Coach';
 import {
   IconReport, IconBom, IconLoan, IconConvert, IconAge, IconBio, IconBmi,
@@ -132,10 +133,11 @@ const TOUR_STEPS: CoachStep[] = [
 ];
 
 // نسخه و فهرستِ تغییرات برای پنجره‌ی «تازه‌ها»
-const APP_VERSION = '1.0.40';
+const APP_VERSION = '1.0.41';
 const CHANGELOG: string[] = [
-  'ماژولِ حسابداریِ دوطرفه (Double-entry): ثبتِ سند با بدهکار/بستانکار، دفترِ معین، تراز آزمایشی و صورتِ سود و زیان',
-  'گزارش‌ها قابلِ چاپ و ذخیره به PDF هستند — از منوی «حسابداری»',
+  'ماژولِ «حضور و غیاب»: ثبتِ روزانه‌ی حاضر/غایب/مرخصی، محاسبه‌ی کارکرد و اضافه‌کار و حقوقِ تخمینی + گزارشِ ماهانه‌ی قابلِ چاپ',
+  'حسابداری: «ترازنامه» هم اضافه شد (دارایی = بدهی + سرمایه + سود)',
+  'فایلِ ROADMAP.md با نقشه‌ی راه و تحلیلِ رقبا به پروژه اضافه شد',
 ];
 
 function App() {
@@ -167,6 +169,9 @@ function App() {
   const [showAccModal, setShowAccModal] = useState<boolean>(false);
   const [accounting, setAccounting] = useState<AccountingState>(() => { try { const s = localStorage.getItem('accounting'); return s ? JSON.parse(s) : emptyAccounting(); } catch { return emptyAccounting(); } });
   const saveAccounting = (s: AccountingState) => { localStorage.setItem('accounting', JSON.stringify(s)); setAccounting(s); };
+  const [showAttModal, setShowAttModal] = useState<boolean>(false);
+  const [attendance, setAttendance] = useState<AttendanceState>(() => { try { const s = localStorage.getItem('attendance'); return s ? JSON.parse(s) : emptyAttendance(); } catch { return emptyAttendance(); } });
+  const saveAttendance = (s: AttendanceState) => { localStorage.setItem('attendance', JSON.stringify(s)); setAttendance(s); };
   const [fundStartReport, setFundStartReport] = useState<boolean>(false);
   const [theme, setTheme] = useState<'light' | 'dark'>(() => (localStorage.getItem('theme') as 'light' | 'dark') || 'light');
   const [prayerProvince, setPrayerProvince] = useState<string>(() => localStorage.getItem('prayerProvince') || 'تهران');
@@ -265,6 +270,7 @@ function App() {
       [showLoansModal, () => setShowLoansModal(false)],
       [showFundModal, () => setShowFundModal(false)],
       [showAccModal, () => setShowAccModal(false)],
+      [showAttModal, () => setShowAttModal(false)],
       [showAboutModal, () => setShowAboutModal(false)],
       [showYearMonthModal, () => setShowYearMonthModal(false)],
       [showDayModal, () => setShowDayModal(false)],
@@ -281,7 +287,7 @@ function App() {
       else { lastBack.current = now; setExitHint(true); setTimeout(() => setExitHint(false), 2000); }
     });
     return () => { sub.then((h) => h.remove()); };
-  }, [showTour, dialog, showAddModal, showReminderModal, showPrayerModal, showToolsModal, selectedLoanId, showLoansModal, showFundModal, showAccModal, showAboutModal, showYearMonthModal, showDayModal, showRightDrawer, showLeftDrawer, showWhatsNew, showOnboarding]);
+  }, [showTour, dialog, showAddModal, showReminderModal, showPrayerModal, showToolsModal, selectedLoanId, showLoansModal, showFundModal, showAccModal, showAttModal, showAboutModal, showYearMonthModal, showDayModal, showRightDrawer, showLeftDrawer, showWhatsNew, showOnboarding]);
 
   // هنگام تغییر تقویم، انتخابِ نظام را ذخیره و ماهِ در حال نمایش را تبدیل می‌کنیم
   const switchCalendar = (system: CalendarSystem) => {
@@ -575,7 +581,7 @@ function App() {
 
   // ---------- پشتیبان‌گیری و بازیابی ----------
   // کلیدهایی که در فایلِ پشتیبان ذخیره می‌شوند (داده‌ها + تنظیمات)
-  const BACKUP_KEYS = ['calendarData', 'funds', 'loans', 'accounting', 'calendarSystem', 'theme', 'prayerProvince', 'prayerCity'];
+  const BACKUP_KEYS = ['calendarData', 'funds', 'loans', 'accounting', 'attendance', 'calendarSystem', 'theme', 'prayerProvince', 'prayerCity'];
   const [ghRepo, setGhRepo] = useState<string>(() => localStorage.getItem('ghBackupRepo') || '');
   const [ghToken, setGhToken] = useState<string>(() => localStorage.getItem('ghBackupToken') || '');
   // حساب کاربری و همگام‌سازیِ ابری (سرورِ خودمان)
@@ -1328,6 +1334,10 @@ function App() {
         <AccountingPanel state={accounting} onChange={saveAccounting} onClose={() => setShowAccModal(false)} confirm={askConfirm} />
       )}
 
+      {showAttModal && (
+        <AttendancePanel state={attendance} onChange={saveAttendance} onClose={() => setShowAttModal(false)} confirm={askConfirm} />
+      )}
+
       {/* منوی راست: امکانات و ابزارها */}
       {showRightDrawer && (
         <div className="drawer-overlay" onClick={() => setShowRightDrawer(false)}>
@@ -1349,6 +1359,7 @@ function App() {
             <button className="drawer-item" onClick={() => { setShowRightDrawer(false); setFundStartReport(false); setShowFundModal(true); }}><span className="di-icon"><IconUsers /></span> صندوق خانوادگی</button>
             <button className="drawer-item" onClick={() => { setShowRightDrawer(false); setFundStartReport(true); setShowFundModal(true); }}><span className="di-icon"><IconReport /></span> گزارش صندوق</button>
             <button className="drawer-item" onClick={() => { setShowRightDrawer(false); setShowAccModal(true); }}><span className="di-icon"><IconBom /></span> حسابداری (دفترداریِ دوطرفه)</button>
+            <button className="drawer-item" onClick={() => { setShowRightDrawer(false); setShowAttModal(true); }}><span className="di-icon"><IconToday /></span> حضور و غیاب</button>
             <div className="drawer-section-label">ابزارهای کاربردی</div>
             <button className="drawer-item" onClick={() => openTool('convert')}><span className="di-icon"><IconConvert /></span> تبدیل تاریخ</button>
             <button className="drawer-item" onClick={() => openTool('age')}><span className="di-icon"><IconAge /></span> محاسبه سن</button>
@@ -1424,7 +1435,7 @@ function App() {
               <button className={`theme-btn ${theme === 'dark' ? 'active' : ''}`} onClick={() => setTheme('dark')}>🌙 تیره</button>
             </div>
 
-            <div className="drawer-foot">نسخه ۱۴۰۵ · ۱.۰.۴۰</div>
+            <div className="drawer-foot">نسخه ۱۴۰۵ · ۱.۰.۴۱</div>
           </aside>
         </div>
       )}

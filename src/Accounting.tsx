@@ -102,6 +102,13 @@ export default function AccountingPanel({ state, onChange, onClose, confirm }: P
   const incomeTotal = sums.filter((x) => x.a.type === 'income').reduce((s, x) => s + x.bal, 0);
   const expenseTotal = sums.filter((x) => x.a.type === 'expense').reduce((s, x) => s + x.bal, 0);
   const profit = incomeTotal - expenseTotal;
+  // ترازنامه: دارایی‌ها = بدهی‌ها + سرمایه + سودِ انباشته (سود و زیانِ دوره)
+  // (مانده‌ی هر گروه با علامتِ طبیعیِ خودش جمع می‌شود)
+  const assetsTotal = sums.filter((x) => x.a.type === 'asset').reduce((s, x) => s + x.bal, 0);
+  const liabilitiesTotal = sums.filter((x) => x.a.type === 'liability').reduce((s, x) => s + x.bal, 0);
+  const equityTotal = sums.filter((x) => x.a.type === 'equity').reduce((s, x) => s + x.bal, 0);
+  const equityPlusProfit = equityTotal + profit;          // سرمایه + سودِ دوره
+  const balanceSheetOk = Math.round(assetsTotal) === Math.round(liabilitiesTotal + equityPlusProfit);
 
   const [ledgerAcc, setLedgerAcc] = useState<string>(accounts[0]?.id || '');
   const ledgerRows = (() => {
@@ -223,6 +230,16 @@ export default function AccountingPanel({ state, onChange, onClose, confirm }: P
                     <tr><td>جمعِ درآمد</td><td>{fmt(incomeTotal)}</td></tr>
                     <tr><td>جمعِ هزینه</td><td>{fmt(expenseTotal)}</td></tr>
                     <tr className="acc-total"><td>{profit >= 0 ? 'سودِ خالص' : 'زیانِ خالص'}</td><td>{fmt(Math.abs(profit))}</td></tr>
+                  </tbody>
+                </table>
+
+                <div className="acc-print-title">ترازنامه</div>
+                <table className="acc-table">
+                  <tbody>
+                    <tr><td>جمعِ دارایی‌ها</td><td>{fmt(assetsTotal)}</td></tr>
+                    <tr><td>جمعِ بدهی‌ها</td><td>{fmt(liabilitiesTotal)}</td></tr>
+                    <tr><td>سرمایه + سودِ دوره</td><td>{fmt(equityPlusProfit)}</td></tr>
+                    <tr className="acc-total"><td>بدهی + سرمایه + سود</td><td>{fmt(liabilitiesTotal + equityPlusProfit)} {balanceSheetOk ? '✓' : '(ناتراز)'}</td></tr>
                   </tbody>
                 </table>
 
