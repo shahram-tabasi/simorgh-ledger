@@ -1,0 +1,58 @@
+name: Build iOS IPA (unsigned)
+
+# این ورک‌فلو یک فایلِ .ipaِ امضانشده می‌سازد.
+# برای نصب روی آیفون باید فروشگاهِ ایرانی (سیب‌اپ/سیبچه/…) آن را با گواهیِ Enterprise خودش امضا کند.
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-14
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '22'
+
+    - name: Install dependencies
+      run: npm install
+
+    - name: Build web app
+      run: npm run build
+
+    - name: Add iOS platform
+      run: npx cap add ios
+
+    - name: Sync Capacitor (iOS)
+      run: npx cap sync ios
+
+    - name: Build unsigned archive
+      run: |
+        cd ios/App
+        xcodebuild \
+          -workspace App.xcworkspace \
+          -scheme App \
+          -configuration Release \
+          -sdk iphoneos \
+          -archivePath "$PWD/build/App.xcarchive" \
+          archive \
+          CODE_SIGNING_ALLOWED=NO \
+          CODE_SIGNING_REQUIRED=NO \
+          CODE_SIGN_IDENTITY="" \
+          DEVELOPMENT_TEAM=""
+
+    - name: Package unsigned IPA
+      run: |
+        cd ios/App
+        mkdir -p Payload
+        cp -R build/App.xcarchive/Products/Applications/App.app Payload/App.app
+        zip -qry "$GITHUB_WORKSPACE/simorgh-ledger-ios-unsigned.ipa" Payload
+
+    - name: Upload IPA
+      uses: actions/upload-artifact@v4
+      with:
+        name: simorgh-ledger-ios
+        path: simorgh-ledger-ios-unsigned.ipa
