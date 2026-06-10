@@ -106,12 +106,14 @@ flowchart TD
 - ✓ User account + cloud sync (Node + PostgreSQL)
 - ✓ Double-entry accounting (journal / trial balance / ledger / P&L / balance sheet / print)
 - ✓ Attendance (employees, daily log, work-time/overtime, payroll, monthly report)
-- ✓ Integration: attendance payroll → accounting; fund cash position → accounting (`postJournal`)
-- ◻ Integration: loan installments → accounting (disbursement, principal, interest→income)
-- ◻ Inventory module (items, in/out, stock, invoices)
-- ◻ Full payroll (payslip from attendance → auto journal)
-- ◻ Relational storage of journal on server (instead of blob) for heavy reports & multi-user
-- ◻ Roles, multi-company/multi-book, Excel export, statutory reports
+- ✓ Integration: attendance payroll → accounting; fund cash position → accounting; loan → accounting (`postJournal`)
+- ✓ Inventory module (items, in/out, stock, value, report) with auto-accounting (purchase/sale → journal)
+- ✓ Payslip (base + overtime + allowances − deductions = net), printable
+- ✓ Access control: groups + permissions + users, device-side gating, admin PIN, worker self-service mode
+- ◻ Windows desktop installer (.exe) via Electron + Windows CI  ← NEXT
+- ◻ CSV/Excel export of all reports
+- ◻ Server-enforced multi-user auth & permissions (real security) + relational journal storage
+- ◻ Multi-company/multi-book, statutory reports, personnel order (حکم کارگزینی)
 
 ## Coding conventions
 - Each module is a self-contained component with `state / onChange / onClose / confirm` props.
