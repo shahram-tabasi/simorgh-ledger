@@ -44,22 +44,26 @@ export interface LeaveType {
   unit: 'day' | 'hour';
   paid: boolean;
   fromBalance: boolean;
+  category?: string;       // نوعِ مجوز (grouping for the worker's two-step combobox) e.g. «کسر حضور ساعتی»
   enabled?: boolean;
   requireReason?: boolean;
   maxDays?: number;        // 0 = no cap
+  isMission?: boolean;     // mission permit → show origin/destination/subject fields
   builtin?: boolean;
 }
-// Default catalogue (user can add/edit/disable these). Mirrors Kasra's مجوز vocabulary.
+// Default catalogue (user can add/edit/disable these). Mirrors Kasra's مجوز vocabulary, grouped by category.
 export const DEFAULT_LEAVE_TYPES: LeaveType[] = [
-  { id: 'ent_day', label: 'استحقاقی روزانه', unit: 'day', paid: true, fromBalance: true, enabled: true, builtin: true },
-  { id: 'ent_hour', label: 'استحقاقی ساعتی', unit: 'hour', paid: true, fromBalance: true, enabled: true, builtin: true },
-  { id: 'sick', label: 'استعلاجی', unit: 'day', paid: true, fromBalance: false, enabled: true, requireReason: true, builtin: true },
-  { id: 'unpaid', label: 'بدون حقوق', unit: 'day', paid: false, fromBalance: false, enabled: true, requireReason: true, builtin: true },
-  { id: 'mission_day', label: 'مأموریت روزانه', unit: 'day', paid: true, fromBalance: false, enabled: true, requireReason: true, builtin: true },
-  { id: 'mission_hour', label: 'مأموریت ساعتی', unit: 'hour', paid: true, fromBalance: false, enabled: true, requireReason: true, builtin: true },
-  { id: 'study_day', label: 'تحصیلی روزانه', unit: 'day', paid: true, fromBalance: false, enabled: true, builtin: true },
-  { id: 'study_hour', label: 'تحصیلی ساعتی', unit: 'hour', paid: true, fromBalance: false, enabled: true, builtin: true },
-  { id: 'entry', label: 'ثبتِ تردد', unit: 'hour', paid: true, fromBalance: false, enabled: true, requireReason: true, builtin: true },
+  { id: 'ent_day', label: 'استحقاقی روزانه', unit: 'day', paid: true, fromBalance: true, category: 'کسر حضور روزانه', enabled: true, builtin: true },
+  { id: 'ent_hour', label: 'استحقاقی ساعتی', unit: 'hour', paid: true, fromBalance: true, category: 'کسر حضور ساعتی', enabled: true, builtin: true },
+  { id: 'sick', label: 'استعلاجی', unit: 'day', paid: true, fromBalance: false, category: 'کسر حضور روزانه', enabled: true, requireReason: true, builtin: true },
+  { id: 'unpaid', label: 'بدون حقوق', unit: 'day', paid: false, fromBalance: false, category: 'کسر حضور روزانه', enabled: true, requireReason: true, builtin: true },
+  { id: 'exit', label: 'مجوزِ خروج', unit: 'hour', paid: true, fromBalance: false, category: 'کسر حضور ساعتی', enabled: true, builtin: true },
+  { id: 'study_day', label: 'مرخصیِ تحصیلی روزانه', unit: 'day', paid: true, fromBalance: false, category: 'کسر حضور روزانه', enabled: true, builtin: true },
+  { id: 'study_hour', label: 'مرخصیِ تحصیلی ساعتی', unit: 'hour', paid: true, fromBalance: false, category: 'کسر حضور ساعتی', enabled: true, builtin: true },
+  { id: 'mission_day', label: 'مأموریت برون‌شهری روزانه', unit: 'day', paid: true, fromBalance: false, category: 'مأموریت', enabled: true, requireReason: true, isMission: true, builtin: true },
+  { id: 'mission_hour', label: 'مأموریت درون‌شهری ساعتی', unit: 'hour', paid: true, fromBalance: false, category: 'مأموریت', enabled: true, requireReason: true, isMission: true, builtin: true },
+  { id: 'overtime', label: 'مازادِ حضور (اضافه‌کار)', unit: 'hour', paid: true, fromBalance: false, category: 'مازاد حضور', enabled: true, builtin: true },
+  { id: 'entry', label: 'ثبتِ تردد', unit: 'hour', paid: true, fromBalance: false, category: 'مازاد حضور', enabled: true, requireReason: true, builtin: true },
 ];
 // A single approval action taken by one approver in the chain (کارتابل).
 export interface LeaveApproval { by: string; at: string; result: 'approved' | 'rejected'; }
@@ -71,6 +75,10 @@ export interface LeaveRequest {
   year: number;            // Jalali year the request belongs to (for the annual kardex)
   from: string;            // free Jalali date text e.g. "۱۴۰۵/۰۳/۱۲" (used to bucket into a payroll month)
   to: string;
+  fromTime?: string;       // از ساعت (for hourly permits) "HH:MM"
+  toTime?: string;         // تا ساعت
+  substitute?: string;     // جانشین — covering employee id
+  mission?: { origin?: string; dest?: string; subject?: string }; // mission-only fields (مبدا/مقصد/موضوع)
   days: number;            // amount: working days, or hours when the type's unit is 'hour'
   reason?: string;
   status: LeaveStatus;
@@ -329,17 +337,24 @@ export default function AttendancePanel({ state, onChange, onClose, confirm, onP
   // ---------- type catalogue management (the user-extendable combobox) ----------
   const setTypes = (types: LeaveType[]) => setLeave({ types });
   const updateType = (id: string, patch: Partial<LeaveType>) => setTypes(leaveTypes.map((t) => (t.id === id ? { ...t, ...patch } : t)));
-  const addType = (label: string, unit: 'day' | 'hour', paid: boolean, fromBalance: boolean) =>
-    setTypes([...leaveTypes, { id: `lt-${Date.now()}`, label: label.trim(), unit, paid, fromBalance, enabled: true }]);
+  const addType = (label: string, unit: 'day' | 'hour', paid: boolean, fromBalance: boolean, category: string) =>
+    setTypes([...leaveTypes, { id: `lt-${Date.now()}`, label: label.trim(), unit, paid, fromBalance, category: category.trim() || 'سایر', enabled: true }]);
   const delType = (id: string) => setTypes(leaveTypes.filter((t) => t.id !== id));
   const enabledTypes = leaveTypes.filter((t) => t.enabled !== false);
-  // New-request form state.
+  // Distinct categories (نوعِ مجوز) for the worker's first combobox.
+  const leaveCats = [...new Set(enabledTypes.map((t) => t.category || 'سایر'))];
+  // New-request form state. lkCat = category, lkKind = the specific permit within it.
+  const [lkCat, setLkCat] = useState<string>(enabledTypes[0]?.category || leaveCats[0] || '');
+  const typesInCat = enabledTypes.filter((t) => (t.category || 'سایر') === lkCat);
   const [lkKind, setLkKind] = useState<LeaveKind>(enabledTypes[0]?.id || 'ent_day');
   const [lkFrom, setLkFrom] = useState(''); const [lkTo, setLkTo] = useState('');
-  const [lkDays, setLkDays] = useState(''); const [lkReason, setLkReason] = useState('');
+  const [lkFromTime, setLkFromTime] = useState(''); const [lkToTime, setLkToTime] = useState('');
+  const [lkSub, setLkSub] = useState(''); const [lkDays, setLkDays] = useState(''); const [lkReason, setLkReason] = useState('');
+  const [lkOrigin, setLkOrigin] = useState(''); const [lkDest, setLkDest] = useState(''); const [lkSubject, setLkSubject] = useState('');
+  const curType = typeOf(lkKind);
   // New leave-type form state (the user-extendable combobox catalogue).
   const [ntLabel, setNtLabel] = useState(''); const [ntUnit, setNtUnit] = useState<'day' | 'hour'>('day');
-  const [ntPaid, setNtPaid] = useState(true); const [ntBalance, setNtBalance] = useState(false);
+  const [ntPaid, setNtPaid] = useState(true); const [ntBalance, setNtBalance] = useState(false); const [ntCat, setNtCat] = useState('');
   const submitLeave = () => {
     if (!empId || !lkDays) return;
     const rule = typeOf(lkKind);
@@ -350,11 +365,16 @@ export default function AttendancePanel({ state, onChange, onClose, confirm, onP
     const chain = managerChain(empId); // route up the manager hierarchy
     const req: LeaveRequest = {
       id: `lv-${Date.now()}`, empId, kind: lkKind, year: y,
-      from: lkFrom.trim(), to: lkTo.trim(), days,
+      from: lkFrom.trim(), to: lkTo.trim(),
+      fromTime: rule.unit === 'hour' ? (lkFromTime || undefined) : undefined,
+      toTime: rule.unit === 'hour' ? (lkToTime || undefined) : undefined,
+      substitute: lkSub || undefined,
+      mission: rule.isMission ? { origin: lkOrigin.trim() || undefined, dest: lkDest.trim() || undefined, subject: lkSubject.trim() || undefined } : undefined,
+      days,
       reason: lkReason.trim() || undefined, status: 'pending', chain, level: 0, approvals: [], createdAt: new Date().toISOString(),
     };
     setLeave({ requests: [req, ...(leave.requests || [])] });
-    setLkFrom(''); setLkTo(''); setLkDays(''); setLkReason('');
+    setLkFrom(''); setLkTo(''); setLkFromTime(''); setLkToTime(''); setLkSub(''); setLkDays(''); setLkReason(''); setLkOrigin(''); setLkDest(''); setLkSubject('');
   };
   // Approve/reject by the current approver. Approving advances up the chain; the last approver finalizes.
   const actLeave = (id: string, result: 'approved' | 'rejected', byEmpId?: string) => {
@@ -742,18 +762,44 @@ export default function AttendancePanel({ state, onChange, onClose, confirm, onP
                 );
               })()}
 
-              {/* new permit form (ثبتِ مجوز) — type chosen from the user-extendable combobox */}
+              {/* new permit form (ثبتِ مجوز) — two-step combobox: نوعِ مجوز (category) → مجوز (type) */}
               <div className="loan-sched-head"><span>ثبتِ درخواستِ جدید</span></div>
-              <label className="field-label">نوعِ مجوز</label>
-              <select className="tool-text-input" value={lkKind} onChange={(e) => setLkKind(e.target.value)}>
-                {enabledTypes.map((t) => <option key={t.id} value={t.id}>{t.label} ({t.unit === 'hour' ? 'ساعتی' : 'روزانه'}{t.paid ? '' : ' · بدون حقوق'})</option>)}
-              </select>
+              <div className="att-addgrid">
+                <div><label className="field-label">نوعِ مجوز</label>
+                  <select className="tool-text-input" value={lkCat} onChange={(e) => { setLkCat(e.target.value); const first = enabledTypes.find((t) => (t.category || 'سایر') === e.target.value); if (first) setLkKind(first.id); }}>
+                    {leaveCats.map((c) => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </div>
+                <div><label className="field-label">مجوز</label>
+                  <select className="tool-text-input" value={lkKind} onChange={(e) => setLkKind(e.target.value)}>
+                    {typesInCat.map((t) => <option key={t.id} value={t.id}>{t.label}{t.paid ? '' : ' · بدون حقوق'}</option>)}
+                  </select>
+                </div>
+              </div>
               <div className="att-addgrid">
                 <input className="tool-text-input" type="text" dir="ltr" placeholder="از تاریخ (۱۴۰۵/۰۳/۱۲)" value={lkFrom} onChange={(e) => setLkFrom(e.target.value)} />
                 <input className="tool-text-input" type="text" dir="ltr" placeholder="تا تاریخ" value={lkTo} onChange={(e) => setLkTo(e.target.value)} />
-                <input className="tool-text-input" type="text" inputMode="decimal" dir="ltr" placeholder={typeOf(lkKind).unit === 'hour' ? 'تعداد ساعت' : 'تعداد روز'} value={lkDays} onChange={(e) => setLkDays(e.target.value.replace(/[^0-9.]/g, ''))} />
+                <input className="tool-text-input" type="text" inputMode="decimal" dir="ltr" placeholder={curType.unit === 'hour' ? 'تعداد ساعت' : 'تعداد روز'} value={lkDays} onChange={(e) => setLkDays(e.target.value.replace(/[^0-9.]/g, ''))} />
               </div>
-              <input className="tool-text-input" type="text" placeholder={typeOf(lkKind).requireReason ? 'توضیح / علت (الزامی)' : 'توضیح / علت (اختیاری)'} value={lkReason} onChange={(e) => setLkReason(e.target.value)} />
+              {curType.unit === 'hour' && (
+                <div className="att-addgrid">
+                  <div><label className="field-label">از ساعت</label><input className="tool-text-input" type="time" dir="ltr" value={lkFromTime} onChange={(e) => setLkFromTime(e.target.value)} /></div>
+                  <div><label className="field-label">تا ساعت</label><input className="tool-text-input" type="time" dir="ltr" value={lkToTime} onChange={(e) => setLkToTime(e.target.value)} /></div>
+                </div>
+              )}
+              {curType.isMission && (
+                <div className="att-addgrid">
+                  <input className="tool-text-input" type="text" placeholder="شهرِ مبدا" value={lkOrigin} onChange={(e) => setLkOrigin(e.target.value)} />
+                  <input className="tool-text-input" type="text" placeholder="شهرِ مقصد" value={lkDest} onChange={(e) => setLkDest(e.target.value)} />
+                  <input className="tool-text-input" type="text" placeholder="موضوع / پروژه" value={lkSubject} onChange={(e) => setLkSubject(e.target.value)} />
+                </div>
+              )}
+              <label className="field-label">جانشین (اختیاری)</label>
+              <select className="tool-text-input" value={lkSub} onChange={(e) => setLkSub(e.target.value)}>
+                <option value="">— بدون جانشین —</option>
+                {employees.filter((e) => e.id !== empId).map((e) => <option key={e.id} value={e.id}>{e.name}</option>)}
+              </select>
+              <input className="tool-text-input" type="text" placeholder={curType.requireReason ? 'شرح / علت (الزامی)' : 'شرح / علت (اختیاری)'} value={lkReason} onChange={(e) => setLkReason(e.target.value)} />
               <button className="loan-submit" disabled={!lkDays || parseFloat(lkDays) <= 0} onClick={submitLeave}>ثبتِ درخواست</button>
               <div className="tool-note">{(() => { const ch = managerChain(empId); return ch.length ? `این درخواست به کارتابلِ «${nameOf(ch[0])}» می‌رود و به‌ترتیب تا «${nameOf(ch[ch.length - 1])}» تایید می‌شود (${ch.length} سطح).` : 'برای این کارمند سرپرستی تعریف نشده؛ درخواست در کارتابلِ مدیرِ ارشد قرار می‌گیرد. سرپرست را در تبِ «کارمندان» مشخص کنید.'; })()}</div>
 
@@ -771,7 +817,7 @@ export default function AttendancePanel({ state, onChange, onClose, confirm, onP
                     <div key={r.id} className="loan-detail-row">
                       <div className="ld-info">
                         <span className="ld-amt">{typeOf(r.kind).label} · {fmt(r.days)} {typeOf(r.kind).unit === 'hour' ? 'ساعت' : 'روز'} <span className={`att-statpill ${cls}`}>{statusText}</span></span>
-                        <span className="ld-date">{r.from || '—'}{r.to ? ` تا ${r.to}` : ''}{r.reason ? ` · ${r.reason}` : ''}</span>
+                        <span className="ld-date">{r.from || '—'}{r.to ? ` تا ${r.to}` : ''}{r.fromTime ? ` · ${r.fromTime}${r.toTime ? `–${r.toTime}` : ''}` : ''}{r.substitute ? ` · جانشین: ${nameOf(r.substitute)}` : ''}{r.mission?.dest ? ` · مقصد: ${r.mission.dest}` : ''}{r.reason ? ` · ${r.reason}` : ''}</span>
                       </div>
                       <div className="att-approw">
                         {!selfMode && r.status === 'pending' && (
@@ -807,6 +853,7 @@ export default function AttendancePanel({ state, onChange, onClose, confirm, onP
                     {leaveTypes.map((t) => (
                       <div key={t.id} className="att-kindrow">
                         <input className="tool-text-input att-typename" type="text" value={t.label} onChange={(e) => updateType(t.id, { label: e.target.value })} />
+                        <input className="tool-text-input att-typecat" type="text" placeholder="نوعِ مجوز" value={t.category || ''} onChange={(e) => updateType(t.id, { category: e.target.value })} />
                         <select className="tool-text-input att-typesel" value={t.unit} onChange={(e) => updateType(t.id, { unit: e.target.value as 'day' | 'hour' })}>
                           <option value="day">روزانه</option><option value="hour">ساعتی</option>
                         </select>
@@ -820,12 +867,13 @@ export default function AttendancePanel({ state, onChange, onClose, confirm, onP
                   </div>
                   <div className="att-addgrid">
                     <input className="tool-text-input" type="text" placeholder="نامِ نوعِ جدید (مثلاً مرخصیِ تشویقی)" value={ntLabel} onChange={(e) => setNtLabel(e.target.value)} />
+                    <input className="tool-text-input" type="text" placeholder="نوعِ مجوز (دسته)" value={ntCat} onChange={(e) => setNtCat(e.target.value)} />
                     <select className="tool-text-input" value={ntUnit} onChange={(e) => setNtUnit(e.target.value as 'day' | 'hour')}><option value="day">روزانه</option><option value="hour">ساعتی</option></select>
                   </div>
                   <div className="att-addgrid">
                     <label className="att-kindopt"><input type="checkbox" checked={ntPaid} onChange={(e) => setNtPaid(e.target.checked)} /> با حقوق</label>
                     <label className="att-kindopt"><input type="checkbox" checked={ntBalance} onChange={(e) => setNtBalance(e.target.checked)} /> از مانده‌ی استحقاقی</label>
-                    <button className="loan-submit" disabled={!ntLabel.trim()} onClick={() => { addType(ntLabel, ntUnit, ntPaid, ntBalance); setNtLabel(''); }}>افزودنِ نوع</button>
+                    <button className="loan-submit" disabled={!ntLabel.trim()} onClick={() => { addType(ntLabel, ntUnit, ntPaid, ntBalance, ntCat); setNtLabel(''); setNtCat(''); }}>افزودنِ نوع</button>
                   </div>
                   <button className="acc-addline acc-noprint" onClick={() => downloadCsv(`leave-${y}.csv`, [['کارمند', 'استحقاقی', 'ذخیره', 'کسرشده', 'مانده', 'قابلِ ذخیره'], ...employees.map((e) => { const k = leaveKardex(e); return [e.name, policy.annualEntitled, k.carryIn, k.used, k.remaining, k.saveable]; })])}>📤 خروجیِ اکسلِ کاردکس (CSV)</button>
                 </>

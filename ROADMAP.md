@@ -121,6 +121,8 @@ flowchart TD
       each with its own rules (enabled, reason-required, max-days)
 - ✓ **User-definable leave/permit types** (the combobox the user can extend): per type unit (day/hour),
       pay treatment (paid/unpaid) and whether it draws the annual استحقاقی balance — directly drives payroll
+- ✓ **Kasra-style worker request form**: two-step combobox نوعِ مجوز (category) → مجوز (type), grouped by
+      category; extra fields از ساعت/تا ساعت (hourly), جانشین (substitute), and mission مبدا/مقصد/موضوع
 - ✓ **Daily punch kardex** (کارکرد روزانه): clock-in/out per day → worked, late (تأخیر), early-leave (تعجیل),
       shortfall (کسرِ کار) and surplus (مازادِ حضور) computed against the company work rules; CSV export
 - ✓ **Integrated payroll**: base = worked days/hours + PAID leave; overtime = manual + punch surplus (×1.4);

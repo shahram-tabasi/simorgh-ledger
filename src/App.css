@@ -2443,7 +2443,8 @@ body.dark .dash-title { color: #eef2fa; }
 .att-kindmax { width: 92px; padding: 4px 8px; font-size: 12px; }
 .att-mgrsel { margin-top: 6px; padding: 4px 8px; font-size: 12px; }
 .att-emprow .ld-info { flex: 1; }
-.att-typename { flex: 1 1 130px; padding: 4px 8px; font-size: 12px; }
+.att-typename { flex: 1 1 110px; padding: 4px 8px; font-size: 12px; }
+.att-typecat { flex: 0 1 110px; padding: 4px 8px; font-size: 12px; }
 .att-typesel { width: 84px; padding: 4px 6px; font-size: 12px; }
 .att-kardex-wrap { max-height: 360px; overflow-y: auto; border: 1px solid #e3eaf4; border-radius: 10px; margin: 6px 0; }
 .att-kardex { font-size: 12px; }
