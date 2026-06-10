@@ -2443,6 +2443,17 @@ body.dark .dash-title { color: #eef2fa; }
 .att-kindmax { width: 92px; padding: 4px 8px; font-size: 12px; }
 .att-mgrsel { margin-top: 6px; padding: 4px 8px; font-size: 12px; }
 .att-emprow .ld-info { flex: 1; }
+.att-typename { flex: 1 1 130px; padding: 4px 8px; font-size: 12px; }
+.att-typesel { width: 84px; padding: 4px 6px; font-size: 12px; }
+.att-kardex-wrap { max-height: 360px; overflow-y: auto; border: 1px solid #e3eaf4; border-radius: 10px; margin: 6px 0; }
+.att-kardex { font-size: 12px; }
+.att-kardex th { position: sticky; top: 0; background: #f3f7fc; z-index: 1; }
+.att-kardex td { text-align: center; padding: 2px 4px; }
+.att-krow-off td { background: #f6e9e9; }
+.att-krow-wd { font-size: 10px; opacity: .6; }
+.att-ktime { width: 92px; border: 1px solid #d3deee; border-radius: 6px; padding: 2px 4px; font-family: inherit; font-size: 12px; }
+.att-kbad { color: #d2453b; font-weight: 700; }
+.att-kgood { color: #2e9d5b; font-weight: 700; }
 .att-day.weekoff { background: #f6e9e9; border-color: #f0d2d2; }
 .att-dstat.off { color: #d2453b; }
 .att-dstat.early { color: #1c6fd6; }

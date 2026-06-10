@@ -119,6 +119,12 @@ flowchart TD
       (سرپرست → مدیر → …) and each manager sees only requests awaiting them; admin (مدیرِ ارشد) sees all + history
 - ✓ Request types beyond leave: روزانه / ساعتی / استعلاجی / بدون حقوق / مأموریت / **ثبتِ تردد** (punch correction),
       each with its own rules (enabled, reason-required, max-days)
+- ✓ **User-definable leave/permit types** (the combobox the user can extend): per type unit (day/hour),
+      pay treatment (paid/unpaid) and whether it draws the annual استحقاقی balance — directly drives payroll
+- ✓ **Daily punch kardex** (کارکرد روزانه): clock-in/out per day → worked, late (تأخیر), early-leave (تعجیل),
+      shortfall (کسرِ کار) and surplus (مازادِ حضور) computed against the company work rules; CSV export
+- ✓ **Integrated payroll**: base = worked days/hours + PAID leave; overtime = manual + punch surplus (×1.4);
+      shortfall + unpaid hourly leave reduce salary; fuller payslip lines
 - ◻ Windows desktop installer (.exe) via Electron + Windows CI  (deferred — not yet)
 - ◻ Attendance device matching: face / fingerprint / RFID-card readers
       - phase 1: device biometric unlock (WebAuthn / Capacitor biometric) for worker self check-in

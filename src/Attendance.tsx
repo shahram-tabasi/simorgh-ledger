@@ -28,28 +28,50 @@ export interface WorkRules {
 }
 export const DEFAULT_RULES: WorkRules = { start: '08:00', end: '16:00', weekend: [6], thuPolicy: 'normal', thuEarlyMin: 90, shift2: null, altWeeksOff: false, note: '' };
 
-// ---- Leave / permits workflow (modeled on Kasra's kardex + کارتابل) ----
-// kind: entitled = استحقاقی (drawn from the annual balance), daily = روزانه, hourly = ساعتی,
-//       sick = استعلاجی, unpaid = بدون حقوق, mission = مأموریت, entry = ثبتِ تردد (punch correction).
-// Only 'entitled' leave is deducted from the annual kardex. Others are tracked but not deducted.
-export type LeaveKind = 'entitled' | 'daily' | 'hourly' | 'sick' | 'unpaid' | 'mission' | 'entry';
+// ---- Leave / permits workflow (modeled on Kasra's kardex + کارتابل + payroll) ----
+// Leave TYPES are user-definable (the combobox the user can extend). Each type carries its own
+// rules AND its payroll treatment, so salary can be computed from approved permits:
+//   unit:      'day' or 'hour'  → how the amount is counted / paid.
+//   paid:      true  → the absence is PAID (adds to salary like worked time);
+//              false → بدون حقوق (unpaid → not paid).
+//   fromBalance: true → draws from the annual استحقاقی kardex (مانده).
+// `kind` on a request is the TYPE id (string), so adding a type just adds an option.
+export type LeaveKind = string;
 export type LeaveStatus = 'pending' | 'approved' | 'rejected';
-export const LEAVE_KIND_LABEL: { [k in LeaveKind]: string } = {
-  entitled: 'مرخصیِ استحقاقی', daily: 'مرخصیِ روزانه', hourly: 'مرخصیِ ساعتی', sick: 'استعلاجی',
-  unpaid: 'بدون حقوق', mission: 'مأموریت', entry: 'ثبتِ تردد',
-};
-export const LEAVE_KINDS: LeaveKind[] = ['entitled', 'daily', 'hourly', 'sick', 'unpaid', 'mission', 'entry'];
+export interface LeaveType {
+  id: string;
+  label: string;
+  unit: 'day' | 'hour';
+  paid: boolean;
+  fromBalance: boolean;
+  enabled?: boolean;
+  requireReason?: boolean;
+  maxDays?: number;        // 0 = no cap
+  builtin?: boolean;
+}
+// Default catalogue (user can add/edit/disable these). Mirrors Kasra's مجوز vocabulary.
+export const DEFAULT_LEAVE_TYPES: LeaveType[] = [
+  { id: 'ent_day', label: 'استحقاقی روزانه', unit: 'day', paid: true, fromBalance: true, enabled: true, builtin: true },
+  { id: 'ent_hour', label: 'استحقاقی ساعتی', unit: 'hour', paid: true, fromBalance: true, enabled: true, builtin: true },
+  { id: 'sick', label: 'استعلاجی', unit: 'day', paid: true, fromBalance: false, enabled: true, requireReason: true, builtin: true },
+  { id: 'unpaid', label: 'بدون حقوق', unit: 'day', paid: false, fromBalance: false, enabled: true, requireReason: true, builtin: true },
+  { id: 'mission_day', label: 'مأموریت روزانه', unit: 'day', paid: true, fromBalance: false, enabled: true, requireReason: true, builtin: true },
+  { id: 'mission_hour', label: 'مأموریت ساعتی', unit: 'hour', paid: true, fromBalance: false, enabled: true, requireReason: true, builtin: true },
+  { id: 'study_day', label: 'تحصیلی روزانه', unit: 'day', paid: true, fromBalance: false, enabled: true, builtin: true },
+  { id: 'study_hour', label: 'تحصیلی ساعتی', unit: 'hour', paid: true, fromBalance: false, enabled: true, builtin: true },
+  { id: 'entry', label: 'ثبتِ تردد', unit: 'hour', paid: true, fromBalance: false, enabled: true, requireReason: true, builtin: true },
+];
 // A single approval action taken by one approver in the chain (کارتابل).
 export interface LeaveApproval { by: string; at: string; result: 'approved' | 'rejected'; }
 // A request / permit (مجوز). Routed up a chain of approvers (managers) defined by the org hierarchy.
 export interface LeaveRequest {
   id: string;
   empId: string;
-  kind: LeaveKind;
+  kind: LeaveKind;         // = LeaveType.id
   year: number;            // Jalali year the request belongs to (for the annual kardex)
-  from: string;            // free Jalali date/time text e.g. "۱۴۰۵/۰۳/۱۲" (or "08:00" for تردد)
+  from: string;            // free Jalali date text e.g. "۱۴۰۵/۰۳/۱۲" (used to bucket into a payroll month)
   to: string;
-  days: number;            // working days (fractional allowed for hourly)
+  days: number;            // amount: working days, or hours when the type's unit is 'hour'
   reason?: string;
   status: LeaveStatus;
   chain: string[];         // ordered approver employee-ids (the manager hierarchy, bottom→top)
@@ -57,50 +79,52 @@ export interface LeaveRequest {
   approvals: LeaveApproval[];
   createdAt: string;
 }
-// Per request-type rule (قوانینِ مخصوصِ هر نوع درخواست).
-export interface KindRule { enabled?: boolean; requireReason?: boolean; maxDays?: number; }
-// Company leave policy (قوانینِ ثبتِ مرخصی).
+// Company leave policy (قوانینِ ثبتِ مرخصی) — annual kardex parameters.
 export interface LeavePolicy {
   annualEntitled: number;  // استحقاقیِ سالانه (روز) — Iranian labor law ≈ 26 working days
   carryMax: number;        // سقفِ ذخیره‌ی سالیانه به سالِ بعد (روز)
   mustUseMin: number;      // ملزم به استفاده: حداقل روزی که باید در سال مصرف شود
   minNoticeDays?: number;  // حداقل روزِ پیش از شروعِ مرخصی برای ثبت (قانون)
   maxConsecutive?: number; // حداکثر روزِ پیوسته در یک مجوز
-  kindRules?: { [k in LeaveKind]?: KindRule }; // each request type has its own rules
 }
 export const DEFAULT_LEAVE_POLICY: LeavePolicy = {
   annualEntitled: 26, carryMax: 9, mustUseMin: 5, minNoticeDays: 0, maxConsecutive: 0,
-  kindRules: {
-    entitled: { enabled: true, requireReason: false, maxDays: 0 },
-    daily: { enabled: true, requireReason: false, maxDays: 0 },
-    hourly: { enabled: true, requireReason: false, maxDays: 0 },
-    sick: { enabled: true, requireReason: true, maxDays: 0 },
-    unpaid: { enabled: true, requireReason: true, maxDays: 0 },
-    mission: { enabled: true, requireReason: true, maxDays: 0 },
-    entry: { enabled: true, requireReason: true, maxDays: 0 },
-  },
 };
 export interface LeaveState {
   policy: LeavePolicy;
+  types: LeaveType[];      // user-definable type catalogue (the combobox)
   requests: LeaveRequest[];
   carry?: { [empId: string]: number }; // ذخیره‌ی منتقل‌شده از سالِ قبل (روز)
 }
-export function emptyLeave(): LeaveState { return { policy: { ...DEFAULT_LEAVE_POLICY }, requests: [], carry: {} }; }
+export function emptyLeave(): LeaveState { return { policy: { ...DEFAULT_LEAVE_POLICY }, types: DEFAULT_LEAVE_TYPES.map((t) => ({ ...t })), requests: [], carry: {} }; }
+
+// Daily punch (تردد): one clock-in / clock-out pair per day. dayKey = "y-m-d" (Jalali, 0-based month).
+export interface Punch { in: string; out: string; } // "HH:MM"
 
 export interface AttendanceState {
   employees: Employee[];
   standardHours: number;                                   // ساعتِ کاریِ استانداردِ روز (پیش‌فرض ۸)
   records: { [empId: string]: { [dayKey: string]: DayStatus } }; // وضعیتِ هر روز؛ dayKey = "y-m-d" (شمسی، ماه ۰مبنا)
   overtime: { [empId: string]: { [ym: string]: number } };       // ساعتِ اضافه‌کارِ هر ماه؛ ym = "y-m"
+  punches?: { [empId: string]: { [dayKey: string]: Punch } };    // ورود/خروجِ روزانه (کاردکسِ ساعتی)
   // Per-month allowances/deductions for the payslip (bonuses, insurance, advances, ...).
   adjust?: { [empId: string]: { [ym: string]: { allow?: number; deduct?: number } } };
   rules?: WorkRules;                                       // company work-schedule rules
   leave?: LeaveState;                                      // leave kardex + permits + policy
 }
 
-export function emptyAttendance(): AttendanceState { return { employees: [], standardHours: 8, records: {}, overtime: {}, adjust: {}, rules: { ...DEFAULT_RULES }, leave: emptyLeave() }; }
+export function emptyAttendance(): AttendanceState { return { employees: [], standardHours: 8, records: {}, overtime: {}, punches: {}, adjust: {}, rules: { ...DEFAULT_RULES }, leave: emptyLeave() }; }
 // Hours between two "HH:MM" times.
 const hoursBetween = (a: string, b: string) => { const p = (s: string) => { const [h, m] = (s || '0:0').split(':').map(Number); return (h || 0) * 60 + (m || 0); }; return Math.max(0, (p(b) - p(a)) / 60); };
+// Minutes for a "HH:MM" time.
+const toMin = (s: string) => { const [h, m] = (s || '').split(':').map(Number); return (h || 0) * 60 + (m || 0); };
+// Parse a free Jalali date string ("۱۴۰۵/۰۳/۱۲" or "1405-3-12") → { y, m(0-based) } for payroll bucketing.
+const FA_DIGITS = '۰۱۲۳۴۵۶۷۸۹';
+const toLatinDigits = (s: string) => (s || '').replace(/[۰-۹]/g, (d) => String(FA_DIGITS.indexOf(d)));
+const parseJalali = (s: string): { y: number; m: number } | null => {
+  const t = toLatinDigits(s).match(/(\d{3,4})\D+(\d{1,2})/);
+  return t ? { y: +t[1], m: +t[2] - 1 } : null;
+};
 const WEEKDAY_NAMES = ['شنبه', 'یک‌شنبه', 'دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنج‌شنبه', 'جمعه'];
 
 // چرخه‌ی وضعیت با هر لمس: خالی → حاضر → غایب → مرخصی → تعطیل → خالی
@@ -121,15 +145,23 @@ interface Props {
   // The current user's own employee id (if linked) — used to default their کارتابل (manager inbox).
   viewerEmpId?: string;
 }
-type Tab = 'log' | 'report' | 'slip' | 'decree' | 'leave' | 'inbox' | 'rules' | 'staff';
+type Tab = 'log' | 'kardex' | 'report' | 'slip' | 'decree' | 'leave' | 'inbox' | 'rules' | 'staff';
 
 export default function AttendancePanel({ state, onChange, onClose, confirm, onPostJournal, selfMode, selfEmpId, viewerEmpId }: Props) {
   const employees = state.employees || [];
   const standardHours = state.standardHours || 8;
   const records = state.records || {};
   const overtime = state.overtime || {};
+  const punches = state.punches || {};
   const monthNames = getMonthNames('jalali');
   const today = getToday('jalali');
+
+  // Leave catalogue + lookup (defined early so payroll calc can use it).
+  const leave = state.leave || emptyLeave();
+  const policy = leave.policy || DEFAULT_LEAVE_POLICY;
+  const leaveTypes = leave.types && leave.types.length ? leave.types : DEFAULT_LEAVE_TYPES;
+  // Resolve a request's type; tolerate unknown ids from older data with a sensible fallback.
+  const typeOf = (id: string): LeaveType => leaveTypes.find((t) => t.id === id) || { id, label: id, unit: 'day', paid: true, fromBalance: id.startsWith('ent') };
 
   // In self-mode the worker can only see their own record + the payslip, and may only register leave.
   const [tab, setTab] = useState<Tab>(selfMode ? 'log' : (employees.length ? 'log' : 'staff'));
@@ -162,27 +194,75 @@ export default function AttendancePanel({ state, onChange, onClose, confirm, onP
     const empOt = { ...(overtime[empId] || {}), [ym]: digits(val) };
     onChange({ ...state, overtime: { ...overtime, [empId]: empOt }, employees, standardHours, records });
   };
+  // Set one side (in/out) of a day's punch (تردد). Empty pair is removed.
+  const setPunch = (d: number, field: 'in' | 'out', val: string) => {
+    if (!empId) return;
+    const emp = { ...(punches[empId] || {}) };
+    const cur: Punch = { ...(emp[`${y}-${m}-${d}`] || { in: '', out: '' }), [field]: val };
+    if (!cur.in && !cur.out) delete emp[`${y}-${m}-${d}`]; else emp[`${y}-${m}-${d}`] = cur;
+    onChange({ ...state, punches: { ...punches, [empId]: emp } });
+  };
+
+  // ---------- کاردکسِ ساعتی: محاسبه‌ی یک روز از روی ترددِ ورود/خروج ----------
+  // Returns null when there is no punch for that day. Computes worked, late (تأخیر), early-leave
+  // (تعجیل), shortfall (کسرِ کار) and surplus (مازادِ حضور / overtime) against the company rules.
+  const punchCalc = (empId2: string, d: number) => {
+    const pk = punches[empId2]?.[`${y}-${m}-${d}`];
+    if (!pk || (!pk.in && !pk.out)) return null;
+    const worked = hoursBetween(pk.in, pk.out);
+    let endMin = toMin(rules.end);
+    if (isThuEarly(d)) endMin -= (rules.thuEarlyMin || 0); // Thursday leaves earlier → smaller target
+    const startMin = toMin(rules.start);
+    const expected = isWeekendDay(d) ? 0 : Math.max(0, (endMin - startMin) / 60);
+    const late = Math.max(0, (toMin(pk.in) - startMin) / 60);
+    const early = Math.max(0, (endMin - toMin(pk.out)) / 60);
+    const shortfall = Math.max(0, expected - worked);
+    const surplus = Math.max(0, worked - expected);
+    return { in: pk.in, out: pk.out, worked, expected, late, early, shortfall, surplus };
+  };
 
   // ---------- محاسبه‌ی کارکرد و حقوقِ یک کارمند در ماهِ جاری ----------
   const calc = (e: Employee) => {
     const rec = records[e.id] || {};
     let present = 0, absent = 0, leave = 0, holiday = 0;
+    // Aggregate the daily punches (hourly kardex) across the month.
+    let punchDays = 0, punchWorked = 0, lateH = 0, earlyH = 0, shortfallH = 0, surplusH = 0;
     for (let d = 1; d <= daysInMonth; d++) {
       const s = rec[`${y}-${m}-${d}`];
       if (s === 'present') present++; else if (s === 'absent') absent++; else if (s === 'leave') leave++; else if (s === 'holiday') holiday++;
+      const pc = punchCalc(e.id, d);
+      if (pc) { punchDays++; punchWorked += pc.worked; lateH += pc.late; earlyH += pc.early; shortfallH += pc.shortfall; surplusH += pc.surplus; }
     }
-    const ot = overtime[e.id]?.[ym] || 0;
-    const workedHours = present * standardHours + ot;
+    // Approved leave permits that fall in THIS payroll month feed the salary (paid vs unpaid).
+    let paidLeaveDays = 0, paidLeaveHours = 0, unpaidDays = 0, unpaidHours = 0;
+    for (const r of (state.leave?.requests || [])) {
+      if (r.empId !== e.id || r.status !== 'approved') continue;
+      const p = parseJalali(r.from) || { y: r.year, m };   // fall back to its year/current month
+      if (p.y !== y || p.m !== m) continue;
+      const ty = typeOf(r.kind); const amt = r.days || 0;
+      if (ty.paid) { if (ty.unit === 'hour') paidLeaveHours += amt; else paidLeaveDays += amt; }
+      else { if (ty.unit === 'hour') unpaidHours += amt; else unpaidDays += amt; }
+    }
     // Derive day-rate and hour-rate from whichever the user filled in.
     const dayRate = e.dailyRate || (e.hourlyRate ? e.hourlyRate * standardHours : 0);
     const hrRate = e.hourlyRate || (e.dailyRate ? e.dailyRate / standardHours : 0);
-    const base = dayRate * present;
-    const otPay = hrRate * 1.4 * ot;                       // overtime at 1.4x (common labor-law factor)
+    // Overtime = manual entry + surplus measured from punches (1.4× labor-law factor).
+    const manualOt = overtime[e.id]?.[ym] || 0;
+    const ot = manualOt + surplusH;
+    // Paid days = worked days (from punches if any, else grid-present) + PAID leave days.
+    const workedDays = punchDays > 0 ? punchDays : present;
+    const workedHours = (punchDays > 0 ? punchWorked : present * standardHours) + paidLeaveHours;
+    const base = dayRate * (workedDays + paidLeaveDays) + hrRate * paidLeaveHours;
+    const otPay = hrRate * 1.4 * ot;
     const adj = (state.adjust || {})[e.id]?.[ym] || {};
     const allow = adj.allow || 0;                          // allowances / bonuses
-    const deduct = adj.deduct || 0;                        // deductions (insurance, advances, ...)
+    const manualDeduct = adj.deduct || 0;                  // manual deductions (insurance, advances…)
+    // Shortfall (تأخیر/تعجیل/کسرِ کار) and unpaid hourly leave reduce the salary.
+    const shortfallPay = hrRate * (shortfallH + unpaidHours);
+    const deduct = manualDeduct + shortfallPay;
     const pay = Math.max(0, base + otPay + allow - deduct);
-    return { present, absent, leave, holiday, ot, workedHours, base, otPay, allow, deduct, pay };
+    return { present, absent, leave, holiday, ot, manualOt, workedHours, workedDays, base, otPay, allow, deduct, manualDeduct, pay,
+      punchDays, lateH, earlyH, shortfallH, surplusH, paidLeaveDays, paidLeaveHours, unpaidDays, unpaidHours, shortfallPay };
   };
   const setAdjust = (field: 'allow' | 'deduct', val: string) => {
     if (!empId) return;
@@ -193,8 +273,6 @@ export default function AttendancePanel({ state, onChange, onClose, confirm, onP
   };
 
   // ---------- مرخصی: کاردکس، مجوزها و کارتابلِ مدیران ----------
-  const leave = state.leave || emptyLeave();
-  const policy = leave.policy || DEFAULT_LEAVE_POLICY;
   const setLeave = (patch: Partial<LeaveState>) => onChange({ ...state, leave: { ...leave, ...patch } });
   const setPolicy = (patch: Partial<LeavePolicy>) => setLeave({ policy: { ...policy, ...patch } });
   const nameOf = (id: string) => employees.find((e) => e.id === id)?.name || '—';
@@ -208,16 +286,17 @@ export default function AttendancePanel({ state, onChange, onClose, confirm, onP
   };
   // Managers = anyone who is someone else's سرپرست (appears as a managerId).
   const managerIds = [...new Set(employees.map((e) => e.managerId).filter(Boolean) as string[])];
-  const kindRule = (k: LeaveKind): KindRule => (policy.kindRules || {})[k] || { enabled: true };
   // Annual kardex for one employee in the selected year `y`.
-  // entitled (استحقاقی) = yearly grant + carry-in; used (کسر شده) = approved entitled-leave days;
+  // entitled (استحقاقی) = yearly grant + carry-in; used (کسر شده) = approved balance-drawing days;
   // remaining (مانده) = entitled − used; saveable (ذخیره‌ی سالیانه) = min(remaining, carryMax).
+  // Hour-unit balance types are converted to days at standardHours so the kardex stays in days.
   const leaveKardex = (e: Employee) => {
     const carryIn = leave.carry?.[e.id] || 0;
     const entitled = (policy.annualEntitled || 0) + carryIn;
-    const reqs = (leave.requests || []).filter((r) => r.empId === e.id && r.year === y);
-    const used = reqs.filter((r) => r.kind === 'entitled' && r.status === 'approved').reduce((s, r) => s + (r.days || 0), 0);
-    const pending = reqs.filter((r) => r.kind === 'entitled' && r.status === 'pending').reduce((s, r) => s + (r.days || 0), 0);
+    const inDays = (r: LeaveRequest) => typeOf(r.kind).unit === 'hour' ? (r.days || 0) / standardHours : (r.days || 0);
+    const reqs = (leave.requests || []).filter((r) => r.empId === e.id && r.year === y && typeOf(r.kind).fromBalance);
+    const used = reqs.filter((r) => r.status === 'approved').reduce((s, r) => s + inDays(r), 0);
+    const pending = reqs.filter((r) => r.status === 'pending').reduce((s, r) => s + inDays(r), 0);
     const remaining = entitled - used;
     const saveable = Math.min(Math.max(0, remaining), policy.carryMax || 0);
     const mustUse = policy.mustUseMin || 0;
@@ -225,17 +304,27 @@ export default function AttendancePanel({ state, onChange, onClose, confirm, onP
     const shortfall = Math.max(0, mustUse - used);
     return { carryIn, entitled, used, pending, remaining, saveable, mustUse, shortfall };
   };
+  // ---------- type catalogue management (the user-extendable combobox) ----------
+  const setTypes = (types: LeaveType[]) => setLeave({ types });
+  const updateType = (id: string, patch: Partial<LeaveType>) => setTypes(leaveTypes.map((t) => (t.id === id ? { ...t, ...patch } : t)));
+  const addType = (label: string, unit: 'day' | 'hour', paid: boolean, fromBalance: boolean) =>
+    setTypes([...leaveTypes, { id: `lt-${Date.now()}`, label: label.trim(), unit, paid, fromBalance, enabled: true }]);
+  const delType = (id: string) => setTypes(leaveTypes.filter((t) => t.id !== id));
+  const enabledTypes = leaveTypes.filter((t) => t.enabled !== false);
   // New-request form state.
-  const [lkKind, setLkKind] = useState<LeaveKind>('entitled');
+  const [lkKind, setLkKind] = useState<LeaveKind>(enabledTypes[0]?.id || 'ent_day');
   const [lkFrom, setLkFrom] = useState(''); const [lkTo, setLkTo] = useState('');
   const [lkDays, setLkDays] = useState(''); const [lkReason, setLkReason] = useState('');
+  // New leave-type form state (the user-extendable combobox catalogue).
+  const [ntLabel, setNtLabel] = useState(''); const [ntUnit, setNtUnit] = useState<'day' | 'hour'>('day');
+  const [ntPaid, setNtPaid] = useState(true); const [ntBalance, setNtBalance] = useState(false);
   const submitLeave = () => {
     if (!empId || !lkDays) return;
-    const rule = kindRule(lkKind);
+    const rule = typeOf(lkKind);
     const days = parseFloat(lkDays.replace(/[^0-9.]/g, '')) || 0;
     if (days <= 0) return;
     if (rule.requireReason && !lkReason.trim()) { confirm('برای این نوعِ درخواست، نوشتنِ علت الزامی است.', () => {}); return; }
-    if (rule.maxDays && days > rule.maxDays) { confirm(`حداکثرِ مجازِ این نوعِ درخواست ${rule.maxDays} روز است.`, () => {}); return; }
+    if (rule.maxDays && days > rule.maxDays) { confirm(`حداکثرِ مجازِ این نوعِ درخواست ${rule.maxDays} ${rule.unit === 'hour' ? 'ساعت' : 'روز'} است.`, () => {}); return; }
     const chain = managerChain(empId); // route up the manager hierarchy
     const req: LeaveRequest = {
       id: `lv-${Date.now()}`, empId, kind: lkKind, year: y,
@@ -299,6 +388,7 @@ export default function AttendancePanel({ state, onChange, onClose, confirm, onP
         <div className="tool-panel-body">
           <div className="mini-toggle fund-tabs">
             <button type="button" className={`mini-toggle-btn ${tab === 'log' ? 'active' : ''}`} onClick={() => setTab('log')}>{selfMode ? 'حضورِ من' : 'ثبتِ ماهانه'}</button>
+            <button type="button" className={`mini-toggle-btn ${tab === 'kardex' ? 'active' : ''}`} onClick={() => setTab('kardex')}>{selfMode ? 'کارکردِ من' : 'کارکرد روزانه'}</button>
             {!selfMode && <button type="button" className={`mini-toggle-btn ${tab === 'report' ? 'active' : ''}`} onClick={() => setTab('report')}>گزارش</button>}
             <button type="button" className={`mini-toggle-btn ${tab === 'slip' ? 'active' : ''}`} onClick={() => setTab('slip')}>{selfMode ? 'فیشِ من' : 'فیش'}</button>
             <button type="button" className={`mini-toggle-btn ${tab === 'decree' ? 'active' : ''}`} onClick={() => setTab('decree')}>حکم</button>
@@ -365,6 +455,62 @@ export default function AttendancePanel({ state, onChange, onClose, confirm, onP
             </>
           ))}
 
+          {/* ---------------- daily punch kardex (کارکرد روزانه: ورود/خروج) ---------------- */}
+          {tab === 'kardex' && (employees.length === 0 ? (
+            <div className="tool-note">اول از تبِ «کارمندان» چند نفر اضافه کنید.</div>
+          ) : (
+            <>
+              <div className="att-monthnav">
+                <button onClick={() => shiftMonth(-1)}>‹</button>
+                <span>{monthLabel}</span>
+                <button onClick={() => shiftMonth(1)}>›</button>
+              </div>
+              {selfMode ? (
+                <div className="acc-ledger-name">{curEmp?.name || '—'}</div>
+              ) : (
+                <select className="tool-text-input" value={empId} onChange={(e) => setEmpId(e.target.value)}>
+                  {employees.map((e) => <option key={e.id} value={e.id}>{e.name}</option>)}
+                </select>
+              )}
+              <div className="tool-note">ساعتِ ورود/خروج را وارد کنید؛ تأخیر/تعجیل و کسرِ کار و مازادِ حضور بر اساسِ «قوانینِ کاری» ({rules.start}–{rules.end}) محاسبه می‌شود و به حقوق وصل است.</div>
+              <div className="att-kardex-wrap">
+                <table className="acc-table att-kardex">
+                  <thead><tr><th>روز</th><th>ورود</th><th>خروج</th><th>کارکرد</th><th>تأخیر</th><th>تعجیل</th><th>کسر</th><th>مازاد</th></tr></thead>
+                  <tbody>
+                    {Array.from({ length: daysInMonth }, (_, i) => i + 1).map((d) => {
+                      const pc = punchCalc(empId, d);
+                      const pk = punches[empId]?.[`${y}-${m}-${d}`];
+                      const off = isWeekendDay(d);
+                      return (
+                        <tr key={d} className={off ? 'att-krow-off' : ''}>
+                          <td>{d} <span className="att-krow-wd">{WEEKDAY_NAMES[weekdayOf(d)]}</span></td>
+                          <td><input className="att-ktime" type="time" dir="ltr" disabled={selfMode} value={pk?.in || ''} onChange={(e) => setPunch(d, 'in', e.target.value)} /></td>
+                          <td><input className="att-ktime" type="time" dir="ltr" disabled={selfMode} value={pk?.out || ''} onChange={(e) => setPunch(d, 'out', e.target.value)} /></td>
+                          <td>{pc ? pc.worked.toFixed(1) : '—'}</td>
+                          <td className={pc && pc.late > 0 ? 'att-kbad' : ''}>{pc && pc.late > 0 ? pc.late.toFixed(1) : '—'}</td>
+                          <td className={pc && pc.early > 0 ? 'att-kbad' : ''}>{pc && pc.early > 0 ? pc.early.toFixed(1) : '—'}</td>
+                          <td className={pc && pc.shortfall > 0 ? 'att-kbad' : ''}>{pc && pc.shortfall > 0 ? pc.shortfall.toFixed(1) : '—'}</td>
+                          <td className={pc && pc.surplus > 0 ? 'att-kgood' : ''}>{pc && pc.surplus > 0 ? pc.surplus.toFixed(1) : '—'}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              {curCalc && (
+                <div className="tool-result">
+                  <div className="tool-result-row"><span>روزهای ترددشده</span><strong>{curCalc.punchDays}</strong></div>
+                  <div className="tool-result-row"><span>کارکرد / تأخیر / تعجیل (ساعت)</span><strong>{fmt(curCalc.workedHours)} / {curCalc.lateH.toFixed(1)} / {curCalc.earlyH.toFixed(1)}</strong></div>
+                  <div className="tool-result-row"><span>کسرِ کار / مازادِ حضور (ساعت)</span><strong>{curCalc.shortfallH.toFixed(1)} / {curCalc.surplusH.toFixed(1)}</strong></div>
+                  <div className="tool-result-row closing"><span>اثرِ کسرِ کار بر حقوق</span><strong>−{fmt(curCalc.shortfallPay)}</strong></div>
+                </div>
+              )}
+              {!selfMode && (
+                <button className="acc-addline acc-noprint" onClick={() => downloadCsv(`kardex-${empId}-${ym}.csv`, [['روز', 'هفته', 'ورود', 'خروج', 'کارکرد', 'تأخیر', 'تعجیل', 'کسر', 'مازاد'], ...Array.from({ length: daysInMonth }, (_, i) => i + 1).map((d) => { const pc = punchCalc(empId, d); const pk = punches[empId]?.[`${y}-${m}-${d}`]; return [d, WEEKDAY_NAMES[weekdayOf(d)], pk?.in || '', pk?.out || '', pc ? pc.worked.toFixed(1) : '', pc ? pc.late.toFixed(1) : '', pc ? pc.early.toFixed(1) : '', pc ? pc.shortfall.toFixed(1) : '', pc ? pc.surplus.toFixed(1) : '']; })])}>📤 خروجیِ اکسلِ کارکرد (CSV)</button>
+              )}
+            </>
+          ))}
+
           {/* ---------------- گزارشِ ماهانه ---------------- */}
           {tab === 'report' && (
             <>
@@ -426,11 +572,14 @@ export default function AttendancePanel({ state, onChange, onClose, confirm, onP
                     <table className="acc-table">
                       <tbody>
                         <tr><td>کارمند</td><td>{curEmp.name}{curEmp.code ? ` (#${curEmp.code})` : ''}</td></tr>
-                        <tr><td>روزهای کارکرد</td><td>{curCalc.present} روز ({fmt(curCalc.workedHours)} ساعت)</td></tr>
-                        <tr><td>حقوقِ پایه</td><td>{fmt(curCalc.base)}</td></tr>
+                        <tr><td>روزهای کارکرد</td><td>{curCalc.workedDays} روز ({fmt(curCalc.workedHours)} ساعت)</td></tr>
+                        {(curCalc.paidLeaveDays > 0 || curCalc.paidLeaveHours > 0) && <tr><td>مرخصیِ با حقوق</td><td>{curCalc.paidLeaveDays} روز{curCalc.paidLeaveHours > 0 ? ` + ${curCalc.paidLeaveHours} ساعت` : ''}</td></tr>}
+                        {curCalc.unpaidDays > 0 && <tr><td>مرخصیِ بدون حقوق</td><td>{curCalc.unpaidDays} روز</td></tr>}
+                        <tr><td>حقوقِ پایه (شاملِ مرخصیِ با حقوق)</td><td>{fmt(curCalc.base)}</td></tr>
                         <tr><td>اضافه‌کار ({fmt(curCalc.ot)} ساعت × ۱.۴)</td><td>{fmt(curCalc.otPay)}</td></tr>
                         <tr><td>مزایا</td><td>{fmt(curCalc.allow)}</td></tr>
-                        <tr><td>کسورات</td><td>−{fmt(curCalc.deduct)}</td></tr>
+                        {curCalc.shortfallPay > 0 && <tr><td>کسرِ کار (تأخیر/تعجیل {(curCalc.shortfallH + curCalc.unpaidHours).toFixed(1)} ساعت)</td><td>−{fmt(curCalc.shortfallPay)}</td></tr>}
+                        <tr><td>کسوراتِ دستی</td><td>−{fmt(curCalc.manualDeduct)}</td></tr>
                         <tr className="acc-total"><td>خالصِ پرداختی</td><td>{fmt(curCalc.pay)} تومان</td></tr>
                       </tbody>
                     </table>
@@ -538,19 +687,18 @@ export default function AttendancePanel({ state, onChange, onClose, confirm, onP
                 );
               })()}
 
-              {/* new permit form (ثبتِ مجوزِ مرخصی) */}
-              <div className="loan-sched-head"><span>ثبتِ مرخصیِ جدید</span></div>
-              <div className="mini-toggle fund-tabs">
-                {LEAVE_KINDS.filter((kk) => kindRule(kk).enabled !== false).map((kk) => (
-                  <button key={kk} type="button" className={`mini-toggle-btn ${lkKind === kk ? 'active' : ''}`} onClick={() => setLkKind(kk)}>{LEAVE_KIND_LABEL[kk]}</button>
-                ))}
-              </div>
+              {/* new permit form (ثبتِ مجوز) — type chosen from the user-extendable combobox */}
+              <div className="loan-sched-head"><span>ثبتِ درخواستِ جدید</span></div>
+              <label className="field-label">نوعِ مجوز</label>
+              <select className="tool-text-input" value={lkKind} onChange={(e) => setLkKind(e.target.value)}>
+                {enabledTypes.map((t) => <option key={t.id} value={t.id}>{t.label} ({t.unit === 'hour' ? 'ساعتی' : 'روزانه'}{t.paid ? '' : ' · بدون حقوق'})</option>)}
+              </select>
               <div className="att-addgrid">
                 <input className="tool-text-input" type="text" dir="ltr" placeholder="از تاریخ (۱۴۰۵/۰۳/۱۲)" value={lkFrom} onChange={(e) => setLkFrom(e.target.value)} />
                 <input className="tool-text-input" type="text" dir="ltr" placeholder="تا تاریخ" value={lkTo} onChange={(e) => setLkTo(e.target.value)} />
-                <input className="tool-text-input" type="text" inputMode="decimal" dir="ltr" placeholder="تعداد روز" value={lkDays} onChange={(e) => setLkDays(e.target.value.replace(/[^0-9.]/g, ''))} />
+                <input className="tool-text-input" type="text" inputMode="decimal" dir="ltr" placeholder={typeOf(lkKind).unit === 'hour' ? 'تعداد ساعت' : 'تعداد روز'} value={lkDays} onChange={(e) => setLkDays(e.target.value.replace(/[^0-9.]/g, ''))} />
               </div>
-              <input className="tool-text-input" type="text" placeholder="توضیح / علتِ مرخصی (اختیاری)" value={lkReason} onChange={(e) => setLkReason(e.target.value)} />
+              <input className="tool-text-input" type="text" placeholder={typeOf(lkKind).requireReason ? 'توضیح / علت (الزامی)' : 'توضیح / علت (اختیاری)'} value={lkReason} onChange={(e) => setLkReason(e.target.value)} />
               <button className="loan-submit" disabled={!lkDays || parseFloat(lkDays) <= 0} onClick={submitLeave}>ثبتِ درخواست</button>
               <div className="tool-note">{(() => { const ch = managerChain(empId); return ch.length ? `این درخواست به کارتابلِ «${nameOf(ch[0])}» می‌رود و به‌ترتیب تا «${nameOf(ch[ch.length - 1])}» تایید می‌شود (${ch.length} سطح).` : 'برای این کارمند سرپرستی تعریف نشده؛ درخواست در کارتابلِ مدیرِ ارشد قرار می‌گیرد. سرپرست را در تبِ «کارمندان» مشخص کنید.'; })()}</div>
 
@@ -567,7 +715,7 @@ export default function AttendancePanel({ state, onChange, onClose, confirm, onP
                   return (
                     <div key={r.id} className="loan-detail-row">
                       <div className="ld-info">
-                        <span className="ld-amt">{LEAVE_KIND_LABEL[r.kind]} · {fmt(r.days)} روز <span className={`att-statpill ${cls}`}>{statusText}</span></span>
+                        <span className="ld-amt">{typeOf(r.kind).label} · {fmt(r.days)} {typeOf(r.kind).unit === 'hour' ? 'ساعت' : 'روز'} <span className={`att-statpill ${cls}`}>{statusText}</span></span>
                         <span className="ld-date">{r.from || '—'}{r.to ? ` تا ${r.to}` : ''}{r.reason ? ` · ${r.reason}` : ''}</span>
                       </div>
                       <div className="att-approw">
@@ -598,18 +746,31 @@ export default function AttendancePanel({ state, onChange, onClose, confirm, onP
                   </div>
                   <div className="tool-note">سطوحِ تایید از «سرپرست»‌های تعریف‌شده در تبِ «کارمندان» ساخته می‌شوند: هر درخواست از سرپرستِ کارمند تا بالاترین مدیر بالا می‌رود و در «کارتابل»ِ هر مدیر دیده می‌شود.</div>
 
-                  <div className="loan-sched-head"><span>قوانینِ هر نوعِ درخواست</span></div>
+                  <div className="loan-sched-head"><span>انواعِ مجوز (قابلِ افزودن)</span><span className="loan-sched-hint">{leaveTypes.length}</span></div>
+                  <div className="tool-note">هر نوعِ مجوز را خودتان می‌سازید و رفتارِ حقوقی‌اش را تعیین می‌کنید: «با حقوق/بدون حقوق» در محاسبه‌ی حقوق اثر می‌گذارد و «از مانده» از کاردکسِ استحقاقی کم می‌کند.</div>
                   <div className="att-kindrules">
-                    {LEAVE_KINDS.map((kk) => { const r = kindRule(kk); return (
-                      <div key={kk} className="att-kindrow">
-                        <label className="fund-switch">
-                          <input type="checkbox" checked={r.enabled !== false} onChange={(e) => setPolicy({ kindRules: { ...(policy.kindRules || {}), [kk]: { ...r, enabled: e.target.checked } } })} />
-                          <span>{LEAVE_KIND_LABEL[kk]}</span>
-                        </label>
-                        <label className="att-kindopt"><input type="checkbox" checked={!!r.requireReason} onChange={(e) => setPolicy({ kindRules: { ...(policy.kindRules || {}), [kk]: { ...r, requireReason: e.target.checked } } })} /> علتِ اجباری</label>
-                        <input className="tool-text-input att-kindmax" type="text" inputMode="numeric" dir="ltr" placeholder="حداکثر روز" value={r.maxDays ? String(r.maxDays) : ''} onChange={(e) => setPolicy({ kindRules: { ...(policy.kindRules || {}), [kk]: { ...r, maxDays: digits(e.target.value) } } })} />
+                    {leaveTypes.map((t) => (
+                      <div key={t.id} className="att-kindrow">
+                        <input className="tool-text-input att-typename" type="text" value={t.label} onChange={(e) => updateType(t.id, { label: e.target.value })} />
+                        <select className="tool-text-input att-typesel" value={t.unit} onChange={(e) => updateType(t.id, { unit: e.target.value as 'day' | 'hour' })}>
+                          <option value="day">روزانه</option><option value="hour">ساعتی</option>
+                        </select>
+                        <label className="att-kindopt"><input type="checkbox" checked={t.paid} onChange={(e) => updateType(t.id, { paid: e.target.checked })} /> با حقوق</label>
+                        <label className="att-kindopt"><input type="checkbox" checked={t.fromBalance} onChange={(e) => updateType(t.id, { fromBalance: e.target.checked })} /> از مانده</label>
+                        <label className="att-kindopt"><input type="checkbox" checked={t.enabled !== false} onChange={(e) => updateType(t.id, { enabled: e.target.checked })} /> فعال</label>
+                        <label className="att-kindopt"><input type="checkbox" checked={!!t.requireReason} onChange={(e) => updateType(t.id, { requireReason: e.target.checked })} /> علتِ اجباری</label>
+                        {!t.builtin && <button className="fm-notify" title="حذف" onClick={() => delType(t.id)}>🗑</button>}
                       </div>
-                    ); })}
+                    ))}
+                  </div>
+                  <div className="att-addgrid">
+                    <input className="tool-text-input" type="text" placeholder="نامِ نوعِ جدید (مثلاً مرخصیِ تشویقی)" value={ntLabel} onChange={(e) => setNtLabel(e.target.value)} />
+                    <select className="tool-text-input" value={ntUnit} onChange={(e) => setNtUnit(e.target.value as 'day' | 'hour')}><option value="day">روزانه</option><option value="hour">ساعتی</option></select>
+                  </div>
+                  <div className="att-addgrid">
+                    <label className="att-kindopt"><input type="checkbox" checked={ntPaid} onChange={(e) => setNtPaid(e.target.checked)} /> با حقوق</label>
+                    <label className="att-kindopt"><input type="checkbox" checked={ntBalance} onChange={(e) => setNtBalance(e.target.checked)} /> از مانده‌ی استحقاقی</label>
+                    <button className="loan-submit" disabled={!ntLabel.trim()} onClick={() => { addType(ntLabel, ntUnit, ntPaid, ntBalance); setNtLabel(''); }}>افزودنِ نوع</button>
                   </div>
                   <button className="acc-addline acc-noprint" onClick={() => downloadCsv(`leave-${y}.csv`, [['کارمند', 'استحقاقی', 'ذخیره', 'کسرشده', 'مانده', 'قابلِ ذخیره'], ...employees.map((e) => { const k = leaveKardex(e); return [e.name, policy.annualEntitled, k.carryIn, k.used, k.remaining, k.saveable]; })])}>📤 خروجیِ اکسلِ کاردکس (CSV)</button>
                 </>
@@ -645,7 +806,7 @@ export default function AttendancePanel({ state, onChange, onClose, confirm, onP
                     return (
                       <div key={r.id} className="loan-detail-row">
                         <div className="ld-info">
-                          <span className="ld-amt">{nameOf(r.empId)} · {LEAVE_KIND_LABEL[r.kind]} · {fmt(r.days)} روز <span className="att-statpill leave">در انتظارِ {appr ? nameOf(appr) : 'مدیرِ ارشد'}</span></span>
+                          <span className="ld-amt">{nameOf(r.empId)} · {typeOf(r.kind).label} · {fmt(r.days)} {typeOf(r.kind).unit === 'hour' ? 'ساعت' : 'روز'} <span className="att-statpill leave">در انتظارِ {appr ? nameOf(appr) : 'مدیرِ ارشد'}</span></span>
                           <span className="ld-date">{r.from || '—'}{r.to ? ` تا ${r.to}` : ''}{r.reason ? ` · ${r.reason}` : ''} · سالِ {r.year}</span>
                         </div>
                         <div className="att-approw">
@@ -663,7 +824,7 @@ export default function AttendancePanel({ state, onChange, onClose, confirm, onP
                   {acted.slice(0, 30).map((r) => (
                     <div key={r.id} className="loan-detail-row">
                       <div className="ld-info">
-                        <span className="ld-amt">{nameOf(r.empId)} · {LEAVE_KIND_LABEL[r.kind]} · {fmt(r.days)} روز <span className={`att-statpill ${r.status === 'approved' ? 'present' : 'absent'}`}>{r.status === 'approved' ? 'تایید شد' : 'رد شد'}</span></span>
+                        <span className="ld-amt">{nameOf(r.empId)} · {typeOf(r.kind).label} · {fmt(r.days)} {typeOf(r.kind).unit === 'hour' ? 'ساعت' : 'روز'} <span className={`att-statpill ${r.status === 'approved' ? 'present' : 'absent'}`}>{r.status === 'approved' ? 'تایید شد' : 'رد شد'}</span></span>
                         <span className="ld-date">{r.approvals.map((a) => `${a.by}: ${a.result === 'approved' ? '✔' : '✖'}`).join(' · ')}</span>
                       </div>
                     </div>
