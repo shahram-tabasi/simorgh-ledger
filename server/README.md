@@ -86,10 +86,26 @@ cd /var/www/ledger/server && git pull && npm install && pm2 restart ledger
 ---
 
 ## API (خلاصه)
+### احراز و دادهٔ شخصی
 - `POST /api/register` `{phone, password}` → `{token, phone}`
 - `POST /api/login` `{phone, password}` → `{token, phone}`
 - `GET  /api/data` (هدر: `Authorization: Bearer <token>`) → `{blob, version, updatedAt}`
 - `PUT  /api/data` (با توکن) `{blob}` → `{version, updatedAt}`
+
+### نسخه‌ی شرکتی (سرنخِ فروش)
+- `POST /api/quote` `{company, phone, usersCount, modules[], notes}` → `{ok, id}`
+
+### سازمان / نقش‌ها (پایه‌ی SaaS چندکاربره)
+- `POST /api/org` `{name}` (با توکن) → سازنده، **owner** می‌شود.
+- `GET  /api/org` (با توکن) → `{org, role, perms, empId}`
+- `POST /api/org/member` `{phone, role, perms[], empId?}` (owner/admin) → افزودن/به‌روزرسانیِ عضو (کاربر باید قبلاً ثبت‌نام کرده باشد).
+- `GET  /api/org/members` (عضو) → فهرستِ اعضا.
+- `GET  /api/org/data` (عضو) → `{blob, version}` — همه‌ی اعضا می‌خوانند.
+- `PUT  /api/org/data` (نقش‌های owner/admin/manager) → نوشتن؛ **worker → 403**. اعمالِ نقش **روی سرور**.
+
+نقش‌ها: `owner | admin | manager | worker`. در این نسخه دادهٔ مشترک هنوز blob است؛
+گامِ بعدی: ذخیره‌ی **رابطه‌ای** تا سرور بتواند per-record بر اساسِ نقش فیلتر کند، و اتصالِ
+`quote_requests` به فعال‌سازیِ org پس از پرداخت.
 
 داده‌ها رمزنگاریِ سمتِ سرور ندارند؛ امنیت از طریقِ HTTPS + رمزِ کاربر + توکن است.
 برای نسخه‌های بعدی: OTP پیامکی، رمزنگاریِ سمتِ کاربر، و مدلِ دادهٔ رابطه‌ای/حساب‌داریِ دوطرفه.

@@ -116,7 +116,10 @@ flowchart TD
       - phase 1: device biometric unlock (WebAuthn / Capacitor biometric) for worker self check-in
       - phase 2: integrate external hardware (e.g. ZKTeco) via the SaaS server (push logs to /api)
 - ◻ CSV/Excel export of all reports
-- ◻ Server-enforced multi-user auth & permissions (REAL security) + relational journal storage
+- ◑ Server multi-tenant foundation: orgs + members(role) + shared org data with **server-enforced** role gating (workers are read-only). Endpoints: `/api/org*`. (Done & tested; client wiring next.)
+- ◻ Company-edition lead form → `/api/quote` (done); next: pricing + payment gateway (Zarinpal) → org activation
+- ◻ Relational journal storage on server (replace blob) for per-record role filtering & heavy reports
+- ◻ Client wiring: read/write via `/api/org/data`, role from `/api/org` (keep offline cache)
 - ◻ Personnel order / employment decree (حکم کارگزینی): printable per employee
 - ◻ Multi-company/multi-book, statutory reports
 
