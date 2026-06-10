@@ -151,10 +151,10 @@ function resolveAcc(accs: AccLite[], defName: { [k in AccType]: string }, t: Acc
   return a.id;
 }
 
-const APP_VERSION = '1.0.51';
+const APP_VERSION = '1.0.52';
 const CHANGELOG: string[] = [
-  'اتصال به سرورِ سازمانی: از «درباره ما» → «تیمِ من» سازمان بسازید و کارمندان را با نقش دعوت کنید',
-  'نقشِ کاربر از سرور خوانده و اعمال می‌شود: کارگر فقط بخشِ خودش را می‌بیند، حتی وقتی از گوشیِ خودش وارد شود',
+  'قوانینِ کاریِ هر شرکت: ساعتِ کاری، روزهای تعطیلِ هفته، سیاستِ پنج‌شنبه (تعطیل/زودتر) و شیفت — در تبِ «قوانین» حضور و غیاب',
+  'دموی نسخه‌ی شرکتی: بارگذاریِ داده‌ی نمونه برای نمایش، و توضیحِ امکاناتِ نسخه‌ی شرکتی',
 ];
 
 function App() {
@@ -828,6 +828,25 @@ function App() {
       if (!j.blob) { notify('هنوز داده‌ای روی سرور نیست؛ اول «ارسال» را بزنید.'); return; }
       applyBackup(j.blob);
     } catch { notify('اتصال به سرور برقرار نشد.'); }
+  };
+
+  // Load showcase/demo data (for sales demos of the company edition).
+  const loadDemo = () => {
+    askConfirm('داده‌ی نمونه برای نمایش بارگذاری شود؟ (داده‌های فعلیِ این بخش‌ها جایگزین می‌شود)', () => {
+      saveAttendance({
+        employees: [
+          { id: 'd1', name: 'علی رضایی', code: '101', dailyRate: 1200000, position: 'کارشناسِ فنی', hire: '۱۴۰۲/۰۵/۰۱' },
+          { id: 'd2', name: 'مریم احمدی', code: '102', dailyRate: 1500000, position: 'حسابدار', hire: '۱۴۰۱/۱۱/۱۵' },
+        ],
+        standardHours: 8,
+        records: { d1: { '1405-2-1': 'present', '1405-2-2': 'present', '1405-2-4': 'present' }, d2: { '1405-2-1': 'present', '1405-2-3': 'leave' } },
+        overtime: { d1: { '1405-2': 10 } }, adjust: {}, rules: { start: '08:00', end: '16:00', weekend: [6], thuPolicy: 'early', thuEarlyMin: 90, shift2: null, altWeeksOff: false, note: 'نمونه' },
+      });
+      saveInventory({ items: [{ id: 'p1', name: 'روغن موتور', code: '1', unit: 'عدد', buy: 600000, sell: 900000 }, { id: 'p2', name: 'فیلتر هوا', code: '2', unit: 'عدد', buy: 200000, sell: 350000 }], txns: [{ id: 't1', itemId: 'p1', kind: 'in', qty: 20, price: 600000, y: 1405, m: 2, d: 1 }, { id: 't2', itemId: 'p2', kind: 'in', qty: 50, price: 200000, y: 1405, m: 2, d: 1 }] });
+      saveAccounting({ accounts: emptyAccounting().accounts, entries: [{ id: 'e1', y: 1405, m: 2, d: 1, desc: 'آورده‌ی سرمایه', lines: [{ accountId: 'a-cash', debit: 100000000, credit: 0 }, { accountId: 'a-cap', debit: 0, credit: 100000000 }] }] });
+      setShowCompany(false);
+      notify('داده‌ی نمونه بارگذاری شد ✅ — حالا بخش‌های حسابداری، انبار و حضور و غیاب را برای نمایش باز کنید.');
+    });
   };
 
   // ---------- Organization (server roles) ----------
@@ -1631,6 +1650,16 @@ function App() {
               <input className="tool-text-input" type="text" placeholder="نیازِ خاص، تعدادِ شعبه و…" value={coNotes} onChange={(e) => setCoNotes(e.target.value)} />
               <button className="loan-submit" onClick={submitQuote}>ثبتِ درخواست و دریافتِ قیمت</button>
               <div className="tool-note">پس از ثبت، کارشناسِ ما قیمت را برایتان می‌فرستد. پرداخت و فعال‌سازیِ خودکار در نسخه‌ی سرور اضافه می‌شود.</div>
+
+              <div className="loan-sched-head"><span>نسخه‌ی شرکتی چه می‌دهد؟</span></div>
+              <ul className="co-features">
+                <li>✅ حسابِ جداگانه برای هر کارمند با <b>نقش و سطحِ دسترسی</b></li>
+                <li>✅ <b>قوانینِ کاریِ اختصاصیِ شرکت</b> (شیفت، تعطیلیِ هفتگی، پنج‌شنبه)</li>
+                <li>✅ حسابداریِ دوطرفه، انبار، حضور و غیاب و فیشِ حقوقی — همه <b>یکپارچه</b></li>
+                <li>✅ <b>همگام‌سازیِ ابری</b> و چنددستگاهه؛ کارگر از گوشیِ خودش فقط بخشِ خودش را می‌بیند</li>
+                <li>✅ گزارش‌های <b>چاپ/PDF و خروجیِ اکسل</b></li>
+              </ul>
+              <button className="acc-addline" onClick={loadDemo}>🎬 بارگذاریِ داده‌ی نمونه (برای نمایش/دمو)</button>
             </div>
           </div>
         </div>
@@ -1766,7 +1795,7 @@ function App() {
               <button className={`theme-btn ${theme === 'dark' ? 'active' : ''}`} onClick={() => setTheme('dark')}>🌙 تیره</button>
             </div>
 
-            <div className="drawer-foot">نسخه ۱۴۰۵ · ۱.۰.۵۱</div>
+            <div className="drawer-foot">نسخه ۱۴۰۵ · ۱.۰.۵۲</div>
           </aside>
         </div>
       )}

@@ -3,7 +3,7 @@
 // اضافه‌کار (۱.۴ برابر طبقِ عرفِ قانونِ کار) و حقوقِ تخمینی و گزارشِ ماهانه‌ی قابلِ چاپ.
 // مدل عمداً ساده است تا صاحبِ کسب‌وکارِ کوچک بدونِ آموزش بتواند کار کند.
 import { useState } from 'react';
-import { getToday, getMonthNames, getMonthDays } from './calendar';
+import { getToday, getMonthNames, getMonthDays, getFirstWeekdayOffset } from './calendar';
 import { downloadCsv } from './csv';
 import type { AccType } from './Accounting';
 
@@ -13,6 +13,21 @@ const withSep = (s: string): string => { const d = digits(s); return d ? d.toLoc
 
 export type DayStatus = 'present' | 'absent' | 'leave' | 'holiday';
 export interface Employee { id: string; name: string; code?: string; dailyRate?: number; hourlyRate?: number; position?: string; hire?: string; }
+// Per-company work rules (each company defines its own schedule).
+// weekend: weekday indices that are weekly day-off (0=شنبه … 5=پنجشنبه … 6=جمعه).
+// thuPolicy: Thursday is 'off' (full), 'early' (come but leave earlier by thuEarlyMin), or 'normal'.
+export interface WorkRules {
+  start: string;            // "07:30"
+  end: string;              // "15:45"
+  weekend: number[];        // default [6] = جمعه
+  thuPolicy: 'normal' | 'off' | 'early';
+  thuEarlyMin: number;      // minutes to leave earlier on Thursday when policy='early'
+  shift2?: { start: string; end: string } | null; // optional second shift
+  altWeeksOff?: boolean;    // 5 days, every-other-week off (alternating weeks)
+  note?: string;
+}
+export const DEFAULT_RULES: WorkRules = { start: '08:00', end: '16:00', weekend: [6], thuPolicy: 'normal', thuEarlyMin: 90, shift2: null, altWeeksOff: false, note: '' };
+
 export interface AttendanceState {
   employees: Employee[];
   standardHours: number;                                   // ساعتِ کاریِ استانداردِ روز (پیش‌فرض ۸)
@@ -20,9 +35,13 @@ export interface AttendanceState {
   overtime: { [empId: string]: { [ym: string]: number } };       // ساعتِ اضافه‌کارِ هر ماه؛ ym = "y-m"
   // Per-month allowances/deductions for the payslip (bonuses, insurance, advances, ...).
   adjust?: { [empId: string]: { [ym: string]: { allow?: number; deduct?: number } } };
+  rules?: WorkRules;                                       // company work-schedule rules
 }
 
-export function emptyAttendance(): AttendanceState { return { employees: [], standardHours: 8, records: {}, overtime: {}, adjust: {} }; }
+export function emptyAttendance(): AttendanceState { return { employees: [], standardHours: 8, records: {}, overtime: {}, adjust: {}, rules: { ...DEFAULT_RULES } }; }
+// Hours between two "HH:MM" times.
+const hoursBetween = (a: string, b: string) => { const p = (s: string) => { const [h, m] = (s || '0:0').split(':').map(Number); return (h || 0) * 60 + (m || 0); }; return Math.max(0, (p(b) - p(a)) / 60); };
+const WEEKDAY_NAMES = ['شنبه', 'یک‌شنبه', 'دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنج‌شنبه', 'جمعه'];
 
 // چرخه‌ی وضعیت با هر لمس: خالی → حاضر → غایب → مرخصی → تعطیل → خالی
 const CYCLE: (DayStatus | '')[] = ['', 'present', 'absent', 'leave', 'holiday'];
@@ -40,7 +59,7 @@ interface Props {
   selfMode?: boolean;
   selfEmpId?: string;
 }
-type Tab = 'log' | 'report' | 'slip' | 'decree' | 'staff';
+type Tab = 'log' | 'report' | 'slip' | 'decree' | 'rules' | 'staff';
 
 export default function AttendancePanel({ state, onChange, onClose, confirm, onPostJournal, selfMode, selfEmpId }: Props) {
   const employees = state.employees || [];
@@ -59,6 +78,12 @@ export default function AttendancePanel({ state, onChange, onClose, confirm, onP
   const daysInMonth = getMonthDays('jalali', y, m);
   const ym = `${y}-${m}`;
   const dayKey = (d: number) => `${y}-${m}-${d}`;
+  // Work rules + weekday helpers (to reflect weekly day-off / Thursday policy on the grid)
+  const rules = state.rules || DEFAULT_RULES;
+  const monthOffset = getFirstWeekdayOffset('jalali', y, m);   // column (0=شنبه) of day 1
+  const weekdayOf = (d: number) => (monthOffset + d - 1) % 7;  // 0=شنبه … 5=پنجشنبه … 6=جمعه
+  const isWeekendDay = (d: number) => rules.weekend.includes(weekdayOf(d)) || (weekdayOf(d) === 5 && rules.thuPolicy === 'off');
+  const isThuEarly = (d: number) => weekdayOf(d) === 5 && rules.thuPolicy === 'early';
 
   // ---------- ثبتِ وضعیتِ روز ----------
   const cycleDay = (d: number) => {
@@ -142,6 +167,7 @@ export default function AttendancePanel({ state, onChange, onClose, confirm, onP
             {!selfMode && <button type="button" className={`mini-toggle-btn ${tab === 'report' ? 'active' : ''}`} onClick={() => setTab('report')}>گزارش</button>}
             <button type="button" className={`mini-toggle-btn ${tab === 'slip' ? 'active' : ''}`} onClick={() => setTab('slip')}>{selfMode ? 'فیشِ من' : 'فیش'}</button>
             <button type="button" className={`mini-toggle-btn ${tab === 'decree' ? 'active' : ''}`} onClick={() => setTab('decree')}>حکم</button>
+            {!selfMode && <button type="button" className={`mini-toggle-btn ${tab === 'rules' ? 'active' : ''}`} onClick={() => setTab('rules')}>قوانین</button>}
             {!selfMode && <button type="button" className={`mini-toggle-btn ${tab === 'staff' ? 'active' : ''}`} onClick={() => setTab('staff')}>کارمندان</button>}
           </div>
 
@@ -173,10 +199,12 @@ export default function AttendancePanel({ state, onChange, onClose, confirm, onP
               <div className="att-grid">
                 {Array.from({ length: daysInMonth }, (_, i) => i + 1).map((d) => {
                   const s = records[empId]?.[dayKey(d)] as DayStatus | undefined;
+                  const off = isWeekendDay(d);          // weekly day-off per company rules
+                  const early = isThuEarly(d);          // Thursday early-leave day
                   return (
-                    <button key={d} className={`att-day ${s || ''}`} onClick={() => cycleDay(d)}>
+                    <button key={d} className={`att-day ${s || ''} ${off && !s ? 'weekoff' : ''}`} onClick={() => cycleDay(d)} title={off ? 'تعطیلِ هفتگی' : early ? `پنج‌شنبه: ${rules.thuEarlyMin} دقیقه زودتر` : ''}>
                       <span className="att-dnum">{d}</span>
-                      {s && <span className="att-dstat">{STATUS_SHORT[s]}</span>}
+                      {s ? <span className="att-dstat">{STATUS_SHORT[s]}</span> : off ? <span className="att-dstat off">×</span> : early ? <span className="att-dstat early">⏱</span> : null}
                     </button>
                   );
                 })}
@@ -320,6 +348,63 @@ export default function AttendancePanel({ state, onChange, onClose, confirm, onP
               )}
             </>
           ))}
+
+          {/* ---------------- work rules (قوانینِ کاری) ---------------- */}
+          {tab === 'rules' && (() => {
+            const setRules = (patch: Partial<WorkRules>) => onChange({ ...state, rules: { ...rules, ...patch } });
+            const toggleWeekend = (w: number) => setRules({ weekend: rules.weekend.includes(w) ? rules.weekend.filter((x) => x !== w) : [...rules.weekend, w] });
+            const computed = hoursBetween(rules.start, rules.end);
+            return (
+              <>
+                <div className="fund-help">قوانینِ کاریِ شرکتِ خود را اینجا تعریف کنید؛ تقویمِ حضور و غیاب بر اساسِ آن نمایش داده می‌شود.</div>
+                <label className="field-label">ساعتِ کاری (شروع تا پایان)</label>
+                <div className="att-addgrid">
+                  <input className="tool-text-input" type="time" dir="ltr" value={rules.start} onChange={(e) => setRules({ start: e.target.value })} />
+                  <input className="tool-text-input" type="time" dir="ltr" value={rules.end} onChange={(e) => setRules({ end: e.target.value })} />
+                </div>
+                <div className="tool-note">ساعتِ کاریِ روز: <b>{computed.toFixed(1)}</b> ساعت. <button className="att-inlinebtn" onClick={() => onChange({ ...state, standardHours: Math.round(computed * 10) / 10 })}>قراردادن به‌عنوانِ ساعتِ استاندارد</button></div>
+
+                <label className="field-label">روزهای تعطیلِ هفته</label>
+                <div className="att-weekdays">
+                  {WEEKDAY_NAMES.map((nm, w) => (
+                    <button key={w} type="button" className={`att-wd ${rules.weekend.includes(w) ? 'on' : ''}`} onClick={() => toggleWeekend(w)}>{nm}</button>
+                  ))}
+                </div>
+
+                <label className="field-label">سیاستِ پنج‌شنبه</label>
+                <div className="mini-toggle">
+                  <button type="button" className={`mini-toggle-btn ${rules.thuPolicy === 'normal' ? 'active' : ''}`} onClick={() => setRules({ thuPolicy: 'normal' })}>عادی</button>
+                  <button type="button" className={`mini-toggle-btn ${rules.thuPolicy === 'off' ? 'active' : ''}`} onClick={() => setRules({ thuPolicy: 'off' })}>تعطیلِ کامل</button>
+                  <button type="button" className={`mini-toggle-btn ${rules.thuPolicy === 'early' ? 'active' : ''}`} onClick={() => setRules({ thuPolicy: 'early' })}>زودتر رفتن</button>
+                </div>
+                {rules.thuPolicy === 'early' && (
+                  <>
+                    <label className="field-label">پنج‌شنبه‌ها چند دقیقه زودتر؟</label>
+                    <input className="tool-text-input" type="number" inputMode="numeric" dir="ltr" value={String(rules.thuEarlyMin)} onChange={(e) => setRules({ thuEarlyMin: digits(e.target.value) || 0 })} placeholder="مثلاً 90" />
+                  </>
+                )}
+
+                <label className="fund-switch" style={{ marginTop: 12 }}>
+                  <input type="checkbox" checked={!!rules.altWeeksOff} onChange={(e) => setRules({ altWeeksOff: e.target.checked })} />
+                  <span>پنج‌شنبه‌ها «یک‌هفته‌درمیان» تعطیل (شیفتِ کاریِ متناوب)</span>
+                </label>
+                <label className="fund-switch" style={{ marginTop: 8 }}>
+                  <input type="checkbox" checked={!!rules.shift2} onChange={(e) => setRules({ shift2: e.target.checked ? { start: '16:00', end: '00:00' } : null })} />
+                  <span>شیفتِ دوم دارد (نوبت‌کاری)</span>
+                </label>
+                {rules.shift2 && (
+                  <div className="att-addgrid">
+                    <input className="tool-text-input" type="time" dir="ltr" value={rules.shift2.start} onChange={(e) => setRules({ shift2: { ...rules.shift2!, start: e.target.value } })} />
+                    <input className="tool-text-input" type="time" dir="ltr" value={rules.shift2.end} onChange={(e) => setRules({ shift2: { ...rules.shift2!, end: e.target.value } })} />
+                  </div>
+                )}
+
+                <label className="field-label">یادداشتِ قوانین (اختیاری)</label>
+                <input className="tool-text-input" type="text" placeholder="مثلاً: نوبت‌کاری شیفت۱ و شیفت۲ هفته‌درمیان" value={rules.note || ''} onChange={(e) => setRules({ note: e.target.value })} />
+                <div className="tool-note">این قوانین در دادهٔ سازمان ذخیره می‌شوند؛ پس «هر شرکت قوانینِ خودش» را دارد. در تقویمِ تبِ «حضور»، روزهای تعطیلِ هفتگی با × و پنج‌شنبه‌ی زودتر با ⏱ مشخص می‌شوند.</div>
+              </>
+            );
+          })()}
 
           {/* ---------------- کارمندان ---------------- */}
           {tab === 'staff' && (

@@ -2423,3 +2423,20 @@ body.dark .att-dnum { color: #cfd7e8; }
 .dc-pro .dc-s{opacity:.8}
 body.dark .dash-box { background: #131b2c; }
 body.dark .dash-title { color: #eef2fa; }
+
+/* ==================== work rules (قوانینِ کاری) ==================== */
+.att-weekdays { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin: 6px 0 10px; }
+.att-wd { padding: 8px 4px; border: 1px solid #d3deee; border-radius: 9px; background: #fff; color: #4a5774; font-size: 12px; font-weight: 700; cursor: pointer; font-family: inherit; }
+.att-wd.on { background: #d2453b; border-color: #d2453b; color: #fff; }
+.att-inlinebtn { background: none; border: none; color: #1c6fd6; font-weight: 700; cursor: pointer; font-family: inherit; font-size: 12px; }
+.att-day.weekoff { background: #f6e9e9; border-color: #f0d2d2; }
+.att-dstat.off { color: #d2453b; }
+.att-dstat.early { color: #1c6fd6; }
+body.dark .att-wd { background: #1b2740; border-color: #314261; color: #b9c5dc; }
+body.dark .att-wd.on { background: #c0392b; border-color: #c0392b; color: #fff; }
+body.dark .att-day.weekoff { background: #2a1c1c; border-color: #4a2a2a; }
+
+/* company-edition features list */
+.co-features { list-style: none; padding: 0; margin: 4px 0 12px; }
+.co-features li { font-size: 13px; line-height: 2; color: #335a86; }
+body.dark .co-features li { color: #aecbe9; }
