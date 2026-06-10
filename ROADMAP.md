@@ -125,11 +125,17 @@ flowchart TD
       category; extra fields از ساعت/تا ساعت (hourly), جانشین (substitute), and mission مبدا/مقصد/موضوع
 - ✓ **Daily punch kardex** (کارکرد روزانه): clock-in/out per day → worked, late (تأخیر), early-leave (تعجیل),
       shortfall (کسرِ کار) and surplus (مازادِ حضور) computed against the company work rules; CSV export
+- ✓ **Advanced work policy** (admin-configurable, > Kasra): morning lateness grace, allowed late count per
+      month (forgiven), overtime minimum threshold, and unpaid breakfast/lunch break deduction — all fed into payroll
 - ✓ **Integrated payroll**: base = worked days/hours + PAID leave; overtime = manual + punch surplus (×1.4);
       shortfall + unpaid hourly leave reduce salary; fuller payslip lines
 - ✓ **Configurable حکم salary components** (اجزای حکم): company-defined catalogue (حق مسکن، بن، اولاد،
       سنوات، فوق‌العاده شغل، تأهل، بیمه…), per-employee amounts, itemized in the decree + payslip, summed
       into net pay and the payroll journal entry
+- ◻ **Accounting upgrade** (next, original implementation from standard accounting principles — NOT copied
+      from any vendor's materials; we respect their copyright). Planned: hierarchical chart of accounts
+      (گروه/کل/معین/تفصیلی), Iranian standard account groups, VAT (مالیات بر ارزش افزوده), opening/closing
+      entries & fiscal-year close, cost centers, and clearer guided workflows for non-accountants.
 - ◻ Windows desktop installer (.exe) via Electron + Windows CI  (deferred — not yet)
 - ◻ Attendance device matching: face / fingerprint / RFID-card readers
       - phase 1: device biometric unlock (WebAuthn / Capacitor biometric) for worker self check-in

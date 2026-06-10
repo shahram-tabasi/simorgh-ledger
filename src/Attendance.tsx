@@ -24,9 +24,15 @@ export interface WorkRules {
   thuEarlyMin: number;      // minutes to leave earlier on Thursday when policy='early'
   shift2?: { start: string; end: string } | null; // optional second shift
   altWeeksOff?: boolean;    // 5 days, every-other-week off (alternating weeks)
+  // --- Advanced attendance policy (admin-configurable, fed into payroll) ---
+  graceLateMin?: number;    // morning grace: lateness up to this many minutes is not penalized
+  lateAllowPerMonth?: number; // number of late days per month that are forgiven before any deduction
+  otMinMin?: number;        // overtime threshold: staying less than this past end-time does NOT count as overtime
+  breakfastMin?: number;    // unpaid breakfast break deducted from worked hours
+  lunchMin?: number;        // unpaid lunch break deducted from worked hours
   note?: string;
 }
-export const DEFAULT_RULES: WorkRules = { start: '08:00', end: '16:00', weekend: [6], thuPolicy: 'normal', thuEarlyMin: 90, shift2: null, altWeeksOff: false, note: '' };
+export const DEFAULT_RULES: WorkRules = { start: '08:00', end: '16:00', weekend: [6], thuPolicy: 'normal', thuEarlyMin: 90, shift2: null, altWeeksOff: false, graceLateMin: 0, lateAllowPerMonth: 0, otMinMin: 0, breakfastMin: 0, lunchMin: 0, note: '' };
 
 // ---- Leave / permits workflow (modeled on Kasra's kardex + کارتابل + payroll) ----
 // Leave TYPES are user-definable (the combobox the user can extend). Each type carries its own
@@ -228,21 +234,27 @@ export default function AttendancePanel({ state, onChange, onClose, confirm, onP
   };
 
   // ---------- کاردکسِ ساعتی: محاسبه‌ی یک روز از روی ترددِ ورود/خروج ----------
-  // Returns null when there is no punch for that day. Computes worked, late (تأخیر), early-leave
-  // (تعجیل), shortfall (کسرِ کار) and surplus (مازادِ حضور / overtime) against the company rules.
+  // Returns null when there is no punch for that day. Applies the company policy: unpaid breaks are
+  // deducted from worked hours; morning lateness within the grace window is forgiven; staying past the
+  // end-time counts as overtime only beyond the overtime threshold. Returns late/early/shortfall/surplus.
   const punchCalc = (empId2: string, d: number) => {
     const pk = punches[empId2]?.[`${y}-${m}-${d}`];
     if (!pk || (!pk.in && !pk.out)) return null;
-    const worked = hoursBetween(pk.in, pk.out);
+    const breaksH = ((rules.breakfastMin || 0) + (rules.lunchMin || 0)) / 60; // unpaid breaks
+    const worked = Math.max(0, hoursBetween(pk.in, pk.out) - breaksH);        // net worked (breaks removed)
     let endMin = toMin(rules.end);
     if (isThuEarly(d)) endMin -= (rules.thuEarlyMin || 0); // Thursday leaves earlier → smaller target
     const startMin = toMin(rules.start);
-    const expected = isWeekendDay(d) ? 0 : Math.max(0, (endMin - startMin) / 60);
-    const late = Math.max(0, (toMin(pk.in) - startMin) / 60);
+    const expected = isWeekendDay(d) ? 0 : Math.max(0, (endMin - startMin) / 60 - breaksH);
+    const grace = (rules.graceLateMin || 0);
+    const lateRaw = Math.max(0, toMin(pk.in) - startMin);              // raw minutes late
+    const late = Math.max(0, (lateRaw - grace)) / 60;                 // forgiven up to the grace window
     const early = Math.max(0, (endMin - toMin(pk.out)) / 60);
-    const shortfall = Math.max(0, expected - worked);
-    const surplus = Math.max(0, worked - expected);
-    return { in: pk.in, out: pk.out, worked, expected, late, early, shortfall, surplus };
+    const shortfall = late + early;                                   // کسرِ کار = تأخیرِ مؤثر + تعجیل
+    const surplusRaw = Math.max(0, worked - expected);
+    // Overtime counts only beyond the threshold (short overstays are not overtime).
+    const surplus = surplusRaw * 60 >= (rules.otMinMin || 0) ? surplusRaw : 0;
+    return { in: pk.in, out: pk.out, worked, expected, late, lateRaw, early, shortfall, surplus, isLate: late > 0 };
   };
 
   // ---------- محاسبه‌ی کارکرد و حقوقِ یک کارمند در ماهِ جاری ----------
@@ -250,13 +262,21 @@ export default function AttendancePanel({ state, onChange, onClose, confirm, onP
     const rec = records[e.id] || {};
     let present = 0, absent = 0, leave = 0, holiday = 0;
     // Aggregate the daily punches (hourly kardex) across the month.
-    let punchDays = 0, punchWorked = 0, lateH = 0, earlyH = 0, shortfallH = 0, surplusH = 0;
+    let punchDays = 0, punchWorked = 0, lateH = 0, earlyH = 0, surplusH = 0;
+    const lateList: number[] = [];   // late hours per late-day, to apply the monthly forgiveness
     for (let d = 1; d <= daysInMonth; d++) {
       const s = rec[`${y}-${m}-${d}`];
       if (s === 'present') present++; else if (s === 'absent') absent++; else if (s === 'leave') leave++; else if (s === 'holiday') holiday++;
       const pc = punchCalc(e.id, d);
-      if (pc) { punchDays++; punchWorked += pc.worked; lateH += pc.late; earlyH += pc.early; shortfallH += pc.shortfall; surplusH += pc.surplus; }
+      if (pc) { punchDays++; punchWorked += pc.worked; lateH += pc.late; earlyH += pc.early; surplusH += pc.surplus; if (pc.late > 0) lateList.push(pc.late); }
     }
+    // Forgive the smallest N late occurrences this month (admin's allowed-late count).
+    const forgiveN = rules.lateAllowPerMonth || 0;
+    lateList.sort((a, b) => a - b);
+    const forgivenLateH = lateList.slice(0, forgiveN).reduce((s, v) => s + v, 0);
+    const lateCount = lateList.length;
+    const effectiveLateH = Math.max(0, lateH - forgivenLateH);
+    const shortfallH = effectiveLateH + earlyH;   // کسرِ کار after forgiving allowed lateness
     // Approved leave permits that fall in THIS payroll month feed the salary (paid vs unpaid).
     let paidLeaveDays = 0, paidLeaveHours = 0, unpaidDays = 0, unpaidHours = 0;
     for (const r of (state.leave?.requests || [])) {
@@ -292,7 +312,7 @@ export default function AttendancePanel({ state, onChange, onClose, confirm, onP
     const deduct = manualDeduct + shortfallPay + compDeduct;
     const pay = Math.max(0, base + otPay + allow + compEarn - deduct);
     return { present, absent, leave, holiday, ot, manualOt, workedHours, workedDays, base, otPay, allow, deduct, manualDeduct, pay,
-      punchDays, lateH, earlyH, shortfallH, surplusH, paidLeaveDays, paidLeaveHours, unpaidDays, unpaidHours, shortfallPay, compEarn, compDeduct };
+      punchDays, lateH, earlyH, shortfallH, surplusH, lateCount, forgivenLateH, paidLeaveDays, paidLeaveHours, unpaidDays, unpaidHours, shortfallPay, compEarn, compDeduct };
   };
   const setAdjust = (field: 'allow' | 'deduct', val: string) => {
     if (!empId) return;
@@ -550,6 +570,7 @@ export default function AttendancePanel({ state, onChange, onClose, confirm, onP
                 <div className="tool-result">
                   <div className="tool-result-row"><span>روزهای ترددشده</span><strong>{curCalc.punchDays}</strong></div>
                   <div className="tool-result-row"><span>کارکرد / تأخیر / تعجیل (ساعت)</span><strong>{fmt(curCalc.workedHours)} / {curCalc.lateH.toFixed(1)} / {curCalc.earlyH.toFixed(1)}</strong></div>
+                  <div className="tool-result-row"><span>دفعاتِ تأخیر (بخشیده‌شده)</span><strong>{curCalc.lateCount} ({curCalc.forgivenLateH.toFixed(1)} ساعت)</strong></div>
                   <div className="tool-result-row"><span>کسرِ کار / مازادِ حضور (ساعت)</span><strong>{curCalc.shortfallH.toFixed(1)} / {curCalc.surplusH.toFixed(1)}</strong></div>
                   <div className="tool-result-row closing"><span>اثرِ کسرِ کار بر حقوق</span><strong>−{fmt(curCalc.shortfallPay)}</strong></div>
                 </div>
@@ -986,6 +1007,27 @@ export default function AttendancePanel({ state, onChange, onClose, confirm, onP
                     <input className="tool-text-input" type="time" dir="ltr" value={rules.shift2.end} onChange={(e) => setRules({ shift2: { ...rules.shift2!, end: e.target.value } })} />
                   </div>
                 )}
+
+                <div className="loan-sched-head"><span>قوانینِ پیشرفته‌ی کارکرد (محاسبه‌ی حقوق)</span></div>
+                <div className="att-addgrid">
+                  <div><label className="field-label">ارفاقِ تأخیرِ صبح (دقیقه)</label>
+                    <input className="tool-text-input" type="text" inputMode="numeric" dir="ltr" value={String(rules.graceLateMin || 0)} onChange={(e) => setRules({ graceLateMin: digits(e.target.value) })} placeholder="مثلاً 10" /></div>
+                  <div><label className="field-label">دفعاتِ مجازِ تأخیر در ماه</label>
+                    <input className="tool-text-input" type="text" inputMode="numeric" dir="ltr" value={String(rules.lateAllowPerMonth || 0)} onChange={(e) => setRules({ lateAllowPerMonth: digits(e.target.value) })} placeholder="مثلاً 3" /></div>
+                </div>
+                <div className="tool-note">تأخیرِ کمتر از «ارفاق» جریمه ندارد؛ علاوه بر آن، «دفعاتِ مجاز» تأخیرِ کم‌اثرِ ماه بخشیده می‌شود و کسرِ کار نمی‌خورد.</div>
+                <div className="att-addgrid">
+                  <div><label className="field-label">حداقلِ اضافه‌کار (دقیقه)</label>
+                    <input className="tool-text-input" type="text" inputMode="numeric" dir="ltr" value={String(rules.otMinMin || 0)} onChange={(e) => setRules({ otMinMin: digits(e.target.value) })} placeholder="مثلاً 30" /></div>
+                </div>
+                <div className="tool-note">ماندنِ کمتر از این مقدار پس از پایانِ کار، اضافه‌کار حساب نمی‌شود.</div>
+                <div className="att-addgrid">
+                  <div><label className="field-label">استراحتِ صبحانه (دقیقه)</label>
+                    <input className="tool-text-input" type="text" inputMode="numeric" dir="ltr" value={String(rules.breakfastMin || 0)} onChange={(e) => setRules({ breakfastMin: digits(e.target.value) })} placeholder="مثلاً 15" /></div>
+                  <div><label className="field-label">استراحتِ ناهار (دقیقه)</label>
+                    <input className="tool-text-input" type="text" inputMode="numeric" dir="ltr" value={String(rules.lunchMin || 0)} onChange={(e) => setRules({ lunchMin: digits(e.target.value) })} placeholder="مثلاً 45" /></div>
+                </div>
+                <div className="tool-note">زمانِ استراحت (صبحانه و ناهار) بدونِ حقوق است و از کارکردِ روزانه کسر می‌شود؛ نتیجه مستقیم در حقوق و سندِ حسابداریِ حقوق اعمال می‌شود.</div>
 
                 <label className="field-label">یادداشتِ قوانین (اختیاری)</label>
                 <input className="tool-text-input" type="text" placeholder="مثلاً: نوبت‌کاری شیفت۱ و شیفت۲ هفته‌درمیان" value={rules.note || ''} onChange={(e) => setRules({ note: e.target.value })} />
