@@ -12,3 +12,10 @@ createRoot(document.getElementById('root')!).render(
     <App />
   </StrictMode>,
 )
+
+// ثبتِ سرویس‌ورکر فقط در نسخه‌ی وب (نه در اپِ اندرویدِ Capacitor) و فقط در production
+if (import.meta.env.PROD && !(window as any).Capacitor && 'serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch(() => { /* بدونِ آفلاین هم کار می‌کند */ });
+  });
+}

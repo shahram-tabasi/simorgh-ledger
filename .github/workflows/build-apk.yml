@@ -23,6 +23,12 @@ jobs:
     - name: Build web app
       run: npm run build
 
+    - name: Upload web build (برای میزبانی روی سایت/VPS)
+      uses: actions/upload-artifact@v4
+      with:
+        name: simorgh-web
+        path: dist
+
     - name: Setup Java
       uses: actions/setup-java@v4
       with:
