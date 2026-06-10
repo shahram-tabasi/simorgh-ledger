@@ -33,6 +33,7 @@ import FundPanel from './Fund';
 import AccountingPanel, { type AccountingState, type AccType, emptyAccounting } from './Accounting';
 import AttendancePanel, { type AttendanceState, emptyAttendance } from './Attendance';
 import InventoryPanel, { type InventoryState, emptyInventory } from './Inventory';
+import AccessPanel, { type AccessState, emptyAccess } from './Access';
 import CoachTour, { type CoachStep } from './Coach';
 import {
   IconReport, IconBom, IconLoan, IconConvert, IconAge, IconBio, IconBmi,
@@ -150,10 +151,11 @@ function resolveAcc(accs: AccLite[], defName: { [k in AccType]: string }, t: Acc
   return a.id;
 }
 
-const APP_VERSION = '1.0.45';
+const APP_VERSION = '1.0.46';
 const CHANGELOG: string[] = [
-  'فیشِ حقوقیِ کامل در «حضور و غیاب»: حقوقِ پایه + اضافه‌کار + مزایا − کسورات = خالصِ پرداختی، قابلِ چاپ/PDF',
-  'مزایا و کسوراتِ ماهانه برای هر کارمند، که در گزارش و سندِ حقوق هم اعمال می‌شود',
+  'کنترلِ دسترسی: گروه با سطحِ دسترسی تعریف کنید و کاربرها را در گروه بگذارید (نه تنظیمِ تک‌تک)',
+  'حالتِ کارگر: هر کارمند فقط حضور/مرخصی و فیشِ حقوقِ خودش را می‌بیند؛ با رمزِ مدیر محافظت می‌شود',
+  'این کنترل سمتِ دستگاه است؛ امنیتِ کاملِ چنددستگاهه در نسخه‌ی سرور می‌آید',
 ];
 
 function App() {
@@ -221,6 +223,16 @@ function App() {
   const [showInvModal, setShowInvModal] = useState<boolean>(false);
   const [inventory, setInventory] = useState<InventoryState>(() => { try { const s = localStorage.getItem('inventory'); return s ? JSON.parse(s) : emptyInventory(); } catch { return emptyInventory(); } });
   const saveInventory = (s: InventoryState) => { localStorage.setItem('inventory', JSON.stringify(s)); setInventory(s); };
+  const [showAccessModal, setShowAccessModal] = useState<boolean>(false);
+  const [access, setAccess] = useState<AccessState>(() => { try { const s = localStorage.getItem('access'); return s ? JSON.parse(s) : emptyAccess(); } catch { return emptyAccess(); } });
+  const saveAccess = (s: AccessState) => { localStorage.setItem('access', JSON.stringify(s)); setAccess(s); };
+  // Active-user role gating (device-side). When disabled, everything is allowed.
+  const activeUser = access.activeUserId ? access.users.find((u) => u.id === access.activeUserId) : null;
+  const activeGroup = activeUser ? access.groups.find((g) => g.id === activeUser.groupId) : null;
+  const can = (key: string) => !access.enabled || !activeUser || !!activeGroup?.perms.includes(key);
+  // Worker self-service mode: active user only has personal attendance and is linked to an employee.
+  const selfMode = !!(access.enabled && activeUser && activeGroup && !activeGroup.perms.includes('attendance') && activeGroup.perms.includes('attendance_self'));
+  const selfEmpId = selfMode ? activeUser?.empId : undefined;
   const [fundStartReport, setFundStartReport] = useState<boolean>(false);
   const [theme, setTheme] = useState<'light' | 'dark'>(() => (localStorage.getItem('theme') as 'light' | 'dark') || 'light');
   const [prayerProvince, setPrayerProvince] = useState<string>(() => localStorage.getItem('prayerProvince') || 'تهران');
@@ -321,6 +333,7 @@ function App() {
       [showAccModal, () => setShowAccModal(false)],
       [showAttModal, () => setShowAttModal(false)],
       [showInvModal, () => setShowInvModal(false)],
+      [showAccessModal, () => setShowAccessModal(false)],
       [showAboutModal, () => setShowAboutModal(false)],
       [showYearMonthModal, () => setShowYearMonthModal(false)],
       [showDayModal, () => setShowDayModal(false)],
@@ -337,7 +350,7 @@ function App() {
       else { lastBack.current = now; setExitHint(true); setTimeout(() => setExitHint(false), 2000); }
     });
     return () => { sub.then((h) => h.remove()); };
-  }, [showTour, dialog, showAddModal, showReminderModal, showPrayerModal, showToolsModal, selectedLoanId, showLoansModal, showFundModal, showAccModal, showAttModal, showInvModal, showAboutModal, showYearMonthModal, showDayModal, showRightDrawer, showLeftDrawer, showWhatsNew, showOnboarding]);
+  }, [showTour, dialog, showAddModal, showReminderModal, showPrayerModal, showToolsModal, selectedLoanId, showLoansModal, showFundModal, showAccModal, showAttModal, showInvModal, showAccessModal, showAboutModal, showYearMonthModal, showDayModal, showRightDrawer, showLeftDrawer, showWhatsNew, showOnboarding]);
 
   // هنگام تغییر تقویم، انتخابِ نظام را ذخیره و ماهِ در حال نمایش را تبدیل می‌کنیم
   const switchCalendar = (system: CalendarSystem) => {
@@ -631,7 +644,7 @@ function App() {
 
   // ---------- پشتیبان‌گیری و بازیابی ----------
   // کلیدهایی که در فایلِ پشتیبان ذخیره می‌شوند (داده‌ها + تنظیمات)
-  const BACKUP_KEYS = ['calendarData', 'funds', 'loans', 'accounting', 'attendance', 'inventory', 'calendarSystem', 'theme', 'prayerProvince', 'prayerCity'];
+  const BACKUP_KEYS = ['calendarData', 'funds', 'loans', 'accounting', 'attendance', 'inventory', 'access', 'calendarSystem', 'theme', 'prayerProvince', 'prayerCity'];
   const [ghRepo, setGhRepo] = useState<string>(() => localStorage.getItem('ghBackupRepo') || '');
   const [ghToken, setGhToken] = useState<string>(() => localStorage.getItem('ghBackupToken') || '');
   // حساب کاربری و همگام‌سازیِ ابری (سرورِ خودمان)
@@ -1398,11 +1411,15 @@ function App() {
       )}
 
       {showAttModal && (
-        <AttendancePanel state={attendance} onChange={saveAttendance} onClose={() => setShowAttModal(false)} confirm={askConfirm} onPostJournal={postJournal} />
+        <AttendancePanel state={attendance} onChange={saveAttendance} onClose={() => setShowAttModal(false)} confirm={askConfirm} onPostJournal={postJournal} selfMode={selfMode} selfEmpId={selfEmpId} />
       )}
 
       {showInvModal && (
         <InventoryPanel state={inventory} onChange={saveInventory} onClose={() => setShowInvModal(false)} confirm={askConfirm} onPostJournal={upsertJournal} onRemoveJournal={removeJournal} />
+      )}
+
+      {showAccessModal && (
+        <AccessPanel state={access} onChange={saveAccess} onClose={() => setShowAccessModal(false)} confirm={askConfirm} employees={attendance.employees.map((e) => ({ id: e.id, name: e.name }))} requirePin={access.enabled && !!activeUser && !can('users')} />
       )}
 
       {/* منوی راست: امکانات و ابزارها */}
@@ -1417,17 +1434,23 @@ function App() {
               </div>
               <button className="drawer-close" onClick={() => setShowRightDrawer(false)} aria-label="بستن">✕</button>
             </div>
-            <div className="drawer-section-label">گزارش‌ها</div>
-            <button className="drawer-item" onClick={() => openTool('report')}><span className="di-icon"><IconReport /></span> گزارش مالی بازه‌ای</button>
-            <button className="drawer-item" onClick={() => openTool('bom')}><span className="di-icon"><IconBom /></span> گزارش اول ماه (BOM)</button>
-            <div className="drawer-section-label">مالی</div>
-            <button className="drawer-item" onClick={() => openTool('loan')}><span className="di-icon"><IconLoan /></span> وام جدید</button>
-            <button className="drawer-item" onClick={() => { setShowRightDrawer(false); setShowLoansModal(true); }}><span className="di-icon"><IconReport /></span> وام‌های من</button>
-            <button className="drawer-item" onClick={() => { setShowRightDrawer(false); setFundStartReport(false); setShowFundModal(true); }}><span className="di-icon"><IconUsers /></span> صندوق خانوادگی</button>
-            <button className="drawer-item" onClick={() => { setShowRightDrawer(false); setFundStartReport(true); setShowFundModal(true); }}><span className="di-icon"><IconReport /></span> گزارش صندوق</button>
-            <button className="drawer-item" onClick={() => { setShowRightDrawer(false); setShowAccModal(true); }}><span className="di-icon"><IconBom /></span> حسابداری (دفترداریِ دوطرفه)</button>
-            <button className="drawer-item" onClick={() => { setShowRightDrawer(false); setShowAttModal(true); }}><span className="di-icon"><IconToday /></span> حضور و غیاب</button>
-            <button className="drawer-item" onClick={() => { setShowRightDrawer(false); setShowInvModal(true); }}><span className="di-icon"><IconBom /></span> انبار</button>
+            {can('tools') && <>
+              <div className="drawer-section-label">گزارش‌ها</div>
+              <button className="drawer-item" onClick={() => openTool('report')}><span className="di-icon"><IconReport /></span> گزارش مالی بازه‌ای</button>
+              <button className="drawer-item" onClick={() => openTool('bom')}><span className="di-icon"><IconBom /></span> گزارش اول ماه (BOM)</button>
+            </>}
+            {(can('loans') || can('fund') || can('accounting') || can('attendance') || can('attendance_self') || can('inventory')) && <div className="drawer-section-label">مالی و عملیات</div>}
+            {can('loans') && <>
+              <button className="drawer-item" onClick={() => openTool('loan')}><span className="di-icon"><IconLoan /></span> وام جدید</button>
+              <button className="drawer-item" onClick={() => { setShowRightDrawer(false); setShowLoansModal(true); }}><span className="di-icon"><IconReport /></span> وام‌های من</button>
+            </>}
+            {can('fund') && <>
+              <button className="drawer-item" onClick={() => { setShowRightDrawer(false); setFundStartReport(false); setShowFundModal(true); }}><span className="di-icon"><IconUsers /></span> صندوق خانوادگی</button>
+              <button className="drawer-item" onClick={() => { setShowRightDrawer(false); setFundStartReport(true); setShowFundModal(true); }}><span className="di-icon"><IconReport /></span> گزارش صندوق</button>
+            </>}
+            {can('accounting') && <button className="drawer-item" onClick={() => { setShowRightDrawer(false); setShowAccModal(true); }}><span className="di-icon"><IconBom /></span> حسابداری (دفترداریِ دوطرفه)</button>}
+            {(can('attendance') || can('attendance_self')) && <button className="drawer-item" onClick={() => { setShowRightDrawer(false); setShowAttModal(true); }}><span className="di-icon"><IconToday /></span> حضور و غیاب</button>}
+            {can('inventory') && <button className="drawer-item" onClick={() => { setShowRightDrawer(false); setShowInvModal(true); }}><span className="di-icon"><IconBom /></span> انبار</button>}
             <div className="drawer-section-label">ابزارهای کاربردی</div>
             <button className="drawer-item" onClick={() => openTool('convert')}><span className="di-icon"><IconConvert /></span> تبدیل تاریخ</button>
             <button className="drawer-item" onClick={() => openTool('age')}><span className="di-icon"><IconAge /></span> محاسبه سن</button>
@@ -1455,6 +1478,10 @@ function App() {
             <button className="drawer-item" onClick={() => { setShowLeftDrawer(false); setTimeout(() => setShowTour(true), 250); }}><span className="di-icon"><IconInfo /></span> راهنمای تصویری</button>
             <button className="drawer-item" onClick={shareApp}><span className="di-icon"><IconShare /></span> ارسال نرم‌افزار</button>
             <a className="drawer-item" href="https://www.simorghai.com" target="_blank" rel="noopener noreferrer"><span className="di-icon"><IconGlobe /></span> وب‌سایت سیمرغ</a>
+
+            <div className="drawer-section-label">کاربران و دسترسی</div>
+            {access.enabled && <div className="drawer-hint">کاربرِ فعال: <b>{activeUser ? activeUser.name : 'مدیر (بدونِ محدودیت)'}</b></div>}
+            <button className="drawer-item" onClick={() => { setShowLeftDrawer(false); setShowAccessModal(true); }}><span className="di-icon"><IconUsers /></span> کاربران، گروه‌ها و سطحِ دسترسی</button>
 
             <div className="drawer-section-label">حسابِ کاربری و همگام‌سازیِ ابری</div>
             {authToken ? (
@@ -1503,7 +1530,7 @@ function App() {
               <button className={`theme-btn ${theme === 'dark' ? 'active' : ''}`} onClick={() => setTheme('dark')}>🌙 تیره</button>
             </div>
 
-            <div className="drawer-foot">نسخه ۱۴۰۵ · ۱.۰.۴۵</div>
+            <div className="drawer-foot">نسخه ۱۴۰۵ · ۱.۰.۴۶</div>
           </aside>
         </div>
       )}

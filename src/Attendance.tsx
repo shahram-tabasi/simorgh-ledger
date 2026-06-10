@@ -35,10 +35,13 @@ interface Props {
   confirm: (msg: string, onYes: () => void) => void;
   // Accounting hook: auto-posts the month's payroll as a double-entry journal (optional).
   onPostJournal?: (ref: string, date: { y: number; m: number; d: number }, desc: string, spec: { type: AccType; name?: string; debit?: number; credit?: number }[]) => void;
+  // Worker self-service: lock the panel to one employee, allow only viewing + registering leave.
+  selfMode?: boolean;
+  selfEmpId?: string;
 }
 type Tab = 'log' | 'report' | 'slip' | 'staff';
 
-export default function AttendancePanel({ state, onChange, onClose, confirm, onPostJournal }: Props) {
+export default function AttendancePanel({ state, onChange, onClose, confirm, onPostJournal, selfMode, selfEmpId }: Props) {
   const employees = state.employees || [];
   const standardHours = state.standardHours || 8;
   const records = state.records || {};
@@ -46,10 +49,11 @@ export default function AttendancePanel({ state, onChange, onClose, confirm, onP
   const monthNames = getMonthNames('jalali');
   const today = getToday('jalali');
 
-  const [tab, setTab] = useState<Tab>(employees.length ? 'log' : 'staff');
+  // In self-mode the worker can only see their own record + the payslip, and may only register leave.
+  const [tab, setTab] = useState<Tab>(selfMode ? 'log' : (employees.length ? 'log' : 'staff'));
   const [y, setY] = useState<number>(today.year);
   const [m, setM] = useState<number>(today.month);                 // ۰مبنا
-  const [empId, setEmpId] = useState<string>(employees[0]?.id || '');
+  const [empId, setEmpId] = useState<string>(selfEmpId || employees[0]?.id || '');
 
   const daysInMonth = getMonthDays('jalali', y, m);
   const ym = `${y}-${m}`;
@@ -59,7 +63,8 @@ export default function AttendancePanel({ state, onChange, onClose, confirm, onP
   const cycleDay = (d: number) => {
     if (!empId) return;
     const cur = records[empId]?.[dayKey(d)] || '';
-    const next = CYCLE[(CYCLE.indexOf(cur) + 1) % CYCLE.length];
+    // Worker self-mode may only toggle their own leave; managers cycle all statuses.
+    const next = selfMode ? (cur === 'leave' ? '' : 'leave') : CYCLE[(CYCLE.indexOf(cur) + 1) % CYCLE.length];
     const empRec = { ...(records[empId] || {}) };
     if (next === '') delete empRec[dayKey(d)]; else empRec[dayKey(d)] = next as DayStatus;
     onChange({ ...state, records: { ...records, [empId]: empRec }, employees, standardHours, overtime });
@@ -131,10 +136,10 @@ export default function AttendancePanel({ state, onChange, onClose, confirm, onP
         </div>
         <div className="tool-panel-body">
           <div className="mini-toggle fund-tabs">
-            <button type="button" className={`mini-toggle-btn ${tab === 'log' ? 'active' : ''}`} onClick={() => setTab('log')}>ثبتِ ماهانه</button>
-            <button type="button" className={`mini-toggle-btn ${tab === 'report' ? 'active' : ''}`} onClick={() => setTab('report')}>گزارش</button>
-            <button type="button" className={`mini-toggle-btn ${tab === 'slip' ? 'active' : ''}`} onClick={() => setTab('slip')}>فیش</button>
-            <button type="button" className={`mini-toggle-btn ${tab === 'staff' ? 'active' : ''}`} onClick={() => setTab('staff')}>کارمندان</button>
+            <button type="button" className={`mini-toggle-btn ${tab === 'log' ? 'active' : ''}`} onClick={() => setTab('log')}>{selfMode ? 'حضورِ من' : 'ثبتِ ماهانه'}</button>
+            {!selfMode && <button type="button" className={`mini-toggle-btn ${tab === 'report' ? 'active' : ''}`} onClick={() => setTab('report')}>گزارش</button>}
+            <button type="button" className={`mini-toggle-btn ${tab === 'slip' ? 'active' : ''}`} onClick={() => setTab('slip')}>{selfMode ? 'فیشِ من' : 'فیش'}</button>
+            {!selfMode && <button type="button" className={`mini-toggle-btn ${tab === 'staff' ? 'active' : ''}`} onClick={() => setTab('staff')}>کارمندان</button>}
           </div>
 
           {/* ---------------- ثبتِ ماهانه ---------------- */}
@@ -147,16 +152,20 @@ export default function AttendancePanel({ state, onChange, onClose, confirm, onP
                 <span>{monthLabel}</span>
                 <button onClick={() => shiftMonth(1)}>›</button>
               </div>
-              <select className="tool-text-input" value={empId} onChange={(e) => setEmpId(e.target.value)}>
-                {employees.map((e) => <option key={e.id} value={e.id}>{e.name}</option>)}
-              </select>
+              {selfMode ? (
+                <div className="acc-ledger-name">{employees.find((e) => e.id === empId)?.name || '—'}</div>
+              ) : (
+                <select className="tool-text-input" value={empId} onChange={(e) => setEmpId(e.target.value)}>
+                  {employees.map((e) => <option key={e.id} value={e.id}>{e.name}</option>)}
+                </select>
+              )}
 
               <div className="att-legend">
                 <span className="att-chip present">ح</span> حاضر
                 <span className="att-chip absent">غ</span> غایب
                 <span className="att-chip leave">م</span> مرخصی
                 <span className="att-chip holiday">ت</span> تعطیل
-                <span className="att-hint">(روی روز بزنید تا تغییر کند)</span>
+                <span className="att-hint">{selfMode ? '(روی روز بزنید تا مرخصی ثبت/حذف شود)' : '(روی روز بزنید تا تغییر کند)'}</span>
               </div>
               <div className="att-grid">
                 {Array.from({ length: daysInMonth }, (_, i) => i + 1).map((d) => {
@@ -174,12 +183,15 @@ export default function AttendancePanel({ state, onChange, onClose, confirm, onP
                 <>
                   <div className="tool-result">
                     <div className="tool-result-row"><span>حاضر / غایب / مرخصی</span><strong>{curCalc.present} / {curCalc.absent} / {curCalc.leave}</strong></div>
-                    <div className="tool-result-row"><span>کارکرد (ساعت)</span><strong>{fmt(curCalc.workedHours)}</strong></div>
-                    <div className="tool-result-row closing"><span>حقوقِ تخمینیِ ماه</span><strong>{fmt(curCalc.pay)} تومان</strong></div>
+                    <div className="tool-result-row closing"><span>کارکرد (ساعت)</span><strong>{fmt(curCalc.workedHours)}</strong></div>
                   </div>
-                  <label className="field-label">اضافه‌کارِ این ماه (ساعت)</label>
-                  <input className="tool-text-input" type="text" inputMode="numeric" dir="ltr" value={overtime[empId]?.[ym] ? String(overtime[empId][ym]) : ''} onChange={(e) => setOvertime(e.target.value)} placeholder="مثلاً 12" />
-                  <div className="tool-note">اضافه‌کار با ضریبِ ۱.۴ در حقوق حساب می‌شود. ساعتِ استانداردِ روز: {standardHours} ساعت (در تبِ «کارمندان» قابل تغییر).</div>
+                  {!selfMode && (
+                    <>
+                      <label className="field-label">اضافه‌کارِ این ماه (ساعت)</label>
+                      <input className="tool-text-input" type="text" inputMode="numeric" dir="ltr" value={overtime[empId]?.[ym] ? String(overtime[empId][ym]) : ''} onChange={(e) => setOvertime(e.target.value)} placeholder="مثلاً 12" />
+                      <div className="tool-note">اضافه‌کار با ضریبِ ۱.۴ در حقوق حساب می‌شود. ساعتِ استانداردِ روز: {standardHours} ساعت (در تبِ «کارمندان» قابل تغییر).</div>
+                    </>
+                  )}
                 </>
               )}
             </>
@@ -231,9 +243,13 @@ export default function AttendancePanel({ state, onChange, onClose, confirm, onP
                 <span>{monthLabel}</span>
                 <button onClick={() => shiftMonth(1)}>›</button>
               </div>
-              <select className="tool-text-input" value={empId} onChange={(e) => setEmpId(e.target.value)}>
-                {employees.map((e) => <option key={e.id} value={e.id}>{e.name}</option>)}
-              </select>
+              {selfMode ? (
+                <div className="acc-ledger-name">{employees.find((e) => e.id === empId)?.name || '—'}</div>
+              ) : (
+                <select className="tool-text-input" value={empId} onChange={(e) => setEmpId(e.target.value)}>
+                  {employees.map((e) => <option key={e.id} value={e.id}>{e.name}</option>)}
+                </select>
+              )}
               {curEmp && curCalc && (
                 <>
                   <div className="acc-print">
@@ -250,10 +266,12 @@ export default function AttendancePanel({ state, onChange, onClose, confirm, onP
                       </tbody>
                     </table>
                   </div>
-                  <div className="att-addgrid acc-noprint">
-                    <input className="tool-text-input" type="text" inputMode="numeric" dir="ltr" placeholder="مزایا (پاداش…)" value={(state.adjust?.[empId]?.[ym]?.allow) ? String(state.adjust[empId][ym].allow) : ''} onChange={(e) => setAdjust('allow', e.target.value)} />
-                    <input className="tool-text-input" type="text" inputMode="numeric" dir="ltr" placeholder="کسورات (بیمه…)" value={(state.adjust?.[empId]?.[ym]?.deduct) ? String(state.adjust[empId][ym].deduct) : ''} onChange={(e) => setAdjust('deduct', e.target.value)} />
-                  </div>
+                  {!selfMode && (
+                    <div className="att-addgrid acc-noprint">
+                      <input className="tool-text-input" type="text" inputMode="numeric" dir="ltr" placeholder="مزایا (پاداش…)" value={(state.adjust?.[empId]?.[ym]?.allow) ? String(state.adjust[empId][ym].allow) : ''} onChange={(e) => setAdjust('allow', e.target.value)} />
+                      <input className="tool-text-input" type="text" inputMode="numeric" dir="ltr" placeholder="کسورات (بیمه…)" value={(state.adjust?.[empId]?.[ym]?.deduct) ? String(state.adjust[empId][ym].deduct) : ''} onChange={(e) => setAdjust('deduct', e.target.value)} />
+                    </div>
+                  )}
                   <button className="loan-submit acc-noprint" onClick={() => window.print()}>🖨️ چاپِ فیش / PDF</button>
                 </>
               )}
