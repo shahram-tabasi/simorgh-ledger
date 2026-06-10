@@ -2419,5 +2419,7 @@ body.dark .att-dnum { color: #cfd7e8; }
 .dc-loan { background: linear-gradient(135deg,#1f5f8b,#2c87c5); }
 .dc-rep  { background: linear-gradient(135deg,#516395,#614385); }
 .dc-usr  { background: linear-gradient(135deg,#434a59,#6b7280); }
+.dc-pro  { background: linear-gradient(135deg,#bf953f,#fcf6ba,#b38728); color:#3a2c00; }
+.dc-pro .dc-s{opacity:.8}
 body.dark .dash-box { background: #131b2c; }
 body.dark .dash-title { color: #eef2fa; }

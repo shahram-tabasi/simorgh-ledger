@@ -33,7 +33,7 @@ import FundPanel from './Fund';
 import AccountingPanel, { type AccountingState, type AccType, emptyAccounting } from './Accounting';
 import AttendancePanel, { type AttendanceState, emptyAttendance } from './Attendance';
 import InventoryPanel, { type InventoryState, emptyInventory } from './Inventory';
-import AccessPanel, { type AccessState, emptyAccess } from './Access';
+import AccessPanel, { type AccessState, emptyAccess, PERMISSIONS } from './Access';
 import CoachTour, { type CoachStep } from './Coach';
 import {
   IconReport, IconBom, IconLoan, IconConvert, IconAge, IconBio, IconBmi,
@@ -151,10 +151,10 @@ function resolveAcc(accs: AccLite[], defName: { [k in AccType]: string }, t: Acc
   return a.id;
 }
 
-const APP_VERSION = '1.0.49';
+const APP_VERSION = '1.0.50';
 const CHANGELOG: string[] = [
-  'حکم کارگزینی: سمت، تاریخِ استخدام و حقوقِ پایه — قابلِ چاپ؛ هر کارگر حکمِ خودش را هم می‌بیند',
-  'خروجیِ اکسل (CSV) برای گزارش‌های حسابداری، حضور و غیاب و انبار (سازگار با اکسلِ فارسی)',
+  'نسخه‌ی شرکتی (چندکاربره): از داشبورد، ماژول‌ها و تعدادِ کاربرِ موردِنیاز را انتخاب کنید؛ درخواست ثبت و مبلغ برایتان ارسال می‌شود',
+  'نرم‌افزارِ پایه رایگان می‌ماند؛ نسخه‌ی شرکتی پس از پرداخت فعال می‌شود',
 ];
 
 function App() {
@@ -172,6 +172,19 @@ function App() {
   const [showDayModal, setShowDayModal] = useState<boolean>(false);
   const [showAddModal, setShowAddModal] = useState<boolean>(false);
   const [showDashboard, setShowDashboard] = useState<boolean>(false);
+  // Company-edition (multi-user SaaS) upgrade request form
+  const [showCompany, setShowCompany] = useState<boolean>(false);
+  const [coName, setCoName] = useState(''); const [coPhone, setCoPhone] = useState(''); const [coUsers, setCoUsers] = useState('5');
+  const [coMods, setCoMods] = useState<string[]>([]); const [coNotes, setCoNotes] = useState('');
+  const submitQuote = async () => {
+    if (coName.trim().length < 2 || coPhone.replace(/[^0-9+]/g, '').length < 8) { notify('نامِ شرکت و شماره‌ی تماس را درست وارد کنید.'); return; }
+    try {
+      const r = await fetch(`${API_BASE}/api/quote`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ company: coName.trim(), phone: coPhone.trim(), usersCount: parseInt(coUsers, 10) || 1, modules: coMods, notes: coNotes.trim() }) });
+      const j = await r.json().catch(() => ({}));
+      if (r.ok && j.ok) { setShowCompany(false); setCoNotes(''); notify(`درخواستِ شما ثبت شد (کدِ پیگیری: ${j.id}). پس از بررسی، مبلغِ نسخه‌ی شرکتی برایتان ارسال می‌شود و بعد از پرداخت فعال می‌گردد. 🙏`); }
+      else notify('ثبتِ درخواست ناموفق بود؛ بعداً دوباره تلاش کنید.');
+    } catch { notify('اتصال به سرور برقرار نشد. لطفاً اینترنت را بررسی کنید.'); }
+  };
   const [showPrayerModal, setShowPrayerModal] = useState<boolean>(false);
   const [showToolsModal, setShowToolsModal] = useState<boolean>(false);
   const [showYearMonthModal, setShowYearMonthModal] = useState<boolean>(false);
@@ -325,6 +338,7 @@ function App() {
       [!!dialog, () => setDialog(null)],
       [showAddModal, () => { setShowAddModal(false); setEditingTxId(null); }],
       [showDashboard, () => setShowDashboard(false)],
+      [showCompany, () => setShowCompany(false)],
       [showReminderModal, () => setShowReminderModal(false)],
       [showPrayerModal, () => setShowPrayerModal(false)],
       [showToolsModal, () => setShowToolsModal(false)],
@@ -351,7 +365,7 @@ function App() {
       else { lastBack.current = now; setExitHint(true); setTimeout(() => setExitHint(false), 2000); }
     });
     return () => { sub.then((h) => h.remove()); };
-  }, [showTour, dialog, showAddModal, showDashboard, showReminderModal, showPrayerModal, showToolsModal, selectedLoanId, showLoansModal, showFundModal, showAccModal, showAttModal, showInvModal, showAccessModal, showAboutModal, showYearMonthModal, showDayModal, showRightDrawer, showLeftDrawer, showWhatsNew, showOnboarding]);
+  }, [showTour, dialog, showAddModal, showDashboard, showCompany, showReminderModal, showPrayerModal, showToolsModal, selectedLoanId, showLoansModal, showFundModal, showAccModal, showAttModal, showInvModal, showAccessModal, showAboutModal, showYearMonthModal, showDayModal, showRightDrawer, showLeftDrawer, showWhatsNew, showOnboarding]);
 
   // هنگام تغییر تقویم، انتخابِ نظام را ذخیره و ماهِ در حال نمایش را تبدیل می‌کنیم
   const switchCalendar = (system: CalendarSystem) => {
@@ -1422,11 +1436,56 @@ function App() {
                 {can('loans') && <button className="dash-card dc-loan" onClick={() => go(() => setShowLoansModal(true))}><span className="dc-ic">🏦</span><span className="dc-t">وام‌ها</span><span className="dc-s">اقساط و گزارش</span></button>}
                 {can('tools') && <button className="dash-card dc-rep" onClick={() => go(() => openTool('report'))}><span className="dc-ic">📊</span><span className="dc-t">گزارش‌ها</span><span className="dc-s">مالیِ بازه‌ای</span></button>}
                 {can('users') && <button className="dash-card dc-usr" onClick={() => go(() => setShowAccessModal(true))}><span className="dc-ic">👤</span><span className="dc-t">کاربران</span><span className="dc-s">گروه‌ها و دسترسی</span></button>}
+                {(!access.enabled || can('users')) && <button className="dash-card dc-pro" onClick={() => go(() => setShowCompany(true))}><span className="dc-ic">⭐</span><span className="dc-t">نسخه‌ی شرکتی</span><span className="dc-s">چندکاربره و ابری</span></button>}
               </div>
             </div>
           </div>
         );
       })()}
+
+      {/* Company-edition (multi-user) upgrade request */}
+      {showCompany && (
+        <div className="modal" onClick={() => setShowCompany(false)}>
+          <div className="modal-box tool-panel" onClick={(e) => e.stopPropagation()}>
+            <div className="tool-panel-head">
+              <button className="close-modal" onClick={() => setShowCompany(false)}>‹</button>
+              <h3>⭐ نسخه‌ی شرکتی</h3>
+              <button className="close-modal" onClick={() => setShowCompany(false)}>✕</button>
+            </div>
+            <div className="tool-panel-body">
+              <div className="fund-help">
+                نرم‌افزارِ پایه رایگان است. برای <strong>چندکاربره</strong>‌شدن (هر کارمند حسابِ خودش)، نیازِ شرکت را اینجا بگویید؛
+                <strong> مبلغ برایتان ارسال می‌شود</strong> و پس از پرداخت، حسابِ شرکتیِ شما <strong>فعال</strong> می‌گردد.
+              </div>
+              <label className="field-label">نامِ شرکت / کسب‌وکار</label>
+              <input className="tool-text-input" type="text" placeholder="مثلاً بازرگانی سیمرغ" value={coName} onChange={(e) => setCoName(e.target.value)} />
+              <div className="loan-grid">
+                <div>
+                  <label className="field-label">شماره‌ی تماس</label>
+                  <input className="tool-text-input" type="tel" inputMode="tel" dir="ltr" placeholder="0912..." value={coPhone} onChange={(e) => setCoPhone(e.target.value)} />
+                </div>
+                <div>
+                  <label className="field-label">تعدادِ کاربر</label>
+                  <input className="tool-text-input" type="number" inputMode="numeric" dir="ltr" value={coUsers} onChange={(e) => setCoUsers(e.target.value.replace(/[^0-9]/g, ''))} />
+                </div>
+              </div>
+              <label className="field-label">ماژول‌ها / دسترسی‌های موردِ نیاز</label>
+              <div className="acc-perms">
+                {PERMISSIONS.filter((p) => p.key !== 'attendance_self').map((perm) => (
+                  <label key={perm.key} className="fund-switch acc-perm">
+                    <input type="checkbox" checked={coMods.includes(perm.key)} onChange={() => setCoMods((m) => m.includes(perm.key) ? m.filter((x) => x !== perm.key) : [...m, perm.key])} />
+                    <span>{perm.label}</span>
+                  </label>
+                ))}
+              </div>
+              <label className="field-label">توضیحات (اختیاری)</label>
+              <input className="tool-text-input" type="text" placeholder="نیازِ خاص، تعدادِ شعبه و…" value={coNotes} onChange={(e) => setCoNotes(e.target.value)} />
+              <button className="loan-submit" onClick={submitQuote}>ثبتِ درخواست و دریافتِ قیمت</button>
+              <div className="tool-note">پس از ثبت، کارشناسِ ما قیمت را برایتان می‌فرستد. پرداخت و فعال‌سازیِ خودکار در نسخه‌ی سرور اضافه می‌شود.</div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* صندوق خانوادگی */}
       {showFundModal && (
@@ -1557,7 +1616,7 @@ function App() {
               <button className={`theme-btn ${theme === 'dark' ? 'active' : ''}`} onClick={() => setTheme('dark')}>🌙 تیره</button>
             </div>
 
-            <div className="drawer-foot">نسخه ۱۴۰۵ · ۱.۰.۴۹</div>
+            <div className="drawer-foot">نسخه ۱۴۰۵ · ۱.۰.۵۰</div>
           </aside>
         </div>
       )}

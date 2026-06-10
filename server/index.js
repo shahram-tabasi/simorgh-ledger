@@ -31,6 +31,17 @@ async function init() {
     version INTEGER NOT NULL DEFAULT 0,
     updated_at TIMESTAMPTZ DEFAULT now()
   );`);
+  // Company-edition upgrade requests (sales leads). Owner reviews → sends a price → activates.
+  await pool.query(`CREATE TABLE IF NOT EXISTS quote_requests (
+    id SERIAL PRIMARY KEY,
+    company TEXT NOT NULL,
+    phone TEXT NOT NULL,
+    users_count INTEGER NOT NULL DEFAULT 1,
+    modules JSONB NOT NULL DEFAULT '[]'::jsonb,
+    notes TEXT,
+    status TEXT NOT NULL DEFAULT 'new',
+    created_at TIMESTAMPTZ DEFAULT now()
+  );`);
 }
 
 const app = express();
@@ -47,6 +58,22 @@ function auth(req, res, next) {
 }
 
 app.get('/api/health', (_req, res) => res.json({ ok: true }));
+
+// Company-edition quote request (public lead form). Returns an id the customer can reference.
+app.post('/api/quote', async (req, res) => {
+  const company = String(req.body.company || '').trim();
+  const phone = normPhone(req.body.phone);
+  const usersCount = Math.max(1, parseInt(req.body.usersCount, 10) || 1);
+  const modules = Array.isArray(req.body.modules) ? req.body.modules.map(String).slice(0, 50) : [];
+  const notes = String(req.body.notes || '').slice(0, 1000);
+  if (company.length < 2 || phone.length < 8) return res.status(400).json({ error: 'invalid' });
+  try {
+    const r = await pool.query(
+      'INSERT INTO quote_requests(company,phone,users_count,modules,notes) VALUES($1,$2,$3,$4,$5) RETURNING id',
+      [company, phone, usersCount, JSON.stringify(modules), notes]);
+    res.json({ ok: true, id: r.rows[0].id });
+  } catch { res.status(500).json({ error: 'server' }); }
+});
 
 app.post('/api/register', async (req, res) => {
   const phone = normPhone(req.body.phone);
