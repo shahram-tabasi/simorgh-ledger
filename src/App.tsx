@@ -151,10 +151,10 @@ function resolveAcc(accs: AccLite[], defName: { [k in AccType]: string }, t: Acc
   return a.id;
 }
 
-const APP_VERSION = '1.0.50';
+const APP_VERSION = '1.0.51';
 const CHANGELOG: string[] = [
-  'نسخه‌ی شرکتی (چندکاربره): از داشبورد، ماژول‌ها و تعدادِ کاربرِ موردِنیاز را انتخاب کنید؛ درخواست ثبت و مبلغ برایتان ارسال می‌شود',
-  'نرم‌افزارِ پایه رایگان می‌ماند؛ نسخه‌ی شرکتی پس از پرداخت فعال می‌شود',
+  'اتصال به سرورِ سازمانی: از «درباره ما» → «تیمِ من» سازمان بسازید و کارمندان را با نقش دعوت کنید',
+  'نقشِ کاربر از سرور خوانده و اعمال می‌شود: کارگر فقط بخشِ خودش را می‌بیند، حتی وقتی از گوشیِ خودش وارد شود',
 ];
 
 function App() {
@@ -239,13 +239,26 @@ function App() {
   const [showAccessModal, setShowAccessModal] = useState<boolean>(false);
   const [access, setAccess] = useState<AccessState>(() => { try { const s = localStorage.getItem('access'); return s ? JSON.parse(s) : emptyAccess(); } catch { return emptyAccess(); } });
   const saveAccess = (s: AccessState) => { localStorage.setItem('access', JSON.stringify(s)); setAccess(s); };
-  // Active-user role gating (device-side). When disabled, everything is allowed.
+  // Organization role from the SERVER (real, cross-device). Declared here so gating can prefer it.
+  type OrgInfo = { org: { id: number; name: string; active?: boolean; plan?: string } | null; role?: string; perms?: string[]; empId?: string };
+  const [orgInfo, setOrgInfo] = useState<OrgInfo | null>(null);
+  // Organization team UI state (declared here so the back-handler/effects can reference it)
+  const [showTeam, setShowTeam] = useState<boolean>(false);
+  const [orgName, setOrgName] = useState(''); const [mPhone2, setMPhone2] = useState(''); const [mRole2, setMRole2] = useState('worker'); const [mEmp2, setMEmp2] = useState('');
+  const [teamMembers, setTeamMembers] = useState<{ phone: string; role: string; perms: string[]; emp_id?: string }[]>([]);
+  const orgActive = !!(orgInfo && orgInfo.org && orgInfo.role);   // logged into an org → server role drives the UI
+  // Active-user role gating. Prefer the SERVER org role when logged in; else fall back to device-side Access.
   const activeUser = access.activeUserId ? access.users.find((u) => u.id === access.activeUserId) : null;
   const activeGroup = activeUser ? access.groups.find((g) => g.id === activeUser.groupId) : null;
-  const can = (key: string) => !access.enabled || !activeUser || !!activeGroup?.perms.includes(key);
-  // Worker self-service mode: active user only has personal attendance and is linked to an employee.
-  const selfMode = !!(access.enabled && activeUser && activeGroup && !activeGroup.perms.includes('attendance') && activeGroup.perms.includes('attendance_self'));
-  const selfEmpId = selfMode ? activeUser?.empId : undefined;
+  const can = (key: string) => {
+    if (orgActive) return ['owner', 'admin'].includes(orgInfo!.role!) || !!orgInfo!.perms?.includes(key);
+    return !access.enabled || !activeUser || !!activeGroup?.perms.includes(key);
+  };
+  // Worker self-service mode (server role first, then device-side).
+  const selfMode = orgActive
+    ? (orgInfo!.role === 'worker' && !!orgInfo!.perms?.includes('attendance_self') && !orgInfo!.perms?.includes('attendance'))
+    : !!(access.enabled && activeUser && activeGroup && !activeGroup.perms.includes('attendance') && activeGroup.perms.includes('attendance_self'));
+  const selfEmpId = orgActive ? orgInfo!.empId : (selfMode ? activeUser?.empId : undefined);
   const [fundStartReport, setFundStartReport] = useState<boolean>(false);
   const [theme, setTheme] = useState<'light' | 'dark'>(() => (localStorage.getItem('theme') as 'light' | 'dark') || 'light');
   const [prayerProvince, setPrayerProvince] = useState<string>(() => localStorage.getItem('prayerProvince') || 'تهران');
@@ -323,6 +336,9 @@ function App() {
     localStorage.setItem('theme', theme);
   }, [theme]);
 
+  // On startup, if already logged in, load the org role from the server (drives gating).
+  useEffect(() => { if (authToken) fetchOrg(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, []);
+
   // نوار وضعیتِ گوشی روی هدرِ سرمه‌ای می‌افتد (بدون نوار سفید)، با آیکون‌های روشن
   useEffect(() => {
     if (!Capacitor.isNativePlatform()) return;
@@ -339,6 +355,7 @@ function App() {
       [showAddModal, () => { setShowAddModal(false); setEditingTxId(null); }],
       [showDashboard, () => setShowDashboard(false)],
       [showCompany, () => setShowCompany(false)],
+      [showTeam, () => setShowTeam(false)],
       [showReminderModal, () => setShowReminderModal(false)],
       [showPrayerModal, () => setShowPrayerModal(false)],
       [showToolsModal, () => setShowToolsModal(false)],
@@ -365,7 +382,7 @@ function App() {
       else { lastBack.current = now; setExitHint(true); setTimeout(() => setExitHint(false), 2000); }
     });
     return () => { sub.then((h) => h.remove()); };
-  }, [showTour, dialog, showAddModal, showDashboard, showCompany, showReminderModal, showPrayerModal, showToolsModal, selectedLoanId, showLoansModal, showFundModal, showAccModal, showAttModal, showInvModal, showAccessModal, showAboutModal, showYearMonthModal, showDayModal, showRightDrawer, showLeftDrawer, showWhatsNew, showOnboarding]);
+  }, [showTour, dialog, showAddModal, showDashboard, showCompany, showTeam, showReminderModal, showPrayerModal, showToolsModal, selectedLoanId, showLoansModal, showFundModal, showAccModal, showAttModal, showInvModal, showAccessModal, showAboutModal, showYearMonthModal, showDayModal, showRightDrawer, showLeftDrawer, showWhatsNew, showOnboarding]);
 
   // هنگام تغییر تقویم، انتخابِ نظام را ذخیره و ماهِ در حال نمایش را تبدیل می‌کنیم
   const switchCalendar = (system: CalendarSystem) => {
@@ -783,13 +800,13 @@ function App() {
     try {
       const r = await fetch(`${API_BASE}/api/${kind}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone, password }) });
       const j = await r.json().catch(() => ({}));
-      if (r.ok && j.token) { saveAuth(j.token, j.phone || phone); setAcctPw(''); notify(kind === 'register' ? 'حساب ساخته شد و وارد شدید ✅' : 'خوش آمدید ✅'); }
+      if (r.ok && j.token) { saveAuth(j.token, j.phone || phone); setAcctPw(''); fetchOrg(j.token); notify(kind === 'register' ? 'حساب ساخته شد و وارد شدید ✅' : 'خوش آمدید ✅'); }
       else if (r.status === 409) notify('این شماره قبلاً ثبت شده؛ «ورود» را بزنید.');
       else if (r.status === 401) notify('شماره یا رمز درست نیست.');
       else notify('خطا (کد ' + r.status + ').');
     } catch { notify('اتصال به سرور برقرار نشد. اینترنت/آدرسِ سرور را بررسی کنید.'); }
   };
-  const apiLogout = () => { localStorage.removeItem('authToken'); localStorage.removeItem('authPhone'); setAuthToken(''); setAuthPhone(''); };
+  const apiLogout = () => { localStorage.removeItem('authToken'); localStorage.removeItem('authPhone'); setAuthToken(''); setAuthPhone(''); setOrgInfo(null); };
   const cloudPush = async () => {
     if (!authToken) return;
     notify('در حالِ ارسال به سرور…');
@@ -809,6 +826,65 @@ function App() {
       if (!r.ok) { notify('دریافت ناموفق بود (کد ' + r.status + ').'); return; }
       const j = await r.json();
       if (!j.blob) { notify('هنوز داده‌ای روی سرور نیست؛ اول «ارسال» را بزنید.'); return; }
+      applyBackup(j.blob);
+    } catch { notify('اتصال به سرور برقرار نشد.'); }
+  };
+
+  // ---------- Organization (server roles) ----------
+  const authHeaders = () => ({ 'Content-Type': 'application/json', Authorization: `Bearer ${authToken}` });
+  // role → default permission set sent to the server when inviting a member
+  const permsForRole = (role: string): string[] =>
+    role === 'owner' || role === 'admin' ? ['fund', 'loans', 'accounting', 'inventory', 'attendance', 'attendance_self', 'tools', 'users']
+    : role === 'manager' ? ['fund', 'loans', 'accounting', 'inventory', 'attendance', 'tools']
+    : ['attendance_self'];
+  const fetchOrg = async (token = authToken) => {
+    if (!token) { setOrgInfo(null); return; }
+    try {
+      const r = await fetch(`${API_BASE}/api/org`, { headers: { Authorization: `Bearer ${token}` } });
+      if (r.ok) setOrgInfo(await r.json()); else setOrgInfo(null);
+    } catch { /* offline: keep whatever we have */ }
+  };
+  const createOrg = async () => {
+    if (orgName.trim().length < 2) { notify('نامِ سازمان را وارد کنید.'); return; }
+    try {
+      const r = await fetch(`${API_BASE}/api/org`, { method: 'POST', headers: authHeaders(), body: JSON.stringify({ name: orgName.trim() }) });
+      if (r.ok) { setOrgName(''); await fetchOrg(); notify('سازمان ساخته شد؛ شما مدیر (owner) هستید ✅'); }
+      else if (r.status === 409) notify('شما از قبل عضوِ یک سازمان هستید.');
+      else notify('ساختِ سازمان ناموفق بود.');
+    } catch { notify('اتصال به سرور برقرار نشد.'); }
+  };
+  const fetchMembers = async () => {
+    if (!authToken) return;
+    try { const r = await fetch(`${API_BASE}/api/org/members`, { headers: { Authorization: `Bearer ${authToken}` } }); if (r.ok) { const j = await r.json(); setTeamMembers(j.members || []); } } catch { /* offline */ }
+  };
+  const openTeam = () => { setShowLeftDrawer(false); setShowTeam(true); fetchOrg(); fetchMembers(); };
+  const addMember = async () => {
+    const phone = mPhone2.trim();
+    if (phone.replace(/[^0-9+]/g, '').length < 8) { notify('شماره‌ی عضو را درست وارد کنید.'); return; }
+    try {
+      const r = await fetch(`${API_BASE}/api/org/member`, { method: 'POST', headers: authHeaders(), body: JSON.stringify({ phone, role: mRole2, perms: permsForRole(mRole2), empId: mEmp2 || undefined }) });
+      if (r.ok) { setMPhone2(''); setMEmp2(''); fetchMembers(); notify('عضو اضافه/به‌روزرسانی شد ✅'); }
+      else if (r.status === 404) notify('این شماره هنوز در برنامه ثبت‌نام نکرده؛ اول او باید با همین شماره ثبت‌نام کند.');
+      else if (r.status === 403) notify('فقط مدیرِ سازمان می‌تواند عضو اضافه کند.');
+      else notify('افزودنِ عضو ناموفق بود.');
+    } catch { notify('اتصال به سرور برقرار نشد.'); }
+  };
+  const orgPush = async () => {
+    notify('در حالِ ارسال به سازمان…');
+    try {
+      const r = await fetch(`${API_BASE}/api/org/data`, { method: 'PUT', headers: authHeaders(), body: JSON.stringify({ blob: backupDataObject() }) });
+      if (r.ok) notify('داده‌ها روی سازمان ذخیره شد ✅');
+      else if (r.status === 403) notify('نقشِ شما اجازه‌ی نوشتن ندارد (فقط خواندنی).');
+      else notify('ارسال ناموفق بود.');
+    } catch { notify('اتصال به سرور برقرار نشد.'); }
+  };
+  const orgPull = async () => {
+    notify('در حالِ دریافت از سازمان…');
+    try {
+      const r = await fetch(`${API_BASE}/api/org/data`, { headers: authHeaders() });
+      if (!r.ok) { notify('دریافت ناموفق بود.'); return; }
+      const j = await r.json();
+      if (!j.blob) { notify('هنوز داده‌ای روی سازمان نیست.'); return; }
       applyBackup(j.blob);
     } catch { notify('اتصال به سرور برقرار نشد.'); }
   };
@@ -1436,12 +1512,85 @@ function App() {
                 {can('loans') && <button className="dash-card dc-loan" onClick={() => go(() => setShowLoansModal(true))}><span className="dc-ic">🏦</span><span className="dc-t">وام‌ها</span><span className="dc-s">اقساط و گزارش</span></button>}
                 {can('tools') && <button className="dash-card dc-rep" onClick={() => go(() => openTool('report'))}><span className="dc-ic">📊</span><span className="dc-t">گزارش‌ها</span><span className="dc-s">مالیِ بازه‌ای</span></button>}
                 {can('users') && <button className="dash-card dc-usr" onClick={() => go(() => setShowAccessModal(true))}><span className="dc-ic">👤</span><span className="dc-t">کاربران</span><span className="dc-s">گروه‌ها و دسترسی</span></button>}
-                {(!access.enabled || can('users')) && <button className="dash-card dc-pro" onClick={() => go(() => setShowCompany(true))}><span className="dc-ic">⭐</span><span className="dc-t">نسخه‌ی شرکتی</span><span className="dc-s">چندکاربره و ابری</span></button>}
+                {(can('users') || (!access.enabled && !orgActive)) && <button className="dash-card dc-pro" onClick={() => go(() => setShowCompany(true))}><span className="dc-ic">⭐</span><span className="dc-t">نسخه‌ی شرکتی</span><span className="dc-s">چندکاربره و ابری</span></button>}
               </div>
             </div>
           </div>
         );
       })()}
+
+      {/* My team / organization (server roles) */}
+      {showTeam && (
+        <div className="modal" onClick={() => setShowTeam(false)}>
+          <div className="modal-box tool-panel" onClick={(e) => e.stopPropagation()}>
+            <div className="tool-panel-head">
+              <button className="close-modal" onClick={() => setShowTeam(false)}>‹</button>
+              <h3>👥 تیمِ من</h3>
+              <button className="close-modal" onClick={() => setShowTeam(false)}>✕</button>
+            </div>
+            <div className="tool-panel-body">
+              {!orgInfo?.org ? (
+                <>
+                  <div className="fund-help">یک <strong>سازمان</strong> بسازید تا کارمندان با نقش‌های مختلف به آن بپیوندند. شما مدیر (owner) می‌شوید.</div>
+                  <label className="field-label">نامِ سازمان</label>
+                  <input className="tool-text-input" type="text" placeholder="مثلاً بازرگانی سیمرغ" value={orgName} onChange={(e) => setOrgName(e.target.value)} />
+                  <button className="loan-submit" onClick={createOrg}>ساختِ سازمان</button>
+                </>
+              ) : (
+                <>
+                  <div className="tool-result">
+                    <div className="tool-result-row"><span>سازمان</span><strong>{orgInfo.org.name}</strong></div>
+                    <div className="tool-result-row"><span>نقشِ شما</span><strong>{orgInfo.role}</strong></div>
+                    <div className="tool-result-row closing"><span>وضعیت</span><strong>{orgInfo.org.active ? 'فعال' : 'غیرفعال'} · {orgInfo.org.plan}</strong></div>
+                  </div>
+                  <div className="gh-actions">
+                    <button className="gh-btn up" onClick={orgPush}>⬆️ ارسالِ داده به سازمان</button>
+                    <button className="gh-btn down" onClick={orgPull}>⬇️ دریافت از سازمان</button>
+                  </div>
+
+                  {['owner', 'admin'].includes(orgInfo.role || '') && (
+                    <>
+                      <div className="loan-sched-head"><span>دعوتِ عضو</span><span className="loan-sched-hint">عضو باید قبلاً ثبت‌نام کرده باشد</span></div>
+                      <input className="tool-text-input" type="tel" inputMode="tel" dir="ltr" placeholder="شماره‌موبایلِ عضو" value={mPhone2} onChange={(e) => setMPhone2(e.target.value)} />
+                      <div className="loan-grid">
+                        <div>
+                          <label className="field-label">نقش</label>
+                          <select className="tool-text-input" value={mRole2} onChange={(e) => setMRole2(e.target.value)}>
+                            <option value="admin">مدیر (admin)</option>
+                            <option value="manager">سرپرست (manager)</option>
+                            <option value="worker">کارگر (worker)</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="field-label">کارمندِ مرتبط</label>
+                          <select className="tool-text-input" value={mEmp2} onChange={(e) => setMEmp2(e.target.value)}>
+                            <option value="">— ندارد —</option>
+                            {attendance.employees.map((e) => <option key={e.id} value={e.id}>{e.name}</option>)}
+                          </select>
+                        </div>
+                      </div>
+                      <button className="loan-submit" onClick={addMember}>افزودن / به‌روزرسانیِ عضو</button>
+                    </>
+                  )}
+
+                  <div className="loan-sched-head"><span>اعضا</span><span className="loan-sched-hint">{teamMembers.length} نفر</span></div>
+                  <div className="loan-detail-list">
+                    {teamMembers.map((mm) => (
+                      <div key={mm.phone} className="loan-detail-row">
+                        <div className="ld-info">
+                          <span className="ld-amt" dir="ltr">{mm.phone}</span>
+                          <span className="ld-date">{mm.role}{mm.emp_id ? ' · دارای کارمند' : ''}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="drawer-hint">نقش‌ها روی سرور اعمال می‌شوند: کارگر فقط می‌خواند و فقط بخشِ خودش را می‌بیند. وقتی او از گوشیِ خودش وارد شود، خودکار همین محدودیت‌ها را دارد.</div>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Company-edition (multi-user) upgrade request */}
       {showCompany && (
@@ -1572,13 +1721,14 @@ function App() {
             <div className="drawer-section-label">حسابِ کاربری و همگام‌سازیِ ابری</div>
             {authToken ? (
               <div className="gh-sync">
-                <div className="acct-row">واردشده: <b dir="ltr">{authPhone}</b></div>
+                <div className="acct-row">واردشده: <b dir="ltr">{authPhone}</b>{orgInfo?.org ? <> · سازمان: <b>{orgInfo.org.name}</b> ({orgInfo.role})</> : null}</div>
                 <div className="gh-actions">
                   <button className="gh-btn up" onClick={cloudPush}>⬆️ ارسالِ داده‌ها</button>
                   <button className="gh-btn down" onClick={cloudPull}>⬇️ دریافتِ داده‌ها</button>
                 </div>
+                <button className="drawer-item" onClick={openTeam}><span className="di-icon"><IconUsers /></span> تیمِ من (سازمان)</button>
                 <button className="drawer-item acct-logout" onClick={apiLogout}>خروج از حساب</button>
-                <div className="drawer-hint">برای چنددستگاهه‌شدن: روی دستگاهِ اول «ارسال» و روی دستگاهِ دوم «دریافت» را بزنید.</div>
+                <div className="drawer-hint">«تیمِ من» = ساختِ سازمان و دعوتِ کارمندان با نقش. سینکِ شخصی هم با «ارسال/دریافت» انجام می‌شود.</div>
               </div>
             ) : (
               <div className="gh-sync">
@@ -1616,7 +1766,7 @@ function App() {
               <button className={`theme-btn ${theme === 'dark' ? 'active' : ''}`} onClick={() => setTheme('dark')}>🌙 تیره</button>
             </div>
 
-            <div className="drawer-foot">نسخه ۱۴۰۵ · ۱.۰.۵۰</div>
+            <div className="drawer-foot">نسخه ۱۴۰۵ · ۱.۰.۵۱</div>
           </aside>
         </div>
       )}
