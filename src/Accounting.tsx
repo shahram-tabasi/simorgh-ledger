@@ -10,7 +10,8 @@ const withSep = (s: string): string => { const d = digits(s); return d ? d.toLoc
 export type AccType = 'asset' | 'liability' | 'equity' | 'income' | 'expense';
 export interface Account { id: string; code: string; name: string; type: AccType; }
 export interface EntryLine { accountId: string; debit: number; credit: number; }
-export interface JournalEntry { id: string; y: number; m: number; d: number; desc: string; lines: EntryLine[]; }
+// ref: شناسه‌ی منبعِ سند برای جلوگیری از ثبتِ تکراری وقتی از ماژول‌های دیگر (حقوق، صندوق، وام) خودکار ساخته می‌شود
+export interface JournalEntry { id: string; y: number; m: number; d: number; desc: string; lines: EntryLine[]; ref?: string; }
 export interface AccountingState { accounts: Account[]; entries: JournalEntry[]; }
 
 const TYPE_LABEL: { [k in AccType]: string } = { asset: 'دارایی', liability: 'بدهی', equity: 'سرمایه', income: 'درآمد', expense: 'هزینه' };

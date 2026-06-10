@@ -4,6 +4,7 @@
 // مدل عمداً ساده است تا صاحبِ کسب‌وکارِ کوچک بدونِ آموزش بتواند کار کند.
 import { useState } from 'react';
 import { getToday, getMonthNames, getMonthDays } from './calendar';
+import type { AccType } from './Accounting';
 
 const fmt = (n: number): string => Math.round(n || 0).toLocaleString('en-US');
 const digits = (s: string): number => parseInt((s || '').replace(/[^0-9]/g, ''), 10) || 0;
@@ -30,10 +31,12 @@ interface Props {
   onChange: (s: AttendanceState) => void;
   onClose: () => void;
   confirm: (msg: string, onYes: () => void) => void;
+  // اتصال به حسابداری: سندِ حقوقِ ماه را خودکار ثبت می‌کند (اختیاری)
+  onPostJournal?: (ref: string, date: { y: number; m: number; d: number }, desc: string, spec: { type: AccType; debit?: number; credit?: number }[]) => void;
 }
 type Tab = 'log' | 'report' | 'staff';
 
-export default function AttendancePanel({ state, onChange, onClose, confirm }: Props) {
+export default function AttendancePanel({ state, onChange, onClose, confirm, onPostJournal }: Props) {
   const employees = state.employees || [];
   const standardHours = state.standardHours || 8;
   const records = state.records || {};
@@ -193,6 +196,14 @@ export default function AttendancePanel({ state, onChange, onClose, confirm }: P
                 </table>
               </div>
               <button className="loan-submit acc-noprint" onClick={() => window.print()}>🖨️ چاپ / ذخیره‌ی PDF</button>
+              {onPostJournal && employees.length > 0 && (
+                <button className="acc-addline acc-noprint" onClick={() => {
+                  const total = employees.reduce((s, e) => s + calc(e).pay, 0);
+                  if (total <= 0) { confirm('حقوقی برای ثبت نیست (مبلغ صفر است).', () => {}); return; }
+                  // بدهکار: هزینه‌ی حقوق / بستانکار: حساب‌های پرداختنی (حقوقِ پرداختنی)
+                  onPostJournal(`payroll-${ym}`, { y, m, d: daysInMonth }, `حقوقِ ${monthLabel}`, [{ type: 'expense', debit: total }, { type: 'liability', credit: total }]);
+                }}>🧾 ثبتِ حقوقِ {monthLabel} در حسابداری</button>
+              )}
             </>
           )}
 

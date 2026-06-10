@@ -30,7 +30,7 @@ import ToolsPanel, { CalendarDateInput, type DateValue } from './Tools';
 import WelcomeScreen from './WelcomeScreen';
 import { Onboarding, WhatsNew } from './Onboarding';
 import FundPanel from './Fund';
-import AccountingPanel, { type AccountingState, emptyAccounting } from './Accounting';
+import AccountingPanel, { type AccountingState, type AccType, emptyAccounting } from './Accounting';
 import AttendancePanel, { type AttendanceState, emptyAttendance } from './Attendance';
 import CoachTour, { type CoachStep } from './Coach';
 import {
@@ -133,11 +133,10 @@ const TOUR_STEPS: CoachStep[] = [
 ];
 
 // نسخه و فهرستِ تغییرات برای پنجره‌ی «تازه‌ها»
-const APP_VERSION = '1.0.41';
+const APP_VERSION = '1.0.42';
 const CHANGELOG: string[] = [
-  'ماژولِ «حضور و غیاب»: ثبتِ روزانه‌ی حاضر/غایب/مرخصی، محاسبه‌ی کارکرد و اضافه‌کار و حقوقِ تخمینی + گزارشِ ماهانه‌ی قابلِ چاپ',
-  'حسابداری: «ترازنامه» هم اضافه شد (دارایی = بدهی + سرمایه + سود)',
-  'فایلِ ROADMAP.md با نقشه‌ی راه و تحلیلِ رقبا به پروژه اضافه شد',
+  'یکپارچگی: از «حضور و غیاب» حقوقِ ماه را با یک دکمه به‌صورتِ سندِ خودکار در «حسابداری» ثبت کنید — بدونِ ثبتِ تکراری',
+  'این همان مزیتی است که نرم‌افزارهای جدا از هم ندارند: حقوق → سندِ حسابداری خودکار',
 ];
 
 function App() {
@@ -169,6 +168,22 @@ function App() {
   const [showAccModal, setShowAccModal] = useState<boolean>(false);
   const [accounting, setAccounting] = useState<AccountingState>(() => { try { const s = localStorage.getItem('accounting'); return s ? JSON.parse(s) : emptyAccounting(); } catch { return emptyAccounting(); } });
   const saveAccounting = (s: AccountingState) => { localStorage.setItem('accounting', JSON.stringify(s)); setAccounting(s); };
+  // ثبتِ خودکارِ سندِ حسابداری از سایرِ ماژول‌ها (حقوق/صندوق/وام).
+  // type-محور است: حسابِ مناسبِ هر نوع را پیدا (یا می‌سازد) و با ref از ثبتِ تکراری جلوگیری می‌کند.
+  const postJournal = (ref: string, date: { y: number; m: number; d: number }, desc: string, spec: { type: AccType; debit?: number; credit?: number }[]) => {
+    if (accounting.entries.some((e) => e.ref === ref)) { notify('این سند قبلاً در حسابداری ثبت شده است.'); return; }
+    const defName: { [k in AccType]: string } = { asset: 'صندوق (نقد)', liability: 'حساب‌های پرداختنی', equity: 'سرمایه', income: 'درآمد', expense: 'هزینه‌ها' };
+    const accs = accounting.accounts.slice();
+    const idByType = (t: AccType) => {
+      let a = accs.find((x) => x.type === t);
+      if (!a) { a = { id: `a-${t}-${Date.now()}`, code: '', name: defName[t], type: t }; accs.push(a); }
+      return a.id;
+    };
+    const lines = spec.map((l) => ({ accountId: idByType(l.type), debit: l.debit || 0, credit: l.credit || 0 }));
+    const entry = { id: `je-${Date.now()}`, ref, y: date.y, m: date.m, d: date.d, desc, lines };
+    saveAccounting({ accounts: accs, entries: [...accounting.entries, entry] });
+    notify('سندِ حسابداری ثبت شد ✅ (در منوی «حسابداری» ببینید)');
+  };
   const [showAttModal, setShowAttModal] = useState<boolean>(false);
   const [attendance, setAttendance] = useState<AttendanceState>(() => { try { const s = localStorage.getItem('attendance'); return s ? JSON.parse(s) : emptyAttendance(); } catch { return emptyAttendance(); } });
   const saveAttendance = (s: AttendanceState) => { localStorage.setItem('attendance', JSON.stringify(s)); setAttendance(s); };
@@ -1335,7 +1350,7 @@ function App() {
       )}
 
       {showAttModal && (
-        <AttendancePanel state={attendance} onChange={saveAttendance} onClose={() => setShowAttModal(false)} confirm={askConfirm} />
+        <AttendancePanel state={attendance} onChange={saveAttendance} onClose={() => setShowAttModal(false)} confirm={askConfirm} onPostJournal={postJournal} />
       )}
 
       {/* منوی راست: امکانات و ابزارها */}
@@ -1435,7 +1450,7 @@ function App() {
               <button className={`theme-btn ${theme === 'dark' ? 'active' : ''}`} onClick={() => setTheme('dark')}>🌙 تیره</button>
             </div>
 
-            <div className="drawer-foot">نسخه ۱۴۰۵ · ۱.۰.۴۱</div>
+            <div className="drawer-foot">نسخه ۱۴۰۵ · ۱.۰.۴۲</div>
           </aside>
         </div>
       )}
