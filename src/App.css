@@ -1269,6 +1269,19 @@ body {
 }
 body.dark .drawer-hint { color: #7f8aa3; }
 
+.gh-sync { padding: 4px 18px 6px; }
+.gh-input {
+  width: 100%; box-sizing: border-box; margin: 5px 0; padding: 10px 12px;
+  border: 1px solid #d3deee; border-radius: 10px; font-size: 13px; font-family: inherit;
+  background: #fff; color: #2c3550;
+}
+.gh-actions { display: flex; gap: 8px; margin: 6px 0 2px; }
+.gh-btn { flex: 1; padding: 10px 8px; border: none; border-radius: 10px; font-size: 13px; font-weight: 800; cursor: pointer; font-family: inherit; }
+.gh-btn.up { background: #1c6fd6; color: #fff; }
+.gh-btn.down { background: #eaf1fb; color: #1c5aa8; }
+body.dark .gh-input { background: #1b2740; border-color: #314261; color: #dce4f2; }
+body.dark .gh-btn.down { background: #1b2c44; color: #9fc4ef; }
+
 .drawer-item {
   display: flex;
   align-items: center;

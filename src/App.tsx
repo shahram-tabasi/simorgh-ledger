@@ -131,10 +131,10 @@ const TOUR_STEPS: CoachStep[] = [
 ];
 
 // نسخه و فهرستِ تغییرات برای پنجره‌ی «تازه‌ها»
-const APP_VERSION = '1.0.36';
+const APP_VERSION = '1.0.37';
 const CHANGELOG: string[] = [
-  'پشتیبان‌گیری و بازیابی اضافه شد: از منوی «درباره ما» می‌توانید از داده‌ها (صندوق، وام، تقویم) یک فایلِ پشتیبان بسازید و بعداً بازیابی کنید',
-  'این‌طوری قبل از حذف‌و‌نصبِ برنامه، داده‌هایتان از بین نمی‌رود',
+  'ارسالِ پشتیبان به پیام‌رسان‌ها (بله/ایتا/تلگرام) با یک دکمه — برای نگه‌داریِ امنِ داده‌ها',
+  'همگام‌سازیِ ابری با گیت‌هاب: آپلود و بازیابیِ پشتیبان در ریپوی خصوصیِ خودتان (حالتِ پیشرفته)',
 ];
 
 function App() {
@@ -571,11 +571,30 @@ function App() {
   // ---------- پشتیبان‌گیری و بازیابی ----------
   // کلیدهایی که در فایلِ پشتیبان ذخیره می‌شوند (داده‌ها + تنظیمات)
   const BACKUP_KEYS = ['calendarData', 'funds', 'loans', 'calendarSystem', 'theme', 'prayerProvince', 'prayerCity'];
+  const [ghRepo, setGhRepo] = useState<string>(() => localStorage.getItem('ghBackupRepo') || '');
+  const [ghToken, setGhToken] = useState<string>(() => localStorage.getItem('ghBackupToken') || '');
 
-  const exportBackup = () => {
+  // ساختِ متنِ پشتیبان از داده‌های فعلی
+  const buildBackup = (): string => {
     const payload: { [k: string]: string } = {};
     BACKUP_KEYS.forEach((k) => { const v = localStorage.getItem(k); if (v !== null) payload[k] = v; });
-    const blob = new Blob([JSON.stringify({ app: 'simorgh-ledger', version: APP_VERSION, date: new Date().toISOString(), data: payload }, null, 2)], { type: 'application/json' });
+    return JSON.stringify({ app: 'simorgh-ledger', version: APP_VERSION, date: new Date().toISOString(), data: payload }, null, 2);
+  };
+  // اعمالِ داده‌ی پشتیبان روی حافظه و بازگشاییِ برنامه
+  const applyBackup = (data: any) => {
+    if (!data || typeof data !== 'object' || (!data.calendarData && !data.funds && !data.loans)) { notify('فایل پشتیبانِ معتبری نیست.'); return; }
+    askConfirm('بازیابیِ پشتیبان جایگزینِ داده‌های فعلی می‌شود. ادامه می‌دهید؟', () => {
+      BACKUP_KEYS.forEach((k) => { if (typeof data[k] === 'string') localStorage.setItem(k, data[k]); });
+      notify('پشتیبان بازیابی شد. برنامه دوباره باز می‌شود…');
+      setTimeout(() => window.location.reload(), 900);
+    });
+  };
+  // کدگذاری/کدگشاییِ base64 با پشتیبانی از فارسی (UTF-8)
+  const utf8ToB64 = (s: string): string => btoa(unescape(encodeURIComponent(s)));
+  const b64ToUtf8 = (b: string): string => decodeURIComponent(escape(atob(b.replace(/\n/g, ''))));
+
+  const exportBackup = () => {
+    const blob = new Blob([buildBackup()], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     const stamp = new Date().toISOString().slice(0, 10);
@@ -586,6 +605,21 @@ function App() {
     notify('پشتیبان ساخته شد. فایلِ «simorgh-backup» را جایی امن نگه دارید. 🗂️');
   };
 
+  // فاز ۱: ارسالِ مستقیمِ فایلِ پشتیبان به پیام‌رسان‌ها (بله/ایتا/تلگرام/…)
+  const shareBackup = async () => {
+    const stamp = new Date().toISOString().slice(0, 10);
+    try {
+      const file = new File([buildBackup()], `simorgh-backup-${stamp}.json`, { type: 'application/json' });
+      const nav: any = navigator;
+      if (nav.canShare && nav.canShare({ files: [file] })) {
+        await nav.share({ files: [file], title: 'پشتیبانِ simorgh-ledger', text: 'فایلِ پشتیبانِ simorgh-ledger' });
+        setShowLeftDrawer(false);
+        return;
+      }
+    } catch { /* کاربر منصرف شد یا پشتیبانی نمی‌شود */ }
+    exportBackup(); // اگر اشتراکِ فایل ممکن نبود، دانلود می‌کنیم تا از فایل‌منیجر بفرستد
+  };
+
   const onRestoreFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     e.target.value = ''; // اجازه‌ی انتخابِ دوباره‌ی همان فایل
@@ -594,20 +628,48 @@ function App() {
     reader.onload = () => {
       try {
         const parsed = JSON.parse(String(reader.result || '{}'));
-        const data = parsed && parsed.data ? parsed.data : null;
-        if (!data || typeof data !== 'object' || (!data.calendarData && !data.funds && !data.loans)) {
-          notify('این فایل پشتیبانِ معتبری نیست.'); return;
-        }
-        askConfirm('بازیابیِ پشتیبان جایگزینِ داده‌های فعلی می‌شود. ادامه می‌دهید؟', () => {
-          BACKUP_KEYS.forEach((k) => { if (typeof data[k] === 'string') localStorage.setItem(k, data[k]); });
-          notify('پشتیبان بازیابی شد. برنامه دوباره باز می‌شود…');
-          setTimeout(() => window.location.reload(), 900);
-        });
+        applyBackup(parsed && parsed.data);
       } catch {
         notify('خواندنِ فایل ناموفق بود؛ فایلِ پشتیبانِ درست را انتخاب کنید.');
       }
     };
     reader.readAsText(file);
+  };
+
+  // فاز ۲: همگام‌سازی با گیت‌هاب (آپلود/بازیابیِ فایلِ پشتیبان در ریپوی خصوصی)
+  const ghHeaders = (token: string) => ({ Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json' });
+  const ghSaveCreds = (repo: string, token: string) => { localStorage.setItem('ghBackupRepo', repo); localStorage.setItem('ghBackupToken', token); };
+  const ghUpload = async () => {
+    const repo = ghRepo.trim(), token = ghToken.trim();
+    if (!repo.includes('/') || !token) { notify('آدرسِ ریپو (مثلِ user/backup) و توکن را وارد کنید.'); return; }
+    const url = `https://api.github.com/repos/${repo}/contents/simorgh-backup.json`;
+    notify('در حالِ آپلود به گیت‌هاب…');
+    try {
+      let sha: string | undefined;
+      const g = await fetch(url, { headers: ghHeaders(token) });
+      if (g.ok) { const j = await g.json(); sha = j.sha; }
+      const body: any = { message: `backup ${new Date().toISOString()}`, content: utf8ToB64(buildBackup()) };
+      if (sha) body.sha = sha;
+      const r = await fetch(url, { method: 'PUT', headers: { ...ghHeaders(token), 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      if (r.ok) { ghSaveCreds(repo, token); notify('پشتیبان در گیت‌هاب ذخیره شد ✅'); }
+      else if (r.status === 401 || r.status === 403) notify('توکن نامعتبر است یا دسترسیِ Contents ندارد.');
+      else if (r.status === 404) notify('ریپو پیدا نشد؛ آدرس را درست وارد کنید (user/repo).');
+      else notify('خطا در آپلود به گیت‌هاب (کد ' + r.status + ').');
+    } catch { notify('اتصال به گیت‌هاب برقرار نشد (احتمالاً فیلتر/اینترنت). با VPN امتحان کنید.'); }
+  };
+  const ghRestore = async () => {
+    const repo = ghRepo.trim(), token = ghToken.trim();
+    if (!repo.includes('/') || !token) { notify('آدرسِ ریپو و توکن را وارد کنید.'); return; }
+    const url = `https://api.github.com/repos/${repo}/contents/simorgh-backup.json`;
+    notify('در حالِ دریافت از گیت‌هاب…');
+    try {
+      const g = await fetch(url, { headers: ghHeaders(token) });
+      if (!g.ok) { notify(g.status === 404 ? 'هنوز پشتیبانی در گیت‌هاب نیست.' : 'دریافت ناموفق بود (کد ' + g.status + ').'); return; }
+      const j = await g.json();
+      const parsed = JSON.parse(b64ToUtf8(j.content || ''));
+      ghSaveCreds(repo, token);
+      applyBackup(parsed && parsed.data);
+    } catch { notify('اتصال به گیت‌هاب برقرار نشد (احتمالاً فیلتر/اینترنت). با VPN امتحان کنید.'); }
   };
 
   // اشتراک‌گذاریِ یک متنِ دلخواه (برای پیامِ یادآوریِ صندوق)
@@ -1254,10 +1316,22 @@ function App() {
             <a className="drawer-item" href="https://www.simorghai.com" target="_blank" rel="noopener noreferrer"><span className="di-icon"><IconGlobe /></span> وب‌سایت سیمرغ</a>
 
             <div className="drawer-section-label">پشتیبان‌گیری</div>
-            <button className="drawer-item" onClick={exportBackup}><span className="di-icon"><IconShare /></span> ساختِ فایلِ پشتیبان (ذخیره)</button>
-            <button className="drawer-item" onClick={() => restoreInputRef.current?.click()}><span className="di-icon"><IconReport /></span> بازیابی از فایلِ پشتیبان</button>
+            <button className="drawer-item" onClick={shareBackup}><span className="di-icon"><IconShare /></span> ارسالِ پشتیبان (بله/ایتا/تلگرام)</button>
+            <button className="drawer-item" onClick={exportBackup}><span className="di-icon"><IconReport /></span> ذخیره‌ی فایلِ پشتیبان در دستگاه</button>
+            <button className="drawer-item" onClick={() => restoreInputRef.current?.click()}><span className="di-icon"><IconLoan /></span> بازیابی از فایلِ پشتیبان</button>
             <input ref={restoreInputRef} type="file" accept="application/json,.json" style={{ display: 'none' }} onChange={onRestoreFile} />
-            <div className="drawer-hint">قبل از حذف‌و‌نصبِ برنامه، یک پشتیبان بسازید تا داده‌ها (صندوق، وام، تقویم) از بین نرود.</div>
+            <div className="drawer-hint">قبل از حذف‌و‌نصبِ برنامه یک پشتیبان بسازید تا داده‌ها (صندوق، وام، تقویم) از بین نرود.</div>
+
+            <div className="drawer-section-label">همگام‌سازی با گیت‌هاب (پیشرفته)</div>
+            <div className="gh-sync">
+              <input className="gh-input" type="text" inputMode="url" dir="ltr" placeholder="user/repo (ریپوی خصوصی)" value={ghRepo} onChange={(e) => setGhRepo(e.target.value)} />
+              <input className="gh-input" type="password" dir="ltr" placeholder="GitHub Token (دسترسیِ Contents)" value={ghToken} onChange={(e) => setGhToken(e.target.value)} />
+              <div className="gh-actions">
+                <button className="gh-btn up" onClick={ghUpload}>⬆️ آپلود به گیت‌هاب</button>
+                <button className="gh-btn down" onClick={ghRestore}>⬇️ بازیابی از گیت‌هاب</button>
+              </div>
+              <div className="drawer-hint">یک ریپوی <b>خصوصی</b> بسازید و یک Fine-grained Token با دسترسیِ «Contents: Read and write» فقط روی همان ریپو. توکن فقط روی همین دستگاه ذخیره می‌شود. در ایران ممکن است به VPN نیاز باشد.</div>
+            </div>
 
             <div className="drawer-section-label">پوسته</div>
             <div className="theme-switch">
@@ -1265,7 +1339,7 @@ function App() {
               <button className={`theme-btn ${theme === 'dark' ? 'active' : ''}`} onClick={() => setTheme('dark')}>🌙 تیره</button>
             </div>
 
-            <div className="drawer-foot">نسخه ۱۴۰۵ · ۱.۰.۳۶</div>
+            <div className="drawer-foot">نسخه ۱۴۰۵ · ۱.۰.۳۷</div>
           </aside>
         </div>
       )}
