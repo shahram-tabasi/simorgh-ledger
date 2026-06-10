@@ -37,6 +37,12 @@ jobs:
     - name: Sync Capacitor (iOS)
       run: npx cap sync ios
 
+    - name: Install CocoaPods (creates App.xcworkspace)
+      run: |
+        cd ios/App
+        pod install --repo-update
+        ls -la
+
     - name: Build unsigned archive
       run: |
         cd ios/App
