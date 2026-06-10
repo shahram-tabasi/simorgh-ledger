@@ -151,10 +151,10 @@ function resolveAcc(accs: AccLite[], defName: { [k in AccType]: string }, t: Acc
   return a.id;
 }
 
-const APP_VERSION = '1.0.47';
+const APP_VERSION = '1.0.48';
 const CHANGELOG: string[] = [
-  'ادمین می‌تواند سطحِ دسترسیِ گروه‌ها را ویرایش کند: روی گروه بزنید، دسترسی‌ها را کم/زیاد کنید و نامش را عوض کنید',
-  'نقشه‌ی راه به‌روز شد: تطبیقِ دستگاه‌های چهره/اثرانگشت/کارت، اولویتِ SaaS، و گرافیکِ مدرنِ ۲۰۲۶ با محیط‌های مجزا',
+  'داشبوردِ مدرن (گرافیکِ ۲۰۲۶): روی نام/لوگوی برنامه بزنید تا صفحه‌ی تمیز با کارتِ مجزا برای هر بخش باز شود',
+  'هر بخش محیطِ مستقلِ خودش را دارد و شلوغ نیست؛ کارت‌ها بر اساسِ سطحِ دسترسیِ کاربر نمایش داده می‌شوند',
 ];
 
 function App() {
@@ -171,6 +171,7 @@ function App() {
   const [selectedDayNum, setSelectedDayNum] = useState<number | null>(null);
   const [showDayModal, setShowDayModal] = useState<boolean>(false);
   const [showAddModal, setShowAddModal] = useState<boolean>(false);
+  const [showDashboard, setShowDashboard] = useState<boolean>(false);
   const [showPrayerModal, setShowPrayerModal] = useState<boolean>(false);
   const [showToolsModal, setShowToolsModal] = useState<boolean>(false);
   const [showYearMonthModal, setShowYearMonthModal] = useState<boolean>(false);
@@ -323,6 +324,7 @@ function App() {
       [showTour, () => { setShowTour(false); localStorage.setItem('tourSeen', '1'); }],
       [!!dialog, () => setDialog(null)],
       [showAddModal, () => { setShowAddModal(false); setEditingTxId(null); }],
+      [showDashboard, () => setShowDashboard(false)],
       [showReminderModal, () => setShowReminderModal(false)],
       [showPrayerModal, () => setShowPrayerModal(false)],
       [showToolsModal, () => setShowToolsModal(false)],
@@ -349,7 +351,7 @@ function App() {
       else { lastBack.current = now; setExitHint(true); setTimeout(() => setExitHint(false), 2000); }
     });
     return () => { sub.then((h) => h.remove()); };
-  }, [showTour, dialog, showAddModal, showReminderModal, showPrayerModal, showToolsModal, selectedLoanId, showLoansModal, showFundModal, showAccModal, showAttModal, showInvModal, showAccessModal, showAboutModal, showYearMonthModal, showDayModal, showRightDrawer, showLeftDrawer, showWhatsNew, showOnboarding]);
+  }, [showTour, dialog, showAddModal, showDashboard, showReminderModal, showPrayerModal, showToolsModal, selectedLoanId, showLoansModal, showFundModal, showAccModal, showAttModal, showInvModal, showAccessModal, showAboutModal, showYearMonthModal, showDayModal, showRightDrawer, showLeftDrawer, showWhatsNew, showOnboarding]);
 
   // هنگام تغییر تقویم، انتخابِ نظام را ذخیره و ماهِ در حال نمایش را تبدیل می‌کنیم
   const switchCalendar = (system: CalendarSystem) => {
@@ -1036,10 +1038,10 @@ function App() {
 
       <div className="header">
         <button className="icon-btn" onClick={() => setShowRightDrawer(true)} aria-label="امکانات"><IconMenu /></button>
-        <h1 className="brand">
+        <button className="brand" onClick={() => setShowDashboard(true)} aria-label="داشبورد">
           <img className="brand-logo" src={logoUrl} alt="simorgh-ledger" />
           <span className="brand-name">simorgh-ledger</span>
-        </h1>
+        </button>
         <button className="icon-btn" onClick={() => setShowLeftDrawer(true)} aria-label="درباره ما"><IconInfo /></button>
       </div>
 
@@ -1400,6 +1402,32 @@ function App() {
         );
       })()}
 
+      {/* Modern 2026 dashboard: one clean card per area (uncluttered), gated by permissions */}
+      {showDashboard && (() => {
+        const go = (fn: () => void) => { setShowDashboard(false); fn(); };
+        return (
+          <div className="modal dash-modal" onClick={() => setShowDashboard(false)}>
+            <div className="dash-box" onClick={(e) => e.stopPropagation()}>
+              <div className="dash-head">
+                <img className="dash-logo" src={logoUrl} alt="" />
+                <div className="dash-titles"><div className="dash-title">سیمرغ</div><div className="dash-sub">داشبوردِ مدیریت{access.enabled ? ` · ${activeUser ? activeUser.name : 'مدیر'}` : ''}</div></div>
+                <button className="close-modal" onClick={() => setShowDashboard(false)}>✕</button>
+              </div>
+              <div className="dash-grid">
+                <button className="dash-card dc-cal" onClick={() => setShowDashboard(false)}><span className="dc-ic">📅</span><span className="dc-t">تقویم</span><span className="dc-s">شمسی · میلادی · قمری</span></button>
+                {can('accounting') && <button className="dash-card dc-acc" onClick={() => go(() => setShowAccModal(true))}><span className="dc-ic">📒</span><span className="dc-t">حسابداری</span><span className="dc-s">دفترداریِ دوطرفه</span></button>}
+                {(can('attendance') || can('attendance_self')) && <button className="dash-card dc-att" onClick={() => go(() => setShowAttModal(true))}><span className="dc-ic">🕒</span><span className="dc-t">حضور و غیاب</span><span className="dc-s">کارکرد و فیشِ حقوقی</span></button>}
+                {can('inventory') && <button className="dash-card dc-inv" onClick={() => go(() => setShowInvModal(true))}><span className="dc-ic">📦</span><span className="dc-t">انبار</span><span className="dc-s">کالا و موجودی</span></button>}
+                {can('fund') && <button className="dash-card dc-fund" onClick={() => go(() => { setFundStartReport(false); setShowFundModal(true); })}><span className="dc-ic">💰</span><span className="dc-t">صندوق</span><span className="dc-s">قرض‌الحسنه‌ی گردشی</span></button>}
+                {can('loans') && <button className="dash-card dc-loan" onClick={() => go(() => setShowLoansModal(true))}><span className="dc-ic">🏦</span><span className="dc-t">وام‌ها</span><span className="dc-s">اقساط و گزارش</span></button>}
+                {can('tools') && <button className="dash-card dc-rep" onClick={() => go(() => openTool('report'))}><span className="dc-ic">📊</span><span className="dc-t">گزارش‌ها</span><span className="dc-s">مالیِ بازه‌ای</span></button>}
+                {can('users') && <button className="dash-card dc-usr" onClick={() => go(() => setShowAccessModal(true))}><span className="dc-ic">👤</span><span className="dc-t">کاربران</span><span className="dc-s">گروه‌ها و دسترسی</span></button>}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       {/* صندوق خانوادگی */}
       {showFundModal && (
         <FundPanel funds={funds} onChange={saveFunds} onClose={() => { setShowFundModal(false); setFundStartReport(false); }} confirm={askConfirm} onAddDeposits={addFundDeposits} onShare={shareText} startInReport={fundStartReport} onPostJournal={postJournal} />
@@ -1529,7 +1557,7 @@ function App() {
               <button className={`theme-btn ${theme === 'dark' ? 'active' : ''}`} onClick={() => setTheme('dark')}>🌙 تیره</button>
             </div>
 
-            <div className="drawer-foot">نسخه ۱۴۰۵ · ۱.۰.۴۷</div>
+            <div className="drawer-foot">نسخه ۱۴۰۵ · ۱.۰.۴۸</div>
           </aside>
         </div>
       )}

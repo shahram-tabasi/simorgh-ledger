@@ -2386,3 +2386,38 @@ body.dark .att-dnum { color: #cfd7e8; }
 .acc-perm span { font-weight: 600; }
 .acc-group-edit { background: none; border: none; text-align: right; cursor: pointer; font-family: inherit; padding: 0; display: flex; flex-direction: column; gap: 3px; flex: 1; }
 @media (max-width: 360px){ .acc-perms { grid-template-columns: 1fr; } }
+
+/* ==================== Modern 2026 dashboard ==================== */
+.brand { background: none; border: none; cursor: pointer; font-family: inherit; padding: 0; }
+.dash-modal { align-items: stretch; }
+.dash-box {
+  width: 100%; max-width: 560px; margin: auto; background: #f3f6fb; border-radius: 22px;
+  padding: 18px 16px 22px; box-shadow: 0 24px 60px rgba(0,0,0,.35); max-height: 92vh; overflow-y: auto;
+}
+.dash-head { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+.dash-logo { width: 46px; height: 46px; border-radius: 13px; }
+.dash-titles { flex: 1; }
+.dash-title { font-size: 19px; font-weight: 900; color: #1b2440; }
+.dash-sub { font-size: 12px; color: #6b7a93; margin-top: 2px; }
+.dash-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.dash-card {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 3px;
+  padding: 16px 14px; border-radius: 18px; border: none; cursor: pointer; font-family: inherit;
+  color: #fff; text-align: right; min-height: 104px; position: relative; overflow: hidden;
+  box-shadow: 0 8px 20px rgba(31,43,74,.18); transition: transform .12s ease, box-shadow .12s ease;
+}
+.dash-card:active { transform: scale(.97); }
+.dc-ic { font-size: 30px; line-height: 1; margin-bottom: 6px; filter: drop-shadow(0 2px 4px rgba(0,0,0,.25)); }
+.dc-t { font-size: 16px; font-weight: 800; }
+.dc-s { font-size: 11.5px; opacity: .92; font-weight: 600; }
+/* category gradients */
+.dc-cal  { background: linear-gradient(135deg,#3a7bd5,#2b5876); }
+.dc-acc  { background: linear-gradient(135deg,#11998e,#38ef7d); }
+.dc-att  { background: linear-gradient(135deg,#8e2de2,#6a3df0); }
+.dc-inv  { background: linear-gradient(135deg,#f7971e,#ffb347); }
+.dc-fund { background: linear-gradient(135deg,#e65c00,#f9a825); }
+.dc-loan { background: linear-gradient(135deg,#1f5f8b,#2c87c5); }
+.dc-rep  { background: linear-gradient(135deg,#516395,#614385); }
+.dc-usr  { background: linear-gradient(135deg,#434a59,#6b7280); }
+body.dark .dash-box { background: #131b2c; }
+body.dark .dash-title { color: #eef2fa; }
