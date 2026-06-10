@@ -31,8 +31,8 @@ interface Props {
   onChange: (s: AttendanceState) => void;
   onClose: () => void;
   confirm: (msg: string, onYes: () => void) => void;
-  // اتصال به حسابداری: سندِ حقوقِ ماه را خودکار ثبت می‌کند (اختیاری)
-  onPostJournal?: (ref: string, date: { y: number; m: number; d: number }, desc: string, spec: { type: AccType; debit?: number; credit?: number }[]) => void;
+  // Accounting hook: auto-posts the month's payroll as a double-entry journal (optional).
+  onPostJournal?: (ref: string, date: { y: number; m: number; d: number }, desc: string, spec: { type: AccType; name?: string; debit?: number; credit?: number }[]) => void;
 }
 type Tab = 'log' | 'report' | 'staff';
 
@@ -200,8 +200,8 @@ export default function AttendancePanel({ state, onChange, onClose, confirm, onP
                 <button className="acc-addline acc-noprint" onClick={() => {
                   const total = employees.reduce((s, e) => s + calc(e).pay, 0);
                   if (total <= 0) { confirm('حقوقی برای ثبت نیست (مبلغ صفر است).', () => {}); return; }
-                  // بدهکار: هزینه‌ی حقوق / بستانکار: حساب‌های پرداختنی (حقوقِ پرداختنی)
-                  onPostJournal(`payroll-${ym}`, { y, m, d: daysInMonth }, `حقوقِ ${monthLabel}`, [{ type: 'expense', debit: total }, { type: 'liability', credit: total }]);
+                  // Debit: Salary expense  /  Credit: Salaries payable
+                  onPostJournal(`payroll-${ym}`, { y, m, d: daysInMonth }, `حقوقِ ${monthLabel}`, [{ type: 'expense', name: 'هزینه‌ی حقوق', debit: total }, { type: 'liability', name: 'حقوقِ پرداختنی', credit: total }]);
                 }}>🧾 ثبتِ حقوقِ {monthLabel} در حسابداری</button>
               )}
             </>

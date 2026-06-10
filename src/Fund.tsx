@@ -1,5 +1,6 @@
 // صندوقِ سهم‌محورِ قرض‌الحسنه (گردشی) — چند پرداخت در ماه، سهم‌های متفاوت، و گزارشِ حرفه‌ای
 import { useEffect, useState } from 'react';
+import { getToday } from './calendar';
 
 const fmt = (n: number): string => Math.round(n || 0).toLocaleString('en-US');
 const digits = (s: string): number => parseInt(s.replace(/[^0-9]/g, ''), 10) || 0;
@@ -73,6 +74,8 @@ interface Props {
   onShare: (text: string) => void;
   onAddDeposits: (fundName: string, amount: number, count: number) => void;
   startInReport?: boolean;
+  // Accounting hook: posts the fund's cash position as a pass-through journal entry (optional).
+  onPostJournal?: (ref: string, date: { y: number; m: number; d: number }, desc: string, spec: { type: 'asset' | 'liability' | 'equity' | 'income' | 'expense'; name?: string; debit?: number; credit?: number }[]) => void;
 }
 
 const waNumber = (raw: string): string => {
@@ -87,7 +90,7 @@ const waNumber = (raw: string): string => {
 const wonCount = (f: Fund, name: string) => f.rounds.reduce((c, r) => c + r.winners.filter((w) => w === name).length, 0);
 const totalSharesOf = (f: Fund) => f.members.reduce((s, m) => s + m.shares, 0);
 
-export default function FundPanel({ funds, onChange, onClose, confirm, onShare, onAddDeposits, startInReport }: Props) {
+export default function FundPanel({ funds, onChange, onClose, confirm, onShare, onAddDeposits, startInReport, onPostJournal }: Props) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [view, setView] = useState<'round' | 'report'>('round');
@@ -401,6 +404,19 @@ export default function FundPanel({ funds, onChange, onClose, confirm, onShare, 
                 <button className="loan-submit" onClick={() => onAddDeposits(fund.name, fund.monthlyAmount, Math.max(1, totalMonths - fund.rounds.filter((r) => r.winners.length > 0).length))}>
                   افزودنِ یادآورِ واریزی (هر سهم) به تقویم
                 </button>
+                {onPostJournal && (
+                  <button className="acc-addline" onClick={() => {
+                    // Pass-through fund accounting: cash held by manager = collected - paid out.
+                    const collected = fund.rounds.reduce((s, r) => s + fund.members.reduce((ss, mm) => ss + (r.paid[mm.name] ? fund.monthlyAmount * mm.shares : 0), 0), 0);
+                    const paidOut = fund.rounds.reduce((s, r) => s + r.winners.length * (r.pay ?? payout), 0);
+                    const net = collected - paidOut; // >0: manager holds members' cash (a liability to them)
+                    const t = getToday('jalali');
+                    const spec = net >= 0
+                      ? [{ type: 'asset' as const, name: 'صندوق (نقد)', debit: net }, { type: 'liability' as const, name: 'سپرده‌ی اعضا', credit: net }]
+                      : [{ type: 'liability' as const, name: 'سپرده‌ی اعضا', debit: -net }, { type: 'asset' as const, name: 'صندوق (نقد)', credit: -net }];
+                    onPostJournal(`fund-${fund.id}`, { y: t.year, m: t.month, d: t.day }, `صندوقِ ${fund.name}`, spec);
+                  }}>🧾 ثبت/به‌روزرسانیِ صندوق در حسابداری</button>
+                )}
               </>
             )}
 

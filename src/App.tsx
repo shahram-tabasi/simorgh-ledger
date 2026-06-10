@@ -133,10 +133,10 @@ const TOUR_STEPS: CoachStep[] = [
 ];
 
 // نسخه و فهرستِ تغییرات برای پنجره‌ی «تازه‌ها»
-const APP_VERSION = '1.0.42';
+const APP_VERSION = '1.0.43';
 const CHANGELOG: string[] = [
-  'یکپارچگی: از «حضور و غیاب» حقوقِ ماه را با یک دکمه به‌صورتِ سندِ خودکار در «حسابداری» ثبت کنید — بدونِ ثبتِ تکراری',
-  'این همان مزیتی است که نرم‌افزارهای جدا از هم ندارند: حقوق → سندِ حسابداری خودکار',
+  'یکپارچگیِ صندوق با حسابداری: از گزارشِ صندوق، وضعیتِ نقدیِ صندوق را با یک دکمه به‌صورتِ سندِ خودکار ثبت/به‌روزرسانی کنید',
+  'ثبتِ خودکار حالا «به‌روزرسانی» هم می‌کند: اگر دوباره بزنی، همان سند با مبلغِ تازه به‌روز می‌شود (نه سندِ تکراری)',
 ];
 
 function App() {
@@ -168,21 +168,26 @@ function App() {
   const [showAccModal, setShowAccModal] = useState<boolean>(false);
   const [accounting, setAccounting] = useState<AccountingState>(() => { try { const s = localStorage.getItem('accounting'); return s ? JSON.parse(s) : emptyAccounting(); } catch { return emptyAccounting(); } });
   const saveAccounting = (s: AccountingState) => { localStorage.setItem('accounting', JSON.stringify(s)); setAccounting(s); };
-  // ثبتِ خودکارِ سندِ حسابداری از سایرِ ماژول‌ها (حقوق/صندوق/وام).
-  // type-محور است: حسابِ مناسبِ هر نوع را پیدا (یا می‌سازد) و با ref از ثبتِ تکراری جلوگیری می‌کند.
-  const postJournal = (ref: string, date: { y: number; m: number; d: number }, desc: string, spec: { type: AccType; debit?: number; credit?: number }[]) => {
-    if (accounting.entries.some((e) => e.ref === ref)) { notify('این سند قبلاً در حسابداری ثبت شده است.'); return; }
+  // Auto-post an accounting journal entry from other modules (payroll / fund / loan).
+  // Upsert semantics: if an entry with the same `ref` exists, it is updated; otherwise created.
+  // Each spec line resolves to an account by (type [+ optional name]); a missing account is auto-created.
+  const postJournal = (ref: string, date: { y: number; m: number; d: number }, desc: string, spec: { type: AccType; name?: string; debit?: number; credit?: number }[]) => {
     const defName: { [k in AccType]: string } = { asset: 'صندوق (نقد)', liability: 'حساب‌های پرداختنی', equity: 'سرمایه', income: 'درآمد', expense: 'هزینه‌ها' };
     const accs = accounting.accounts.slice();
-    const idByType = (t: AccType) => {
-      let a = accs.find((x) => x.type === t);
-      if (!a) { a = { id: `a-${t}-${Date.now()}`, code: '', name: defName[t], type: t }; accs.push(a); }
+    // Resolve an account id by exact name within a type, then by type, else create one.
+    const resolve = (t: AccType, name?: string) => {
+      let a = name ? accs.find((x) => x.type === t && x.name === name) : undefined;
+      if (!a) a = accs.find((x) => x.type === t);
+      if (!a) { a = { id: `a-${t}-${Date.now()}-${accs.length}`, code: '', name: name || defName[t], type: t }; accs.push(a); }
       return a.id;
     };
-    const lines = spec.map((l) => ({ accountId: idByType(l.type), debit: l.debit || 0, credit: l.credit || 0 }));
-    const entry = { id: `je-${Date.now()}`, ref, y: date.y, m: date.m, d: date.d, desc, lines };
-    saveAccounting({ accounts: accs, entries: [...accounting.entries, entry] });
-    notify('سندِ حسابداری ثبت شد ✅ (در منوی «حسابداری» ببینید)');
+    const lines = spec.map((l) => ({ accountId: resolve(l.type, l.name), debit: l.debit || 0, credit: l.credit || 0 }));
+    const exists = accounting.entries.some((e) => e.ref === ref);
+    const entries = exists
+      ? accounting.entries.map((e) => (e.ref === ref ? { ...e, y: date.y, m: date.m, d: date.d, desc, lines } : e))
+      : [...accounting.entries, { id: `je-${Date.now()}`, ref, y: date.y, m: date.m, d: date.d, desc, lines }];
+    saveAccounting({ accounts: accs, entries });
+    notify(exists ? 'سندِ حسابداری به‌روزرسانی شد ✅' : 'سندِ حسابداری ثبت شد ✅ (در منوی «حسابداری»)');
   };
   const [showAttModal, setShowAttModal] = useState<boolean>(false);
   const [attendance, setAttendance] = useState<AttendanceState>(() => { try { const s = localStorage.getItem('attendance'); return s ? JSON.parse(s) : emptyAttendance(); } catch { return emptyAttendance(); } });
@@ -1342,7 +1347,7 @@ function App() {
 
       {/* صندوق خانوادگی */}
       {showFundModal && (
-        <FundPanel funds={funds} onChange={saveFunds} onClose={() => { setShowFundModal(false); setFundStartReport(false); }} confirm={askConfirm} onAddDeposits={addFundDeposits} onShare={shareText} startInReport={fundStartReport} />
+        <FundPanel funds={funds} onChange={saveFunds} onClose={() => { setShowFundModal(false); setFundStartReport(false); }} confirm={askConfirm} onAddDeposits={addFundDeposits} onShare={shareText} startInReport={fundStartReport} onPostJournal={postJournal} />
       )}
 
       {showAccModal && (
@@ -1450,7 +1455,7 @@ function App() {
               <button className={`theme-btn ${theme === 'dark' ? 'active' : ''}`} onClick={() => setTheme('dark')}>🌙 تیره</button>
             </div>
 
-            <div className="drawer-foot">نسخه ۱۴۰۵ · ۱.۰.۴۲</div>
+            <div className="drawer-foot">نسخه ۱۴۰۵ · ۱.۰.۴۳</div>
           </aside>
         </div>
       )}
