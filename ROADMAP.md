@@ -104,7 +104,8 @@ flowchart TD
 - ✓ Backup (file / messenger / GitHub)
 - ✓ Web (PWA) + Android (APK) + iOS (IPA)
 - ✓ User account + cloud sync (Node + PostgreSQL)
-- ✓ Double-entry accounting (journal / trial balance / ledger / P&L / balance sheet / print)
+- ✓ Double-entry accounting (journal / trial balance / ledger / P&L / balance sheet / print) + hierarchical
+      chart of accounts (گروه/کل/معین), VAT, and guided quick-entry (see Accounting upgrade below)
 - ✓ Attendance (employees, daily log, work-time/overtime, payroll, monthly report)
 - ✓ Integration: attendance payroll → accounting; fund cash position → accounting; loan → accounting (`postJournal`)
 - ✓ Inventory module (items, in/out, stock, value, report) with auto-accounting (purchase/sale → journal)
@@ -132,10 +133,15 @@ flowchart TD
 - ✓ **Configurable حکم salary components** (اجزای حکم): company-defined catalogue (حق مسکن، بن، اولاد،
       سنوات، فوق‌العاده شغل، تأهل، بیمه…), per-employee amounts, itemized in the decree + payslip, summed
       into net pay and the payroll journal entry
-- ◻ **Accounting upgrade** (next, original implementation from standard accounting principles — NOT copied
-      from any vendor's materials; we respect their copyright). Planned: hierarchical chart of accounts
-      (گروه/کل/معین/تفصیلی), Iranian standard account groups, VAT (مالیات بر ارزش افزوده), opening/closing
-      entries & fiscal-year close, cost centers, and clearer guided workflows for non-accountants.
+- ◑ **Accounting upgrade** (original implementation from standard accounting principles — NOT copied from any
+      vendor's materials; we respect their copyright):
+      - ✓ Hierarchical chart of accounts (کدینگ: گروه/کل/معین) with a full standard default chart + tree view;
+            only leaf accounts are postable; trial balance lists postable accounts
+      - ✓ VAT (مالیات بر ارزش افزوده) with a configurable rate, applied on sales/purchases
+      - ✓ Guided quick-entry for non-accountants (ثبتِ سریع): sale / purchase / receive / pay / cash-bank
+            transfer / capital — auto-builds the correct balanced double-entry with a live preview
+      - ◻ next: opening/closing entries & fiscal-year close, cost centers (مرکز هزینه), تفصیلی (4th level),
+            multi-level grouped trial balance, statutory/VAT return reports
 - ◻ Windows desktop installer (.exe) via Electron + Windows CI  (deferred — not yet)
 - ◻ Attendance device matching: face / fingerprint / RFID-card readers
       - phase 1: device biometric unlock (WebAuthn / Capacitor biometric) for worker self check-in

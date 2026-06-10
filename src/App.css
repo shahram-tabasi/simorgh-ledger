@@ -2332,6 +2332,29 @@ body.dark .fund-guide-banner {
 .acc-type-pick { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0; }
 .acc-type-pick .fund-level-btn { flex: 1 1 28%; padding: 8px 0; font-size: 12.5px; }
 .acc-entry .ld-date { line-height: 1.7; }
+/* hierarchical chart-of-accounts tree */
+.acc-node.lvl-group .ld-amt { font-weight: 800; color: #1c2c4a; }
+.acc-node.lvl-total .ld-amt { font-weight: 700; color: #33415e; }
+.acc-node.lvl-group { background: linear-gradient(90deg,#eef3fb,transparent); border-radius: 8px; }
+.acc-lvl-tag { font-size: 10px; font-weight: 700; color: #fff; background: #8893a8; border-radius: 5px; padding: 1px 6px; margin-inline-start: 4px; vertical-align: middle; }
+.acc-node.lvl-group .acc-lvl-tag { background: #1c6fd6; }
+body.dark .acc-node.lvl-group .ld-amt, body.dark .acc-node.lvl-total .ld-amt { color: #dce4f2; }
+body.dark .acc-node.lvl-group { background: linear-gradient(90deg,#1e2942,transparent); }
+/* guided quick-entry */
+.acc-quick-ops { display: grid; grid-template-columns: repeat(3,1fr); gap: 8px; margin: 8px 0; }
+.acc-quick-op { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 12px 4px; border: 1.5px solid #d3deee; border-radius: 12px; background: #fff; color: #33415e; font-family: inherit; font-size: 12.5px; font-weight: 700; cursor: pointer; transition: .15s; }
+.acc-quick-op .aqo-ic { font-size: 20px; }
+.acc-quick-op.active { border-color: #1c6fd6; background: #eaf2fe; color: #0f4fa8; box-shadow: 0 2px 8px rgba(28,111,214,.18); }
+.acc-quick-seg { display: flex; gap: 6px; margin: 8px 0; }
+.acc-quick-seg .mini-toggle-btn { flex: 1; }
+.acc-preview { border: 1px dashed #b9c8e0; border-radius: 12px; padding: 10px 12px; margin: 10px 0; background: #f8fbff; }
+.acc-preview-title { font-size: 12px; font-weight: 800; color: #1c6fd6; margin-bottom: 6px; }
+.acc-preview-row { display: flex; justify-content: space-between; font-size: 13px; padding: 3px 0; border-bottom: 1px solid #eef3fb; }
+.acc-preview-row .aqp-d { color: #2e6fd0; font-weight: 700; }
+.acc-preview-row .aqp-c { color: #c9761a; font-weight: 700; }
+body.dark .acc-quick-op { background: #16203a; border-color: #2a3654; color: #cdd7ea; }
+body.dark .acc-quick-op.active { background: #1d3358; border-color: #4f8fe0; color: #cfe3ff; }
+body.dark .acc-preview { background: #16203a; border-color: #33415e; }
 .acc-ledger-pick { margin: 8px 0; }
 .acc-ledger-name { font-weight: 800; font-size: 13px; margin: 8px 0 4px; color: #2c3550; }
 .acc-table { width: 100%; border-collapse: collapse; font-size: 12px; margin-bottom: 14px; }
