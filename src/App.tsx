@@ -151,10 +151,10 @@ function resolveAcc(accs: AccLite[], defName: { [k in AccType]: string }, t: Acc
   return a.id;
 }
 
-const APP_VERSION = '1.0.70';
+const APP_VERSION = '1.0.71';
 const CHANGELOG: string[] = [
-  'گزارشِ ماتریسیِ موجودی: کالاها × انبارها در یک جدول، با جمع و ارزشِ هر انبار',
-  'خروجیِ اکسل و چاپِ ماتریسِ انبارها',
+  'حداقلِ موجودی و نقطهٔ سفارش: برای هر کالا تعریف می‌شود و وقتی موجودی به آن می‌رسد هشدار می‌دهد',
+  'هشدارِ کالاهای رو به اتمام در بالای گزارشِ موجودی + نشانه‌گذاریِ ردیف‌ها',
 ];
 
 function App() {
@@ -1795,7 +1795,7 @@ function App() {
               <button className={`theme-btn ${theme === 'dark' ? 'active' : ''}`} onClick={() => setTheme('dark')}>🌙 تیره</button>
             </div>
 
-            <div className="drawer-foot">نسخه ۱۴۰۵ · ۱.۰.۷۰</div>
+            <div className="drawer-foot">نسخه ۱۴۰۵ · ۱.۰.۷۱</div>
           </aside>
         </div>
       )}

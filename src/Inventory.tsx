@@ -14,7 +14,8 @@ const digits = (s: string): number => parseInt((s || '').replace(/[^0-9]/g, ''),
 const withSep = (s: string): string => { const d = digits(s); return d ? d.toLocaleString('en-US') : ''; };
 
 // barcode = scannable code; location = shelf/row/slot; partnerCode = کد همکار; stdCode = کد استانداردِ شرکت.
-export interface InvItem { id: string; name: string; code?: string; unit?: string; buy?: number; sell?: number; barcode?: string; location?: string; partnerCode?: string; stdCode?: string; groupId?: string; }
+// minStock = reorder point (نقطه سفارش): when total stock drops to/below it, the item is flagged low.
+export interface InvItem { id: string; name: string; code?: string; unit?: string; buy?: number; sell?: number; barcode?: string; location?: string; partnerCode?: string; stdCode?: string; groupId?: string; minStock?: number; }
 // Hierarchical product group (گروه کالا), e.g. الکتریکال › اندازه‌گیری. `parent` empty = top level.
 export interface ItemGroup { id: string; name: string; parent?: string; }
 // A company/shop may have several warehouses (انبار), each split into sections (بخش).
@@ -113,6 +114,9 @@ export default function InventoryPanel({ state, onChange, onClose, confirm, onPo
   const delSection = (id: string) => { if (txns.some((t) => t.sectionId === id)) { confirm('این بخش گردش دارد و حذف نمی‌شود.', () => {}); return; } confirm('این بخش حذف شود؟', () => onChange({ ...state, sections: sections.filter((s) => s.id !== id) })); };
 
   const itemByBarcode = (bc: string) => { const c = cleanBarcode(bc); return items.find((i) => cleanBarcode(i.barcode || '') === c || cleanBarcode(i.code || '') === c || cleanBarcode(i.stdCode || '') === c); };
+  // Low-stock = total stock at or below the reorder point (only items that set one).
+  const isLow = (i: InvItem) => (i.minStock || 0) > 0 && stockOf(i.id) <= (i.minStock || 0);
+  const lowItems = () => items.filter(isLow);
 
   // ---------- product groups (گروه کالا) ----------
   const groups = state.groups || [];
@@ -149,15 +153,15 @@ export default function InventoryPanel({ state, onChange, onClose, confirm, onPo
   // ---------- items ----------
   const [iName, setIName] = useState(''); const [iCode, setICode] = useState(''); const [iUnit, setIUnit] = useState('عدد');
   const [iBuy, setIBuy] = useState(''); const [iSell, setISell] = useState('');
-  const [iBarcode, setIBarcode] = useState(''); const [iLoc, setILoc] = useState(''); const [iPartner, setIPartner] = useState(''); const [iStd, setIStd] = useState(''); const [iGroup, setIGroup] = useState('');
+  const [iBarcode, setIBarcode] = useState(''); const [iLoc, setILoc] = useState(''); const [iPartner, setIPartner] = useState(''); const [iStd, setIStd] = useState(''); const [iGroup, setIGroup] = useState(''); const [iMin, setIMin] = useState('');
   const [labelItem, setLabelItem] = useState<InvItem | null>(null);  // item whose barcode label is being printed
   const addItem = () => {
     if (!iName.trim()) return;
     // Auto-print barcode: generate one if the user didn't supply it.
     const barcode = cleanBarcode(iBarcode) || genBarcode();
-    const it: InvItem = { id: `it-${Date.now()}`, name: iName.trim(), code: iCode.trim() || undefined, unit: iUnit.trim() || 'عدد', buy: digits(iBuy) || undefined, sell: digits(iSell) || undefined, barcode, location: iLoc.trim() || undefined, partnerCode: iPartner.trim() || undefined, stdCode: iStd.trim() || undefined, groupId: iGroup || undefined };
+    const it: InvItem = { id: `it-${Date.now()}`, name: iName.trim(), code: iCode.trim() || undefined, unit: iUnit.trim() || 'عدد', buy: digits(iBuy) || undefined, sell: digits(iSell) || undefined, barcode, location: iLoc.trim() || undefined, partnerCode: iPartner.trim() || undefined, stdCode: iStd.trim() || undefined, groupId: iGroup || undefined, minStock: digits(iMin) || undefined };
     onChange({ ...state, items: [...items, it], txns });
-    setIName(''); setICode(''); setIBuy(''); setISell(''); setIBarcode(''); setILoc(''); setIPartner(''); setIStd('');
+    setIName(''); setICode(''); setIBuy(''); setISell(''); setIBarcode(''); setILoc(''); setIPartner(''); setIStd(''); setIMin('');
     setLabelItem(it);   // show its printable barcode label immediately
   };
   const delItem = (id: string) => {
@@ -340,8 +344,14 @@ export default function InventoryPanel({ state, onChange, onClose, confirm, onPo
             const shown = items.filter(inFilter);
             const shownValue = shown.reduce((s, i) => s + qOf(i.id) * (i.buy || 0), 0);
             const whLabel = filterWh ? ` — ${whName(filterWh)}` : '';
+            const low = lowItems();
             return (
             <>
+              {low.length > 0 && (
+                <div className="inv-alert acc-noprint">
+                  ⚠️ {low.length} کالا به نقطهٔ سفارش رسیده: {low.slice(0, 6).map((i) => `${i.name} (${stockOf(i.id)}/${i.minStock})`).join('، ')}{low.length > 6 ? ' …' : ''}
+                </div>
+              )}
               {(groups.length > 0 || warehouses.length > 0) && (
                 <div className="att-addgrid acc-noprint">
                   {warehouses.length > 0 && (
@@ -399,7 +409,7 @@ export default function InventoryPanel({ state, onChange, onClose, confirm, onPo
                     {shown.length === 0 ? (
                       <tr><td colSpan={5} style={{ textAlign: 'center', opacity: .6 }}>کالایی نیست</td></tr>
                     ) : shown.map((i) => { const q = qOf(i.id); return (
-                      <tr key={i.id}><td>{i.name}{i.unit ? ` (${i.unit})` : ''}</td><td>{groupPath(i.groupId) || '—'}</td><td>{q}</td><td>{fmt(i.buy || 0)}</td><td>{fmt(q * (i.buy || 0))}</td></tr>
+                      <tr key={i.id} className={isLow(i) ? 'inv-low-row' : ''}><td>{i.name}{i.unit ? ` (${i.unit})` : ''}{isLow(i) ? ' ⚠️' : ''}</td><td>{groupPath(i.groupId) || '—'}</td><td>{q}</td><td>{fmt(i.buy || 0)}</td><td>{fmt(q * (i.buy || 0))}</td></tr>
                     ); })}
                     <tr className="acc-total"><td>ارزشِ کل</td><td colSpan={3}></td><td>{fmt(shownValue)}</td></tr>
                   </tbody>
@@ -440,6 +450,8 @@ export default function InventoryPanel({ state, onChange, onClose, confirm, onPo
                 <input className="tool-text-input" type="text" inputMode="numeric" dir="ltr" placeholder="قیمتِ خرید" value={iBuy} onChange={(e) => setIBuy(withSep(e.target.value))} />
                 <input className="tool-text-input" type="text" inputMode="numeric" dir="ltr" placeholder="قیمتِ فروش" value={iSell} onChange={(e) => setISell(withSep(e.target.value))} />
               </div>
+              <label className="field-label">حداقلِ موجودی / نقطهٔ سفارش (هشدار)</label>
+              <input className="tool-text-input" type="text" inputMode="numeric" dir="ltr" placeholder="مثلاً 10 — خالی = بدون هشدار" value={iMin} onChange={(e) => setIMin(e.target.value.replace(/[^0-9]/g, ''))} />
               <button className="loan-submit" disabled={!iName.trim()} onClick={addItem}>افزودن و ساختِ بارکد</button>
 
               {/* printable barcode label of the just-added (or chosen) item */}
@@ -460,8 +472,8 @@ export default function InventoryPanel({ state, onChange, onClose, confirm, onPo
                 {items.map((i) => (
                   <div key={i.id} className="loan-detail-row">
                     <div className="ld-info">
-                      <span className="ld-amt">{i.name} <span className="fm-shares">موجودی: {stockOf(i.id)} {i.unit}</span></span>
-                      <span className="ld-date">{i.groupId ? `${groupPath(i.groupId)} · ` : ''}بارکد: {i.barcode || '—'}{i.location ? ` · جایگاه: ${i.location}` : ''}</span>
+                      <span className="ld-amt">{i.name} <span className="fm-shares">موجودی: {stockOf(i.id)} {i.unit}</span>{isLow(i) ? <span className="inv-low-tag">کم‌موجود</span> : null}</span>
+                      <span className="ld-date">{i.groupId ? `${groupPath(i.groupId)} · ` : ''}بارکد: {i.barcode || '—'}{i.location ? ` · جایگاه: ${i.location}` : ''}{i.minStock ? ` · حداقل: ${i.minStock}` : ''}</span>
                     </div>
                     <button className="att-inlinebtn" title="چاپِ بارکد" onClick={() => setLabelItem(i)}>🏷</button>
                     <button className="fm-notify" title="حذف" onClick={() => delItem(i.id)}>🗑</button>

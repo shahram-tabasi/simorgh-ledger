@@ -2377,6 +2377,11 @@ body.dark .acc-print-org { color: #dce4f2; }
 .inv-label-sub { font-size: 11px; color: #6b7894; margin-bottom: 6px; }
 .inv-label-code { font-family: monospace; letter-spacing: 2px; font-size: 13px; margin-top: 4px; color: #1c2c4a; }
 .inv-scanmsg { background: #eaf6ee; border: 1px solid #bfe3cc; color: #1f6b3a; border-radius: 9px; padding: 8px 10px; font-size: 12.5px; margin: 6px 0; }
+.inv-low-tag { font-size: 10px; font-weight: 800; color: #fff; background: #d9822b; border-radius: 5px; padding: 1px 6px; margin-inline-start: 4px; }
+.inv-alert { background: #fdf1e3; border: 1px solid #f0cfa0; color: #9a5a12; border-radius: 10px; padding: 9px 12px; font-size: 12.5px; font-weight: 600; margin: 6px 0; }
+.inv-low-row td { background: #fdf3e8; }
+body.dark .inv-alert { background: #3a2a14; border-color: #6b4a1e; color: #f0c486; }
+body.dark .inv-low-row td { background: #2c2210; }
 .inv-matrix-wrap { overflow-x: auto; }
 .inv-matrix { font-size: 12px; min-width: 100%; }
 .inv-matrix th, .inv-matrix td { text-align: center; padding: 4px 6px; white-space: nowrap; }
