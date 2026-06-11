@@ -151,10 +151,10 @@ function resolveAcc(accs: AccLite[], defName: { [k in AccType]: string }, t: Acc
   return a.id;
 }
 
-const APP_VERSION = '1.0.66';
+const APP_VERSION = '1.0.67';
 const CHANGELOG: string[] = [
-  'اسکنرِ دوربین در اپِ موبایل: با موتورِ ZXing روی WebViewِ اندروید هم کار می‌کند (نه فقط مرورگر)',
-  'دسترسیِ دوربین برای نسخه‌ی اندروید اضافه شد تا گوشی به‌جای بارکدخوانِ سخت‌افزاری استفاده شود',
+  'گروهِ کالا در انبار: دسته‌بندیِ سلسله‌مراتبی (مثلاً الکتریکال › اندازه‌گیری/حفاظت/مصرفی/اداری) — قابلِ تعریف',
+  'انتخابِ گروه هنگامِ ورودِ کالا + فیلتر و نمایشِ گروه در گزارشِ موجودی و خروجیِ اکسل',
 ];
 
 function App() {
@@ -1795,7 +1795,7 @@ function App() {
               <button className={`theme-btn ${theme === 'dark' ? 'active' : ''}`} onClick={() => setTheme('dark')}>🌙 تیره</button>
             </div>
 
-            <div className="drawer-foot">نسخه ۱۴۰۵ · ۱.۰.۶۶</div>
+            <div className="drawer-foot">نسخه ۱۴۰۵ · ۱.۰.۶۷</div>
           </aside>
         </div>
       )}

@@ -14,9 +14,11 @@ const digits = (s: string): number => parseInt((s || '').replace(/[^0-9]/g, ''),
 const withSep = (s: string): string => { const d = digits(s); return d ? d.toLocaleString('en-US') : ''; };
 
 // barcode = scannable code; location = shelf/row/slot; partnerCode = کد همکار; stdCode = کد استانداردِ شرکت.
-export interface InvItem { id: string; name: string; code?: string; unit?: string; buy?: number; sell?: number; barcode?: string; location?: string; partnerCode?: string; stdCode?: string; }
+export interface InvItem { id: string; name: string; code?: string; unit?: string; buy?: number; sell?: number; barcode?: string; location?: string; partnerCode?: string; stdCode?: string; groupId?: string; }
+// Hierarchical product group (گروه کالا), e.g. الکتریکال › اندازه‌گیری. `parent` empty = top level.
+export interface ItemGroup { id: string; name: string; parent?: string; }
 export interface InvTxn { id: string; itemId: string; kind: 'in' | 'out'; qty: number; price: number; y: number; m: number; d: number; }
-export interface InventoryState { items: InvItem[]; txns: InvTxn[]; }
+export interface InventoryState { items: InvItem[]; txns: InvTxn[]; groups?: ItemGroup[]; }
 
 export function emptyInventory(): InventoryState { return { items: [], txns: [] }; }
 
@@ -89,23 +91,53 @@ export default function InventoryPanel({ state, onChange, onClose, confirm, onPo
 
   const itemByBarcode = (bc: string) => { const c = cleanBarcode(bc); return items.find((i) => cleanBarcode(i.barcode || '') === c || cleanBarcode(i.code || '') === c || cleanBarcode(i.stdCode || '') === c); };
 
+  // ---------- product groups (گروه کالا) ----------
+  const groups = state.groups || [];
+  const groupById = (id?: string) => groups.find((g) => g.id === id);
+  // "الکتریکال › اندازه‌گیری" path for a group id.
+  const groupPath = (id?: string): string => {
+    const parts: string[] = []; const seen = new Set<string>(); let cur = id;
+    while (cur && !seen.has(cur)) { seen.add(cur); const g = groupById(cur); if (!g) break; parts.unshift(g.name); cur = g.parent; }
+    return parts.join(' › ');
+  };
+  const groupDepth = (g: ItemGroup): number => { let d = 0, p = g.parent; const seen = new Set<string>(); while (p && !seen.has(p)) { seen.add(p); d++; p = groupById(p)?.parent; } return d; };
+  // Groups ordered as a tree (parents before children), sorted by name.
+  const groupTree = (() => {
+    const out: ItemGroup[] = []; const byParent: { [k: string]: ItemGroup[] } = {};
+    groups.forEach((g) => { const k = g.parent || '__root'; (byParent[k] = byParent[k] || []).push(g); });
+    Object.values(byParent).forEach((arr) => arr.sort((a, b) => a.name.localeCompare(b.name, 'fa')));
+    const walk = (key: string) => { (byParent[key] || []).forEach((g) => { out.push(g); walk(g.id); }); };
+    walk('__root'); return out;
+  })();
+  const groupHasChildren = (id: string) => groups.some((g) => g.parent === id);
+  const [gName, setGName] = useState(''); const [gParent, setGParent] = useState('');
+  const addGroup = () => { if (!gName.trim()) return; onChange({ ...state, groups: [...groups, { id: `g-${Date.now()}`, name: gName.trim(), parent: gParent || undefined }] }); setGName(''); };
+  const delGroup = (id: string) => {
+    if (groupHasChildren(id) || items.some((i) => i.groupId === id)) { confirm('این گروه زیرمجموعه یا کالا دارد و حذف نمی‌شود.', () => {}); return; }
+    confirm('این گروهِ کالا حذف شود؟', () => onChange({ ...state, groups: groups.filter((g) => g.id !== id) }));
+  };
+  // report filter by group (includes descendants)
+  const [filterGroup, setFilterGroup] = useState('');
+  const isDescendant = (gid: string | undefined, ancestor: string): boolean => { let cur = gid; const seen = new Set<string>(); while (cur && !seen.has(cur)) { if (cur === ancestor) return true; seen.add(cur); cur = groupById(cur)?.parent; } return false; };
+  const inFilter = (it: InvItem) => !filterGroup || isDescendant(it.groupId, filterGroup);
+
   // ---------- items ----------
   const [iName, setIName] = useState(''); const [iCode, setICode] = useState(''); const [iUnit, setIUnit] = useState('عدد');
   const [iBuy, setIBuy] = useState(''); const [iSell, setISell] = useState('');
-  const [iBarcode, setIBarcode] = useState(''); const [iLoc, setILoc] = useState(''); const [iPartner, setIPartner] = useState(''); const [iStd, setIStd] = useState('');
+  const [iBarcode, setIBarcode] = useState(''); const [iLoc, setILoc] = useState(''); const [iPartner, setIPartner] = useState(''); const [iStd, setIStd] = useState(''); const [iGroup, setIGroup] = useState('');
   const [labelItem, setLabelItem] = useState<InvItem | null>(null);  // item whose barcode label is being printed
   const addItem = () => {
     if (!iName.trim()) return;
     // Auto-print barcode: generate one if the user didn't supply it.
     const barcode = cleanBarcode(iBarcode) || genBarcode();
-    const it: InvItem = { id: `it-${Date.now()}`, name: iName.trim(), code: iCode.trim() || undefined, unit: iUnit.trim() || 'عدد', buy: digits(iBuy) || undefined, sell: digits(iSell) || undefined, barcode, location: iLoc.trim() || undefined, partnerCode: iPartner.trim() || undefined, stdCode: iStd.trim() || undefined };
-    onChange({ items: [...items, it], txns });
+    const it: InvItem = { id: `it-${Date.now()}`, name: iName.trim(), code: iCode.trim() || undefined, unit: iUnit.trim() || 'عدد', buy: digits(iBuy) || undefined, sell: digits(iSell) || undefined, barcode, location: iLoc.trim() || undefined, partnerCode: iPartner.trim() || undefined, stdCode: iStd.trim() || undefined, groupId: iGroup || undefined };
+    onChange({ ...state, items: [...items, it], txns });
     setIName(''); setICode(''); setIBuy(''); setISell(''); setIBarcode(''); setILoc(''); setIPartner(''); setIStd('');
     setLabelItem(it);   // show its printable barcode label immediately
   };
   const delItem = (id: string) => {
     if (txns.some((t) => t.itemId === id)) { confirm('این کالا گردش دارد و حذف نمی‌شود.', () => {}); return; }
-    confirm('این کالا حذف شود؟', () => onChange({ items: items.filter((i) => i.id !== id), txns }));
+    confirm('این کالا حذف شود؟', () => onChange({ ...state, items: items.filter((i) => i.id !== id), txns }));
   };
 
   // ---------- stock movement (in/out) ----------
@@ -147,13 +179,13 @@ export default function InventoryPanel({ state, onChange, onClose, confirm, onPo
     if (qty <= 0) return;
     if (mKind === 'out' && qty > stockOf(mItem)) { confirm(`موجودیِ کافی نیست (موجودی: ${stockOf(mItem)}).`, () => {}); return; }
     const t: InvTxn = { id: `tx-${Date.now()}`, itemId: mItem, kind: mKind, qty, price, y: today.year, m: today.month, d: today.day };
-    onChange({ items, txns: [...txns, t] });
+    onChange({ ...state, items, txns: [...txns, t] });
     // Auto-post to accounting (kept in sync via ref = inv-<txnId>).
     if (onPostJournal) onPostJournal(`inv-${t.id}`, { y: t.y, m: t.m, d: t.d }, `${mKind === 'in' ? 'خریدِ' : 'فروشِ'} ${item.name} (${qty} ${item.unit || ''})`, journalSpec(t));
     setMQty(''); setMPrice('');
   };
   const delTxn = (t: InvTxn) => confirm('این گردش حذف شود؟', () => {
-    onChange({ items, txns: txns.filter((x) => x.id !== t.id) });
+    onChange({ ...state, items, txns: txns.filter((x) => x.id !== t.id) });
     if (onRemoveJournal) onRemoveJournal(`inv-${t.id}`);   // remove its auto-posted journal entry
   });
 
@@ -219,26 +251,39 @@ export default function InventoryPanel({ state, onChange, onClose, confirm, onPo
           ))}
 
           {/* ---------------- stock report ---------------- */}
-          {tab === 'report' && (
+          {tab === 'report' && (() => {
+            const shown = items.filter(inFilter);
+            const shownValue = shown.reduce((s, i) => s + stockOf(i.id) * (i.buy || 0), 0);
+            return (
             <>
+              {groups.length > 0 && (
+                <>
+                  <label className="field-label acc-noprint">فیلترِ گروهِ کالا</label>
+                  <select className="tool-text-input acc-noprint" value={filterGroup} onChange={(e) => setFilterGroup(e.target.value)}>
+                    <option value="">همه‌ی گروه‌ها</option>
+                    {groupTree.map((g) => <option key={g.id} value={g.id}>{groupPath(g.id)}</option>)}
+                  </select>
+                </>
+              )}
               <div className="acc-print">
-                <div className="acc-print-title">موجودیِ انبار</div>
+                <div className="acc-print-title">موجودیِ انبار{filterGroup ? ` — ${groupPath(filterGroup)}` : ''}</div>
                 <table className="acc-table">
-                  <thead><tr><th>کالا</th><th>موجودی</th><th>قیمتِ خرید</th><th>ارزش</th></tr></thead>
+                  <thead><tr><th>کالا</th><th>گروه</th><th>موجودی</th><th>قیمتِ خرید</th><th>ارزش</th></tr></thead>
                   <tbody>
-                    {items.length === 0 ? (
-                      <tr><td colSpan={4} style={{ textAlign: 'center', opacity: .6 }}>کالایی ثبت نشده</td></tr>
-                    ) : items.map((i) => { const q = stockOf(i.id); return (
-                      <tr key={i.id}><td>{i.name}{i.unit ? ` (${i.unit})` : ''}</td><td>{q}</td><td>{fmt(i.buy || 0)}</td><td>{fmt(q * (i.buy || 0))}</td></tr>
+                    {shown.length === 0 ? (
+                      <tr><td colSpan={5} style={{ textAlign: 'center', opacity: .6 }}>کالایی نیست</td></tr>
+                    ) : shown.map((i) => { const q = stockOf(i.id); return (
+                      <tr key={i.id}><td>{i.name}{i.unit ? ` (${i.unit})` : ''}</td><td>{groupPath(i.groupId) || '—'}</td><td>{q}</td><td>{fmt(i.buy || 0)}</td><td>{fmt(q * (i.buy || 0))}</td></tr>
                     ); })}
-                    <tr className="acc-total"><td>ارزشِ کلِ انبار</td><td colSpan={2}></td><td>{fmt(totalValue)}</td></tr>
+                    <tr className="acc-total"><td>ارزشِ کل</td><td colSpan={3}></td><td>{fmt(shownValue)}</td></tr>
                   </tbody>
                 </table>
               </div>
               <button className="loan-submit acc-noprint" onClick={() => window.print()}>🖨️ چاپ / ذخیره‌ی PDF</button>
-              <button className="acc-addline acc-noprint" onClick={() => downloadCsv('inventory.csv', [['کالا', 'واحد', 'موجودی', 'قیمتِ خرید', 'ارزش'], ...items.map((i) => [i.name, i.unit || '', stockOf(i.id), i.buy || 0, stockOf(i.id) * (i.buy || 0)]), ['جمع', '', '', '', totalValue]])}>📤 خروجیِ اکسل (CSV)</button>
+              <button className="acc-addline acc-noprint" onClick={() => downloadCsv('inventory.csv', [['کالا', 'گروه', 'واحد', 'موجودی', 'قیمتِ خرید', 'ارزش'], ...shown.map((i) => [i.name, groupPath(i.groupId), i.unit || '', stockOf(i.id), i.buy || 0, stockOf(i.id) * (i.buy || 0)]), ['جمع', '', '', '', '', shownValue]])}>📤 خروجیِ اکسل (CSV)</button>
             </>
-          )}
+            );
+          })()}
 
           {/* ---------------- items ---------------- */}
           {tab === 'items' && (
@@ -254,6 +299,11 @@ export default function InventoryPanel({ state, onChange, onClose, confirm, onPo
                 <input className="tool-text-input" type="text" placeholder="جایگاه (قفسه/ردیف)" value={iLoc} onChange={(e) => setILoc(e.target.value)} />
                 <input className="tool-text-input" type="text" placeholder="واحد (عدد)" value={iUnit} onChange={(e) => setIUnit(e.target.value)} />
               </div>
+              <label className="field-label">گروهِ کالا</label>
+              <select className="tool-text-input" value={iGroup} onChange={(e) => setIGroup(e.target.value)}>
+                <option value="">— بدون گروه —</option>
+                {groupTree.map((g) => <option key={g.id} value={g.id}>{' '.repeat(groupDepth(g) * 3)}{groupPath(g.id)}</option>)}
+              </select>
               <div className="att-addgrid">
                 <input className="tool-text-input" type="text" placeholder="کدِ همکار" value={iPartner} onChange={(e) => setIPartner(e.target.value)} />
                 <input className="tool-text-input" type="text" placeholder="کدِ استانداردِ شرکت" value={iStd} onChange={(e) => setIStd(e.target.value)} />
@@ -283,10 +333,33 @@ export default function InventoryPanel({ state, onChange, onClose, confirm, onPo
                   <div key={i.id} className="loan-detail-row">
                     <div className="ld-info">
                       <span className="ld-amt">{i.name} <span className="fm-shares">موجودی: {stockOf(i.id)} {i.unit}</span></span>
-                      <span className="ld-date">بارکد: {i.barcode || '—'}{i.location ? ` · جایگاه: ${i.location}` : ''}{i.stdCode ? ` · کد: ${i.stdCode}` : ''}</span>
+                      <span className="ld-date">{i.groupId ? `${groupPath(i.groupId)} · ` : ''}بارکد: {i.barcode || '—'}{i.location ? ` · جایگاه: ${i.location}` : ''}</span>
                     </div>
                     <button className="att-inlinebtn" title="چاپِ بارکد" onClick={() => setLabelItem(i)}>🏷</button>
                     <button className="fm-notify" title="حذف" onClick={() => delItem(i.id)}>🗑</button>
+                  </div>
+                ))}
+              </div>
+
+              {/* product-group tree management (گروه‌های کالا) */}
+              <div className="loan-sched-head"><span>گروه‌های کالا</span><span className="loan-sched-hint">{groups.length}</span></div>
+              <div className="tool-note">گروه‌بندیِ سلسله‌مراتبی؛ مثلاً «الکتریکال» و زیرِ آن «اندازه‌گیری / حفاظت / مصرفی / اداری». برای زیرگروه، گروهِ والد را انتخاب کنید.</div>
+              <input className="tool-text-input" type="text" placeholder="نامِ گروه (مثلاً الکتریکال)" value={gName} onChange={(e) => setGName(e.target.value)} />
+              <div className="att-addgrid">
+                <select className="tool-text-input" value={gParent} onChange={(e) => setGParent(e.target.value)}>
+                  <option value="">— گروهِ اصلی (بدون والد) —</option>
+                  {groupTree.map((g) => <option key={g.id} value={g.id}>{groupPath(g.id)}</option>)}
+                </select>
+                <button className="loan-submit" disabled={!gName.trim()} onClick={addGroup}>افزودنِ گروه</button>
+              </div>
+              <div className="loan-detail-list">
+                {groupTree.map((g) => (
+                  <div key={g.id} className="loan-detail-row" style={{ paddingInlineStart: 8 + groupDepth(g) * 16 }}>
+                    <div className="ld-info">
+                      <span className="ld-amt">{g.name}{!g.parent ? <span className="acc-lvl-tag">اصلی</span> : null}</span>
+                      <span className="ld-date">{items.filter((i) => i.groupId === g.id).length} کالا</span>
+                    </div>
+                    {!groupHasChildren(g.id) && !items.some((i) => i.groupId === g.id) && <button className="fm-notify" title="حذف" onClick={() => delGroup(g.id)}>🗑</button>}
                   </div>
                 ))}
               </div>
