@@ -6,6 +6,9 @@ import '@fontsource/vazirmatn/700.css'
 import '@fontsource/vazirmatn/800.css'
 import './index.css'
 import App from './App.tsx'
+import { installErrorCapture } from './logger'
+
+installErrorCapture()   // capture errors/events for the in-app diagnostics log
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

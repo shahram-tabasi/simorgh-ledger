@@ -202,6 +202,9 @@ flowchart TD
 - ◻ Client wiring: read/write via `/api/org/data`, role from `/api/org` (keep offline cache)
 - ◻ Personnel order / employment decree (حکم کارگزینی): printable per employee
 - ◻ Multi-company/multi-book, statutory reports
+- ✓ In-app diagnostics log (`src/logger.ts` + `src/Diagnostics.tsx`): captures uncaught errors, promise
+      rejections, console.error/warn and cloud-sync failures into a localStorage ring buffer; the «عیب‌یابی و
+      لاگ» screen (left menu) shows/filters them and copies/shares a report with version+device context.
 
 ## Product principles (owner directives)
 - **SaaS first**: the cloud multi-tenant service is the core product; the standalone apps (Android/iOS/Windows) are companions to it.

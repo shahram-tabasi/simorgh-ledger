@@ -34,6 +34,8 @@ import AccountingPanel, { type AccountingState, type AccType, emptyAccounting } 
 import AttendancePanel, { type AttendanceState, emptyAttendance } from './Attendance';
 import InventoryPanel, { type InventoryState, emptyInventory } from './Inventory';
 import AccessPanel, { type AccessState, emptyAccess, PERMISSIONS } from './Access';
+import Diagnostics from './Diagnostics';
+import { logEvent } from './logger';
 import CoachTour, { type CoachStep } from './Coach';
 import {
   IconReport, IconBom, IconLoan, IconConvert, IconAge, IconBio, IconBmi,
@@ -151,10 +153,10 @@ function resolveAcc(accs: AccLite[], defName: { [k in AccType]: string }, t: Acc
   return a.id;
 }
 
-const APP_VERSION = '1.0.79';
+const APP_VERSION = '1.0.80';
 const CHANGELOG: string[] = [
-  'فیلترِ دوره‌ی مالی در گزارش‌های حسابداری: انتخابِ سال → تراز، سود و زیان، ترازنامه و دفترِ معینِ همان دوره',
-  'سربرگِ صورت‌های مالی شاملِ نامِ دوره و «مبالغ به تومان»',
+  'عیب‌یابی و لاگ: ثبتِ خودکارِ خطاها و رویدادها؛ از منوی چپ ببینید، فیلتر کنید و برای پشتیبانی کپی/اشتراک بگیرید',
+  'خطاهای اتصال به سرور هم در لاگ ثبت می‌شوند تا شناساییِ مشکل آسان شود',
 ];
 
 function App() {
@@ -282,6 +284,7 @@ function App() {
   const [showRightDrawer, setShowRightDrawer] = useState<boolean>(false);
   const [showLeftDrawer, setShowLeftDrawer] = useState<boolean>(false);
   const [showAboutModal, setShowAboutModal] = useState<boolean>(false);
+  const [showDiag, setShowDiag] = useState<boolean>(false);
   const [toolsInitialSection, setToolsInitialSection] = useState<string>('report');
   const [editingTxId, setEditingTxId] = useState<string | null>(null);
   const [dayPreview, setDayPreview] = useState<{ x: number; y: number; day: number } | null>(null);
@@ -367,6 +370,7 @@ function App() {
       [showInvModal, () => setShowInvModal(false)],
       [showAccessModal, () => setShowAccessModal(false)],
       [showAboutModal, () => setShowAboutModal(false)],
+      [showDiag, () => setShowDiag(false)],
       [showYearMonthModal, () => setShowYearMonthModal(false)],
       [showDayModal, () => setShowDayModal(false)],
       [showRightDrawer, () => setShowRightDrawer(false)],
@@ -382,7 +386,7 @@ function App() {
       else { lastBack.current = now; setExitHint(true); setTimeout(() => setExitHint(false), 2000); }
     });
     return () => { sub.then((h) => h.remove()); };
-  }, [showTour, dialog, showAddModal, showDashboard, showCompany, showTeam, showReminderModal, showPrayerModal, showToolsModal, selectedLoanId, showLoansModal, showFundModal, showAccModal, showAttModal, showInvModal, showAccessModal, showAboutModal, showYearMonthModal, showDayModal, showRightDrawer, showLeftDrawer, showWhatsNew, showOnboarding]);
+  }, [showTour, dialog, showAddModal, showDashboard, showCompany, showTeam, showReminderModal, showPrayerModal, showToolsModal, selectedLoanId, showLoansModal, showFundModal, showAccModal, showAttModal, showInvModal, showAccessModal, showAboutModal, showDiag, showYearMonthModal, showDayModal, showRightDrawer, showLeftDrawer, showWhatsNew, showOnboarding]);
 
   // هنگام تغییر تقویم، انتخابِ نظام را ذخیره و ماهِ در حال نمایش را تبدیل می‌کنیم
   const switchCalendar = (system: CalendarSystem) => {
@@ -814,8 +818,8 @@ function App() {
       const r = await fetch(`${API_BASE}/api/data`, { method: 'PUT', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${authToken}` }, body: JSON.stringify({ blob: backupDataObject() }) });
       if (r.ok) notify('داده‌ها روی سرور ذخیره شد ✅');
       else if (r.status === 401) { notify('نشستِ شما منقضی شده؛ دوباره وارد شوید.'); apiLogout(); }
-      else notify('ارسال ناموفق بود (کد ' + r.status + ').');
-    } catch { notify('اتصال به سرور برقرار نشد.'); }
+      else { notify('ارسال ناموفق بود (کد ' + r.status + ').'); logEvent('error', 'cloudPush failed', { status: r.status }); }
+    } catch (e) { notify('اتصال به سرور برقرار نشد.'); logEvent('error', 'cloudPush network error', String(e)); }
   };
   const cloudPull = async () => {
     if (!authToken) return;
@@ -823,11 +827,11 @@ function App() {
     try {
       const r = await fetch(`${API_BASE}/api/data`, { headers: { Authorization: `Bearer ${authToken}` } });
       if (r.status === 401) { notify('نشستِ شما منقضی شده؛ دوباره وارد شوید.'); apiLogout(); return; }
-      if (!r.ok) { notify('دریافت ناموفق بود (کد ' + r.status + ').'); return; }
+      if (!r.ok) { notify('دریافت ناموفق بود (کد ' + r.status + ').'); logEvent('error', 'cloudPull failed', { status: r.status }); return; }
       const j = await r.json();
       if (!j.blob) { notify('هنوز داده‌ای روی سرور نیست؛ اول «ارسال» را بزنید.'); return; }
       applyBackup(j.blob);
-    } catch { notify('اتصال به سرور برقرار نشد.'); }
+    } catch (e) { notify('اتصال به سرور برقرار نشد.'); logEvent('error', 'cloudPull network error', String(e)); }
   };
 
   // Load showcase/demo data (for sales demos of the company edition).
@@ -1747,6 +1751,7 @@ function App() {
               <button className="drawer-close" onClick={() => setShowLeftDrawer(false)} aria-label="بستن">✕</button>
             </div>
             <button className="drawer-item" onClick={() => { setShowLeftDrawer(false); setShowAboutModal(true); }}><span className="di-icon"><IconUsers /></span> طراحان و خدمات</button>
+            <button className="drawer-item" onClick={() => { setShowLeftDrawer(false); setShowDiag(true); }}><span className="di-icon">🩺</span> عیب‌یابی و لاگ</button>
             <button className="drawer-item" onClick={() => { setShowLeftDrawer(false); setTimeout(() => setShowTour(true), 250); }}><span className="di-icon"><IconInfo /></span> راهنمای تصویری</button>
             <button className="drawer-item" onClick={shareApp}><span className="di-icon"><IconShare /></span> ارسال نرم‌افزار</button>
             <a className="drawer-item" href="https://www.simorghai.com" target="_blank" rel="noopener noreferrer"><span className="di-icon"><IconGlobe /></span> وب‌سایت سیمرغ</a>
@@ -1803,9 +1808,13 @@ function App() {
               <button className={`theme-btn ${theme === 'dark' ? 'active' : ''}`} onClick={() => setTheme('dark')}>🌙 تیره</button>
             </div>
 
-            <div className="drawer-foot">نسخه ۱۴۰۵ · ۱.۰.۷۹</div>
+            <div className="drawer-foot">نسخه ۱۴۰۵ · ۱.۰.۸۰</div>
           </aside>
         </div>
+      )}
+
+      {showDiag && (
+        <Diagnostics version={APP_VERSION} onClose={() => setShowDiag(false)} onShare={shareText} confirm={askConfirm} />
       )}
 
       {/* درباره: طراحان و خدمات */}

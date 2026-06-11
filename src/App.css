@@ -2386,6 +2386,22 @@ body.dark .inv-alert { background: #3a2a14; border-color: #6b4a1e; color: #f0c48
 body.dark .inv-low-row td { background: #2c2210; }
 .att-dev-url { font-family: monospace; font-size: 12px; word-break: break-all; direction: ltr; }
 .att-dev-bad { color: #d2453b; }
+/* diagnostics / logs */
+.diag-summary { display: flex; gap: 16px; font-size: 13px; font-weight: 700; margin: 6px 0; }
+.diag-summary .diag-err { color: #d2453b; }
+.diag-list { display: flex; flex-direction: column; gap: 6px; max-height: 50vh; overflow-y: auto; margin-top: 8px; }
+.diag-row { border: 1px solid #e3eaf4; border-radius: 9px; padding: 7px 9px; background: #fafcff; }
+.diag-row.diag-error { border-color: #efc3c3; background: #fdf3f3; }
+.diag-row.diag-warn { border-color: #f0d8a8; background: #fdf8ee; }
+.diag-meta { display: flex; justify-content: space-between; font-size: 10.5px; }
+.diag-lvl { font-weight: 800; text-transform: uppercase; color: #6b7894; }
+.diag-row.diag-error .diag-lvl { color: #d2453b; }
+.diag-ts { color: #8893a8; }
+.diag-msg { font-size: 12.5px; color: #2b3654; margin-top: 2px; word-break: break-word; }
+.diag-data { font-family: monospace; font-size: 11px; color: #6b7894; margin-top: 3px; white-space: pre-wrap; word-break: break-all; }
+body.dark .diag-row { background: #16203a; border-color: #2a3654; }
+body.dark .diag-row.diag-error { background: #2c1717; border-color: #6b2f2f; }
+body.dark .diag-msg { color: #cdd7ea; }
 /* biometric self check-in */
 .att-bio { border: 1px solid #d3deee; border-radius: 12px; padding: 12px; margin-bottom: 10px; background: #f8fbff; }
 .att-bio-today { font-size: 13px; font-weight: 700; color: #2b3654; margin-bottom: 8px; text-align: center; }
