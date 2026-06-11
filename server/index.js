@@ -10,6 +10,7 @@ import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
 import attachScanRelay from './scanRelay.js';
+import attachAttRelay from './attRelay.js';
 
 dotenv.config();
 const { Pool } = pkg;
@@ -77,6 +78,8 @@ app.use(express.json({ limit: '8mb' }));
 
 // Remote-scanner relay (phone as wireless barcode scanner) — in-memory, no DB needed.
 attachScanRelay(app);
+// Attendance-device relay (external face/fingerprint/card devices push punch logs) — in-memory.
+attachAttRelay(app);
 
 const normPhone = (p) => String(p || '').replace(/[^0-9+]/g, '');
 const sign = (u) => jwt.sign({ id: u.id, phone: u.phone }, JWT_SECRET, { expiresIn: '180d' });

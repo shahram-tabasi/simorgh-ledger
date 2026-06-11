@@ -151,10 +151,10 @@ function resolveAcc(accs: AccLite[], defName: { [k in AccType]: string }, t: Acc
   return a.id;
 }
 
-const APP_VERSION = '1.0.76';
+const APP_VERSION = '1.0.77';
 const CHANGELOG: string[] = [
-  'ثبتِ حضور با اثرانگشت/چهره‌ی گوشیِ خودِ کارمند (WebAuthn): یک‌بار فعال‌سازی، سپس هر ورود/خروج با تأییدِ بیومتریکِ گوشی',
-  'زمانِ ثبت‌شده مستقیم در کاردکس و حقوق حساب می‌شود؛ نمایشِ ورود/خروجِ امروزِ کارمند بالای صفحه‌اش',
+  'اتصالِ دستگاه‌های شبکه‌ایِ چهره/اثرانگشت/کارت: دستگاه لاگ‌ها را به سرور می‌فرستد و خودکار در کاردکس ثبت می‌شود',
+  'در تبِ «ساعت‌زنی»: فعال‌سازیِ دریافت، نمایشِ آدرسِ دستگاه و فیدِ زنده‌ی ترددهای دریافتی',
 ];
 
 function App() {
@@ -1803,7 +1803,7 @@ function App() {
               <button className={`theme-btn ${theme === 'dark' ? 'active' : ''}`} onClick={() => setTheme('dark')}>🌙 تیره</button>
             </div>
 
-            <div className="drawer-foot">نسخه ۱۴۰۵ · ۱.۰.۷۶</div>
+            <div className="drawer-foot">نسخه ۱۴۰۵ · ۱.۰.۷۷</div>
           </aside>
         </div>
       )}

@@ -22,3 +22,13 @@ export async function pollScans(channel: string, after: number): Promise<{ scans
     return await r.json();
   } catch { return { scans: [], last: after }; }
 }
+
+// Attendance-device relay: poll punch logs pushed by external face/fingerprint/card devices.
+export interface AttLog { id: number; code: string; time?: string; dir?: 'in' | 'out' }
+export async function pollAtt(channel: string, after: number): Promise<{ logs: AttLog[]; last: number }> {
+  try {
+    const r = await fetch(`${relayBase()}/api/att/${channel}?after=${after}`);
+    if (!r.ok) return { logs: [], last: after };
+    return await r.json();
+  } catch { return { logs: [], last: after }; }
+}

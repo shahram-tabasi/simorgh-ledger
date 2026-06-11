@@ -103,6 +103,12 @@ cd /var/www/ledger/server && git pull && npm install && pm2 restart ledger
 - `GET  /api/org/data` (عضو) → `{blob, version}` — همه‌ی اعضا می‌خوانند.
 - `PUT  /api/org/data` (نقش‌های owner/admin/manager) → نوشتن؛ **worker → 403**. اعمالِ نقش **روی سرور**.
 
+### دستگاه‌های حضور و غیاب (چهره/اثرانگشت/کارت)
+- `POST /api/att/:channel` `{code, time?, dir?}` → دستگاه (یا اسکریپتِ پلِ کنارش) هر تردد را می‌فرستد؛ `code` = کدِ پرسنلی، `dir` = `in|out` (اختیاری)، `time` = «HH:MM» (اختیاری؛ نبود = زمانِ دریافت).
+- `GET  /api/att/:channel?after=N` → برنامه لاگ‌های جدیدتر از N را می‌گیرد: `{logs:[{id,code,time,dir}], last}`.
+
+در حافظه است؛ کانال بعد از ۳۰ دقیقه بی‌استفادگی پاک می‌شود. کانال را تبِ «ساعت‌زنی» می‌سازد و تا وقتی باز است لاگ‌ها را در کاردکس ثبت می‌کند.
+
 ### اسکنرِ بی‌سیم (رله‌ی گوشی → رایانه)
 - `POST /api/scan/:channel` `{code}` → گوشی هر بارکدِ اسکن‌شده را به کانال می‌فرستد.
 - `GET  /api/scan/:channel?after=N` → رایانه اسکن‌های جدیدتر از N را می‌گیرد: `{scans:[{id,code}], last}`.

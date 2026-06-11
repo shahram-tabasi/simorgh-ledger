@@ -183,7 +183,11 @@ flowchart TD
         (platform authenticator, userVerification required); every punch then requires the phone's OS
         fingerprint/face prompt and records in/out into the same punch kardex. Falls back gracefully with
         a message where WebAuthn is unavailable (use the web app in Chrome, or the kiosk badge card).
-      - ◻ phase 2: integrate external hardware (e.g. ZKTeco face/fingerprint) via the SaaS server (push logs to /api)
+      - ✓ phase 2: **network device relay** — external face/fingerprint/card devices (or a tiny bridge
+        script beside them) POST punch logs `{code, time?, dir?}` to `/api/att/:channel` on the server
+        (`server/attRelay.js`, in-memory, 30-min idle TTL); the kiosk tab opens a listen channel, shows
+        the device URL, polls every 3s and applies logs to the punch kardex in one batched commit,
+        honoring the device's own time and direction, with a live feed + unknown-code flagging.
 - ◻ CSV/Excel export of all reports
 - ◑ Server multi-tenant foundation: orgs + members(role) + shared org data with **server-enforced** role gating (workers are read-only). Endpoints: `/api/org*`. (Done & tested; client wiring next.)
 - ◻ Company-edition lead form → `/api/quote` (done); next: pricing + payment gateway (Zarinpal) → org activation

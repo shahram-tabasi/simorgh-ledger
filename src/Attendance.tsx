@@ -2,12 +2,13 @@
 // راهبرد در برابرِ «کسری»: بدونِ دستگاهِ ساعت‌زنی، موبایل/ابری، ساده، با محاسبه‌ی کارکرد و
 // اضافه‌کار (۱.۴ برابر طبقِ عرفِ قانونِ کار) و حقوقِ تخمینی و گزارشِ ماهانه‌ی قابلِ چاپ.
 // مدل عمداً ساده است تا صاحبِ کسب‌وکارِ کوچک بدونِ آموزش بتواند کار کند.
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { getToday, getMonthNames, getMonthDays, getFirstWeekdayOffset } from './calendar';
 import { downloadCsv } from './csv';
 import { cleanBarcode } from './barcode';
 import Barcode from './BarcodeView';
 import CameraScanner from './Scanner';
+import { genChannel, pollAtt, relayBase } from './relay';
 import type { AccType } from './Accounting';
 
 const fmt = (n: number): string => Math.round(n || 0).toLocaleString('en-US');
@@ -254,16 +255,19 @@ export default function AttendancePanel({ state, onChange, onClose, confirm, onP
     tick(); const t = setInterval(tick, 1000);
     return () => clearInterval(t);
   }, [tab]);
-  // Record an in/out punch for NOW (shared by the kiosk and the biometric self check-in).
-  // First punch of the day = in; later punches update the exit time. The day is auto-marked present.
-  const recordPunch = (emp: Employee): { action: string; hm: string } => {
+  // Record an in/out punch (shared by the kiosk, the biometric self check-in, and network devices).
+  // Default time = now; devices may supply their own HH:MM and an explicit direction.
+  // No dir: first punch of the day = in, later punches update the exit. The day is auto-marked present.
+  const recordPunch = (emp: Employee, hmGiven?: string, dir?: 'in' | 'out'): { action: string; hm: string } => {
     const t = getToday('jalali');                       // punch on the real current date
     const key = `${t.year}-${t.month}-${t.day}`;
-    const hm = new Date().toTimeString().slice(0, 5);   // "HH:MM" now
+    const hm = hmGiven || new Date().toTimeString().slice(0, 5);   // "HH:MM"
     const empP = { ...(punches[emp.id] || {}) };
     const cur: Punch = { ...(empP[key] || { in: '', out: '' }) };
-    const action = !cur.in ? 'ورود' : 'خروج';
-    if (!cur.in) cur.in = hm; else cur.out = hm;
+    const action = dir ? (dir === 'in' ? 'ورود' : 'خروج') : (!cur.in ? 'ورود' : 'خروج');
+    if (dir === 'in') { if (!cur.in) cur.in = hm; }       // keep the first entry time
+    else if (dir === 'out') cur.out = hm;                  // last exit wins
+    else if (!cur.in) cur.in = hm; else cur.out = hm;
     empP[key] = cur;
     const empRec = { ...(records[emp.id] || {}) };
     if (!empRec[key]) empRec[key] = 'present';
@@ -279,6 +283,51 @@ export default function AttendancePanel({ state, onChange, onClose, confirm, onP
   };
   // Badge card being printed (from the staff tab).
   const [badgeEmp, setBadgeEmp] = useState<Employee | null>(null);
+
+  // ---------- دستگاه‌های شبکه‌ای (چهره/اثرانگشت/کارت ← رله‌ی سرور) ----------
+  // The admin opens a listen channel; the device (or a tiny bridge script beside it) POSTs each punch
+  // log to /api/att/<channel> on the server, and we poll + apply them to the kardex in one batch.
+  const [devCh, setDevCh] = useState<string | null>(null);
+  const devCursor = useRef(0);
+  const [devFeed, setDevFeed] = useState<{ text: string; ok: boolean }[]>([]);
+  const stateRef = useRef(state); stateRef.current = state;
+  const onChangeRef = useRef(onChange); onChangeRef.current = onChange;
+  useEffect(() => {
+    if (!devCh) return;
+    devCursor.current = 0;
+    const timer = setInterval(async () => {
+      const r = await pollAtt(devCh, devCursor.current);
+      devCursor.current = r.last;
+      if (!r.logs.length) return;
+      // Apply ALL logs of this batch in ONE state commit so none are lost to stale closures.
+      const st = stateRef.current;
+      const punches2 = { ...(st.punches || {}) };
+      const records2 = { ...(st.records || {}) };
+      const td = getToday('jalali'); const key = `${td.year}-${td.month}-${td.day}`;
+      const msgs: { text: string; ok: boolean }[] = [];
+      for (const log of r.logs) {
+        const code = cleanBarcode(log.code);
+        const emp = (st.employees || []).find((e) => (cleanBarcode(e.code || '') || ('E' + e.id.replace(/\D/g, '').slice(-8))) === code);
+        if (!emp) { msgs.push({ text: `کدِ «${log.code}» شناخته نشد`, ok: false }); continue; }
+        let hm = new Date().toTimeString().slice(0, 5);
+        if (log.time) { const m = log.time.match(/(\d{1,2}):(\d{2})/); if (m) hm = `${m[1].padStart(2, '0')}:${m[2]}`; }
+        const empP = { ...(punches2[emp.id] || {}) };
+        const cur: Punch = { ...(empP[key] || { in: '', out: '' }) };
+        const action = log.dir ? (log.dir === 'in' ? 'ورود' : 'خروج') : (!cur.in ? 'ورود' : 'خروج');
+        if (log.dir === 'in') { if (!cur.in) cur.in = hm; }
+        else if (log.dir === 'out') cur.out = hm;
+        else if (!cur.in) cur.in = hm; else cur.out = hm;
+        empP[key] = cur; punches2[emp.id] = empP;
+        const empRec = { ...(records2[emp.id] || {}) };
+        if (!empRec[key]) empRec[key] = 'present';
+        records2[emp.id] = empRec;
+        msgs.push({ text: `${emp.name} — ${action} ${hm} ✓ (دستگاه)`, ok: true });
+      }
+      onChangeRef.current({ ...st, punches: punches2, records: records2 });
+      setDevFeed((f) => [...msgs.reverse(), ...f].slice(0, 20));
+    }, 3000);
+    return () => clearInterval(timer);
+  }, [devCh]);
 
   // ---------- بیومتریکِ گوشیِ کارمند (WebAuthn): اثرانگشت/چهره برای ثبتِ حضورِ خودش ----------
   // The credential is created with userVerification:'required' on a platform authenticator, so the
@@ -588,7 +637,34 @@ export default function AttendancePanel({ state, onChange, onClose, confirm, onP
                   ));
                 })()}
               </div>
-              <div className="tool-note">کارت‌خوان‌های RFID/بارکدیِ ارزان که مثلِ صفحه‌کلید عمل می‌کنند هم با همین فیلد کار می‌کنند. دستگاه‌های چهره/اثرانگشتِ شبکه‌ای (مثلاً ZKTeco) در فازِ سرور وصل می‌شوند.</div>
+              <div className="tool-note">کارت‌خوان‌های RFID/بارکدیِ ارزان که مثلِ صفحه‌کلید عمل می‌کنند هم با همین فیلد کار می‌کنند.</div>
+
+              {/* network face/fingerprint/card devices via the server relay */}
+              <div className="loan-sched-head"><span>دستگاهِ شبکه‌ای (چهره/اثرانگشت/کارت)</span></div>
+              {!devCh ? (
+                <>
+                  <button className="acc-addline" onClick={() => { setDevFeed([]); setDevCh(genChannel()); }}>🌐 فعال‌سازیِ دریافت از دستگاه</button>
+                  <div className="tool-note">دستگاهِ حضور و غیاب (یا اسکریپتِ پلِ کنارش) لاگ‌ها را به سرور می‌فرستد و همین‌جا اعمال می‌شود. کدِ دستگاه = کدِ پرسنلیِ کارمند.</div>
+                </>
+              ) : (
+                <>
+                  <div className="acc-relay-box">
+                    <span>آدرس برای دستگاه/پل:</span>
+                    <b dir="ltr" className="att-dev-url">{relayBase()}/api/att/{devCh}</b>
+                    <span className="acc-relay-hint">POST با بدنه‌ی {'{ code, time?, dir? }'} — مثلاً {'{ "code":"101", "time":"07:31", "dir":"in" }'}. تا وقتی این صفحه باز است، لاگ‌ها دریافت و در کاردکس ثبت می‌شوند.</span>
+                  </div>
+                  <button className="acc-addline" onClick={() => setDevCh(null)}>⏹ توقفِ دریافت</button>
+                  {devFeed.length > 0 && (
+                    <div className="loan-detail-list">
+                      {devFeed.map((m, i) => (
+                        <div key={i} className="loan-detail-row">
+                          <div className="ld-info"><span className={`ld-amt ${m.ok ? '' : 'att-dev-bad'}`}>{m.text}</span></div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </>
+              )}
               {kioskCam && <CameraScanner continuous onClose={() => setKioskCam(false)} onResult={(code) => kioskPunch(code)} />}
             </>
           ))}
