@@ -139,9 +139,10 @@ export default function InventoryPanel({ state, onChange, onClose, confirm, onPo
     if (groupHasChildren(id) || items.some((i) => i.groupId === id)) { confirm('این گروه زیرمجموعه یا کالا دارد و حذف نمی‌شود.', () => {}); return; }
     confirm('این گروهِ کالا حذف شود؟', () => onChange({ ...state, groups: groups.filter((g) => g.id !== id) }));
   };
-  // report filters: by group (includes descendants) and by warehouse
+  // report filters: by group (includes descendants) and by warehouse; matrix = items × warehouses grid
   const [filterGroup, setFilterGroup] = useState('');
   const [filterWh, setFilterWh] = useState('');
+  const [matrix, setMatrix] = useState(false);
   const isDescendant = (gid: string | undefined, ancestor: string): boolean => { let cur = gid; const seen = new Set<string>(); while (cur && !seen.has(cur)) { if (cur === ancestor) return true; seen.add(cur); cur = groupById(cur)?.parent; } return false; };
   const inFilter = (it: InvItem) => !filterGroup || isDescendant(it.groupId, filterGroup);
 
@@ -361,6 +362,35 @@ export default function InventoryPanel({ state, onChange, onClose, confirm, onPo
                   )}
                 </div>
               )}
+              {warehouses.length >= 2 && (
+                <div className="mini-toggle acc-noprint">
+                  <button type="button" className={`mini-toggle-btn ${!matrix ? 'active' : ''}`} onClick={() => setMatrix(false)}>فهرستی</button>
+                  <button type="button" className={`mini-toggle-btn ${matrix ? 'active' : ''}`} onClick={() => setMatrix(true)}>ماتریسِ انبارها</button>
+                </div>
+              )}
+              {matrix && warehouses.length >= 2 ? (
+                <>
+                  <div className="acc-print">
+                    <div className="acc-print-title">موجودی به تفکیکِ انبار{filterGroup ? ` — ${groupPath(filterGroup)}` : ''}</div>
+                    <div className="inv-matrix-wrap">
+                      <table className="acc-table inv-matrix">
+                        <thead><tr><th>کالا</th>{warehouses.map((w) => <th key={w.id}>{w.name}</th>)}<th>جمع</th><th>ارزش</th></tr></thead>
+                        <tbody>
+                          {shown.length === 0 ? (
+                            <tr><td colSpan={warehouses.length + 3} style={{ textAlign: 'center', opacity: .6 }}>کالایی نیست</td></tr>
+                          ) : shown.map((i) => { const tot = stockOf(i.id); return (
+                            <tr key={i.id}><td>{i.name}</td>{warehouses.map((w) => <td key={w.id}>{stockOf(i.id, w.id) || ''}</td>)}<td><b>{tot}</b></td><td>{fmt(tot * (i.buy || 0))}</td></tr>
+                          ); })}
+                          <tr className="acc-total"><td>ارزشِ هر انبار</td>{warehouses.map((w) => <td key={w.id}>{fmt(shown.reduce((s, i) => s + stockOf(i.id, w.id) * (i.buy || 0), 0))}</td>)}<td></td><td>{fmt(shown.reduce((s, i) => s + stockOf(i.id) * (i.buy || 0), 0))}</td></tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                  <button className="loan-submit acc-noprint" onClick={() => window.print()}>🖨️ چاپ / ذخیره‌ی PDF</button>
+                  <button className="acc-addline acc-noprint" onClick={() => downloadCsv('inventory-matrix.csv', [['کالا', ...warehouses.map((w) => w.name), 'جمع', 'ارزش'], ...shown.map((i) => [i.name, ...warehouses.map((w) => stockOf(i.id, w.id)), stockOf(i.id), stockOf(i.id) * (i.buy || 0)]), ['ارزشِ هر انبار', ...warehouses.map((w) => shown.reduce((s, i) => s + stockOf(i.id, w.id) * (i.buy || 0), 0)), '', shown.reduce((s, i) => s + stockOf(i.id) * (i.buy || 0), 0)]])}>📤 خروجیِ اکسل (CSV)</button>
+                </>
+              ) : (
+              <>
               <div className="acc-print">
                 <div className="acc-print-title">موجودیِ انبار{whLabel}{filterGroup ? ` — ${groupPath(filterGroup)}` : ''}</div>
                 <table className="acc-table">
@@ -377,6 +407,8 @@ export default function InventoryPanel({ state, onChange, onClose, confirm, onPo
               </div>
               <button className="loan-submit acc-noprint" onClick={() => window.print()}>🖨️ چاپ / ذخیره‌ی PDF</button>
               <button className="acc-addline acc-noprint" onClick={() => downloadCsv('inventory.csv', [['کالا', 'گروه', 'انبار', 'واحد', 'موجودی', 'قیمتِ خرید', 'ارزش'], ...shown.map((i) => [i.name, groupPath(i.groupId), filterWh ? whName(filterWh) : 'همه', i.unit || '', qOf(i.id), i.buy || 0, qOf(i.id) * (i.buy || 0)]), ['جمع', '', '', '', '', '', shownValue]])}>📤 خروجیِ اکسل (CSV)</button>
+              </>
+              )}
             </>
             );
           })()}

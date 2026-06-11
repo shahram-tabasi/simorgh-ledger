@@ -151,10 +151,10 @@ function resolveAcc(accs: AccLite[], defName: { [k in AccType]: string }, t: Acc
   return a.id;
 }
 
-const APP_VERSION = '1.0.69';
+const APP_VERSION = '1.0.70';
 const CHANGELOG: string[] = [
-  'مچ با حسابداری: موجودیِ هر انبار حسابِ جداگانه در دفتر دارد («موجودیِ کالا (نامِ انبار)»)',
-  'انتقالِ کالا بین انبارها با سندِ خودکارِ متوازن (بدهکارِ انبارِ مقصد / بستانکارِ انبارِ مبدا به بهای تمام‌شده)',
+  'گزارشِ ماتریسیِ موجودی: کالاها × انبارها در یک جدول، با جمع و ارزشِ هر انبار',
+  'خروجیِ اکسل و چاپِ ماتریسِ انبارها',
 ];
 
 function App() {
@@ -1795,7 +1795,7 @@ function App() {
               <button className={`theme-btn ${theme === 'dark' ? 'active' : ''}`} onClick={() => setTheme('dark')}>🌙 تیره</button>
             </div>
 
-            <div className="drawer-foot">نسخه ۱۴۰۵ · ۱.۰.۶۹</div>
+            <div className="drawer-foot">نسخه ۱۴۰۵ · ۱.۰.۷۰</div>
           </aside>
         </div>
       )}
