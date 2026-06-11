@@ -146,7 +146,9 @@ flowchart TD
       - ✓ Subsidiary ledger (تفصیلی): counterparties (مشتری/تأمین‌کننده) with per-party balance + کارت حساب,
             tagged on credit sales/purchases via the guided quick-entry
       - ✓ Cost centers (مرکز هزینه): tag expenses, per-center expense report
-      - ◻ next: opening entry for a new book, statutory printed financial statements, multi-book/period
+      - ✓ Opening entry (سندِ افتتاحیه): per-account starting balances, auto-plugged to سرمایه to balance
+      - ✓ Company name on printed financial statements (سربرگ)
+      - ◻ next: official sales invoice (فاکتورِ رسمی), statutory statement layout, multi-book/period
 - ◻ Windows desktop installer (.exe) via Electron + Windows CI  (deferred — not yet)
 - ◻ Attendance device matching: face / fingerprint / RFID-card readers
       - phase 1: device biometric unlock (WebAuthn / Capacitor biometric) for worker self check-in

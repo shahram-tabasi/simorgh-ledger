@@ -21,7 +21,7 @@ export interface JournalEntry { id: string; y: number; m: number; d: number; des
 export interface Party { id: string; name: string; kind: 'customer' | 'supplier' | 'both'; }
 export interface CostCenter { id: string; name: string; }
 export const PARTY_KIND_LABEL: { [k in Party['kind']]: string } = { customer: 'مشتری', supplier: 'تأمین‌کننده', both: 'هر دو' };
-export interface AccountingState { accounts: Account[]; entries: JournalEntry[]; vatRate?: number; parties?: Party[]; centers?: CostCenter[]; }
+export interface AccountingState { accounts: Account[]; entries: JournalEntry[]; vatRate?: number; parties?: Party[]; centers?: CostCenter[]; orgName?: string; }
 
 const TYPE_LABEL: { [k in AccType]: string } = { asset: 'دارایی', liability: 'بدهی', equity: 'سرمایه', income: 'درآمد', expense: 'هزینه' };
 export const LEVEL_LABEL: { [k in AccLevel]: string } = { group: 'گروه', total: 'کل', sub: 'معین', detail: 'تفصیلی' };
@@ -174,6 +174,29 @@ export default function AccountingPanel({ state, onChange, onClose, confirm }: P
     confirm('این حساب حذف شود؟', () => onChange({ ...state, accounts: accounts.filter((a) => a.id !== id) }));
   };
   const setVat = (v: number) => onChange({ ...state, vatRate: Math.max(0, Math.min(100, v)) });
+  const orgName = state.orgName || '';
+  const setOrgName = (v: string) => onChange({ ...state, orgName: v });
+  // Opening entry (سند افتتاحیه): post starting balances; any imbalance plugs to سرمایه so it always balances.
+  const postOpening = (yr: number, amounts: { [id: string]: number }) => {
+    let list = accounts.slice();
+    const lines: EntryLine[] = [];
+    let debit = 0, credit = 0;
+    Object.entries(amounts).forEach(([id, amt]) => {
+      if (!amt || amt <= 0) return; const a = accById(id); if (!a) return;
+      if (isDebitNormal(a.type)) { lines.push({ accountId: id, debit: amt, credit: 0 }); debit += amt; }
+      else { lines.push({ accountId: id, debit: 0, credit: amt }); credit += amt; }
+    });
+    if (lines.length === 0) { confirm('هیچ مبلغی وارد نشده است.', () => {}); return false; }
+    const plug = debit - credit;
+    if (Math.abs(plug) >= 1) {
+      const r = resolveLocal(list, 'سرمایه', 'equity'); list = r.list;
+      if (plug > 0) lines.push({ accountId: r.acc.id, debit: 0, credit: plug });
+      else lines.push({ accountId: r.acc.id, debit: -plug, credit: 0 });
+    }
+    const entry: JournalEntry = { id: `je-${Date.now()}`, y: yr, m: 0, d: 1, desc: `سندِ افتتاحیه‌ی سالِ ${yr}`, lines, ref: `opening-${yr}` };
+    onChange({ ...state, accounts: list, entries: [...entries.filter((e) => e.ref !== `opening-${yr}`), entry] });
+    return true;
+  };
 
   // ---------- طرف‌حساب‌ها (تفصیلی) و مرکزِ هزینه ----------
   const parties = state.parties || [];
@@ -357,6 +380,7 @@ export default function AccountingPanel({ state, onChange, onClose, confirm }: P
           {tab === 'reports' && (
             <>
               <div className="acc-print">
+                {orgName && <div className="acc-print-org">{orgName}</div>}
                 <div className="acc-print-title">تراز آزمایشی</div>
                 <table className="acc-table">
                   <thead><tr><th>حساب</th><th>بدهکار</th><th>بستانکار</th><th>مانده</th></tr></thead>
@@ -534,8 +558,13 @@ export default function AccountingPanel({ state, onChange, onClose, confirm }: P
           {/* ---------------- حساب‌ها (کدینگِ سلسله‌مراتبی) ---------------- */}
           {tab === 'accounts' && (
             <>
+              <label className="field-label">نامِ شرکت/کسب‌وکار (سربرگِ گزارش‌ها)</label>
+              <input className="tool-text-input" type="text" placeholder="مثلاً شرکتِ سیمرغ" value={orgName} onChange={(e) => setOrgName(e.target.value)} />
               <label className="field-label">نرخِ مالیات بر ارزش افزوده (٪)</label>
               <input className="tool-text-input" type="text" inputMode="numeric" dir="ltr" value={String(vatRate)} onChange={(e) => setVat(digits(e.target.value))} />
+
+              <div className="loan-sched-head"><span>سندِ افتتاحیه (مانده‌ی اول دوره)</span></div>
+              <OpeningEntry accounts={postable.filter((a) => a.type === 'asset' || a.type === 'liability' || a.type === 'equity')} today={today} postOpening={postOpening} />
 
               <div className="loan-sched-head"><span>افزودنِ حسابِ معین</span></div>
               <label className="field-label">زیرمجموعه‌ی (گروه/کل)</label>
@@ -736,6 +765,47 @@ function QuickEntry({ today, vatRate, parties, centers, postQuick, onDone }: {
         </div>
       )}
       <button className="loan-submit" disabled={amt <= 0} onClick={submit}>ثبتِ سند</button>
+    </>
+  );
+}
+
+// ---------------- Opening entry (سندِ افتتاحیه) ----------------
+// Enter starting balances per account (natural side); any imbalance plugs to سرمایه so it always balances.
+function OpeningEntry({ accounts, today, postOpening }: {
+  accounts: Account[];
+  today: { year: number; month: number; day: number };
+  postOpening: (yr: number, amounts: { [id: string]: number }) => boolean;
+}) {
+  const [yr, setYr] = useState(String(today.year));
+  const [amts, setAmts] = useState<{ [id: string]: string }>({});
+  const set = (id: string, v: string) => setAmts((s) => ({ ...s, [id]: withSep(v) }));
+  let debit = 0, credit = 0;
+  accounts.forEach((a) => { const v = digits(amts[a.id] || ''); if (v > 0) { if (a.type === 'asset') debit += v; else credit += v; } });
+  const plug = debit - credit;
+  const submit = () => {
+    const map: { [id: string]: number } = {};
+    accounts.forEach((a) => { const v = digits(amts[a.id] || ''); if (v > 0) map[a.id] = v; });
+    if (postOpening(digits(yr) || today.year, map)) setAmts({});
+  };
+  return (
+    <>
+      <div className="tool-note">مانده‌ی ابتدای دوره‌ی هر حساب را وارد کنید (دارایی = بدهکار، بدهی/سرمایه = بستانکار). اختلاف به‌صورتِ خودکار به «سرمایه» می‌رود تا سند متوازن شود.</div>
+      <label className="field-label">سالِ مالی</label>
+      <input className="tool-text-input" type="number" inputMode="numeric" dir="ltr" value={yr} onChange={(e) => setYr(e.target.value.replace(/[^0-9]/g, ''))} />
+      <div className="acc-open-list">
+        {accounts.map((a) => (
+          <div key={a.id} className="acc-open-row">
+            <span className="acc-open-name">{a.code} · {a.name}</span>
+            <input className="tool-text-input" type="text" inputMode="numeric" dir="ltr" placeholder={a.type === 'asset' ? 'بدهکار' : 'بستانکار'} value={amts[a.id] || ''} onChange={(e) => set(a.id, e.target.value)} />
+          </div>
+        ))}
+      </div>
+      <div className="tool-result">
+        <div className="tool-result-row"><span>جمعِ بدهکار</span><strong>{fmt(debit)}</strong></div>
+        <div className="tool-result-row"><span>جمعِ بستانکار</span><strong>{fmt(credit)}</strong></div>
+        <div className="tool-result-row closing"><span>اختلاف (به سرمایه)</span><strong>{fmt(Math.abs(plug))} {plug === 0 ? '' : plug > 0 ? '← بستانکارِ سرمایه' : '← بدهکارِ سرمایه'}</strong></div>
+      </div>
+      <button className="loan-submit" disabled={debit + credit <= 0} onClick={submit}>🔓 ثبتِ سندِ افتتاحیه</button>
     </>
   );
 }

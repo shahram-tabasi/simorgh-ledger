@@ -2355,6 +2355,13 @@ body.dark .acc-node.lvl-group { background: linear-gradient(90deg,#1e2942,transp
 body.dark .acc-quick-op { background: #16203a; border-color: #2a3654; color: #cdd7ea; }
 body.dark .acc-quick-op.active { background: #1d3358; border-color: #4f8fe0; color: #cfe3ff; }
 body.dark .acc-preview { background: #16203a; border-color: #33415e; }
+.acc-open-list { display: flex; flex-direction: column; gap: 6px; margin: 8px 0; max-height: 300px; overflow-y: auto; }
+.acc-open-row { display: flex; align-items: center; gap: 8px; }
+.acc-open-name { flex: 1; font-size: 12.5px; color: #33415e; }
+.acc-open-row .tool-text-input { width: 120px; }
+.acc-print-org { font-size: 16px; font-weight: 800; text-align: center; color: #1c2c4a; margin-bottom: 6px; }
+body.dark .acc-open-name { color: #cdd7ea; }
+body.dark .acc-print-org { color: #dce4f2; }
 .acc-grp-row td { background: #eef3fb; font-weight: 800; color: #1c2c4a; }
 .acc-tot-row td { background: #f5f8fd; font-weight: 700; }
 body.dark .acc-grp-row td { background: #1e2942; color: #dce4f2; }

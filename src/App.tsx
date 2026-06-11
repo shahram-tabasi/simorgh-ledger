@@ -151,11 +151,10 @@ function resolveAcc(accs: AccLite[], defName: { [k in AccType]: string }, t: Acc
   return a.id;
 }
 
-const APP_VERSION = '1.0.61';
+const APP_VERSION = '1.0.62';
 const CHANGELOG: string[] = [
-  'طرف‌حساب‌ها (تفصیلی): مشتری/تأمین‌کننده با مانده و کارتِ حساب؛ در فروش/خریدِ نسیه انتخاب می‌شوند',
-  'مرکزِ هزینه: تفکیکِ هزینه‌ها بر اساسِ پروژه/واحد + گزارشِ هزینه به تفکیکِ مرکز',
-  'گزارشِ مانده‌ی طرف‌حساب‌ها (طلب/بدهی) در دفتر و تراز',
+  'سندِ افتتاحیه: ثبتِ مانده‌ی اول دوره برای هر حساب؛ اختلاف خودکار به «سرمایه» متوازن می‌شود',
+  'نامِ شرکت در سربرگِ گزارش‌های چاپی (صورت‌های مالی)',
 ];
 
 function App() {
@@ -1796,7 +1795,7 @@ function App() {
               <button className={`theme-btn ${theme === 'dark' ? 'active' : ''}`} onClick={() => setTheme('dark')}>🌙 تیره</button>
             </div>
 
-            <div className="drawer-foot">نسخه ۱۴۰۵ · ۱.۰.۶۱</div>
+            <div className="drawer-foot">نسخه ۱۴۰۵ · ۱.۰.۶۲</div>
           </aside>
         </div>
       )}
