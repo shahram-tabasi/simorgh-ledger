@@ -205,6 +205,8 @@ flowchart TD
 - ✓ In-app diagnostics log (`src/logger.ts` + `src/Diagnostics.tsx`): captures uncaught errors, promise
       rejections, console.error/warn and cloud-sync failures into a localStorage ring buffer; the «عیب‌یابی و
       لاگ» screen (left menu) shows/filters them and copies/shares a report with version+device context.
+      ✓ One-tap «ارسال به پشتیبانی» POSTs the report to the server sink (`server/diagRelay.js`, in-memory)
+      with a stable per-install id; the developer reads reports via `GET /api/diag?key=DIAG_KEY`.
 
 ## Product principles (owner directives)
 - **SaaS first**: the cloud multi-tenant service is the core product; the standalone apps (Android/iOS/Windows) are companions to it.

@@ -11,6 +11,7 @@ import fs from 'fs';
 import { fileURLToPath } from 'url';
 import attachScanRelay from './scanRelay.js';
 import attachAttRelay from './attRelay.js';
+import attachDiagRelay from './diagRelay.js';
 
 dotenv.config();
 const { Pool } = pkg;
@@ -80,6 +81,8 @@ app.use(express.json({ limit: '8mb' }));
 attachScanRelay(app);
 // Attendance-device relay (external face/fingerprint/card devices push punch logs) — in-memory.
 attachAttRelay(app);
+// Diagnostics sink (clients submit error reports; dev reads with DIAG_KEY) — in-memory.
+attachDiagRelay(app);
 
 const normPhone = (p) => String(p || '').replace(/[^0-9+]/g, '');
 const sign = (u) => jwt.sign({ id: u.id, phone: u.phone }, JWT_SECRET, { expiresIn: '180d' });

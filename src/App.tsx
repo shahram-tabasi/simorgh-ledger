@@ -153,10 +153,10 @@ function resolveAcc(accs: AccLite[], defName: { [k in AccType]: string }, t: Acc
   return a.id;
 }
 
-const APP_VERSION = '1.0.80';
+const APP_VERSION = '1.0.81';
 const CHANGELOG: string[] = [
-  'عیب‌یابی و لاگ: ثبتِ خودکارِ خطاها و رویدادها؛ از منوی چپ ببینید، فیلتر کنید و برای پشتیبانی کپی/اشتراک بگیرید',
-  'خطاهای اتصال به سرور هم در لاگ ثبت می‌شوند تا شناساییِ مشکل آسان شود',
+  'ارسالِ گزارشِ عیب‌یابی به پشتیبانی: با یک دکمه لاگ به سرور می‌رود تا مشکل از راه دور بررسی شود',
+  'هر نصب یک «کدِ شما» دارد تا گزارش‌هایتان قابلِ پیگیری باشد',
 ];
 
 function App() {
@@ -1808,7 +1808,7 @@ function App() {
               <button className={`theme-btn ${theme === 'dark' ? 'active' : ''}`} onClick={() => setTheme('dark')}>🌙 تیره</button>
             </div>
 
-            <div className="drawer-foot">نسخه ۱۴۰۵ · ۱.۰.۸۰</div>
+            <div className="drawer-foot">نسخه ۱۴۰۵ · ۱.۰.۸۱</div>
           </aside>
         </div>
       )}

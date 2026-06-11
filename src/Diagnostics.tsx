@@ -1,7 +1,7 @@
 // Diagnostics viewer — shows the captured log so the user can spot/report problems, with
 // copy / share / clear. Lets non-technical users send a useful error report.
 import { useState } from 'react';
-import { getLogs, clearLogs, exportLogs, type LogLevel } from './logger';
+import { getLogs, clearLogs, exportLogs, sendReport, installId, type LogLevel } from './logger';
 
 export default function Diagnostics({ version, onClose, onShare, confirm }: {
   version: string;
@@ -11,6 +11,9 @@ export default function Diagnostics({ version, onClose, onShare, confirm }: {
 }) {
   const [filter, setFilter] = useState<'all' | LogLevel>('all');
   const [tick, setTick] = useState(0);     // re-read after clear
+  const [sending, setSending] = useState(false);
+  const [sent, setSent] = useState<null | boolean>(null);
+  const send = async () => { setSending(true); const ok = await sendReport(version); setSent(ok); setSending(false); };
   const logs = getLogs().slice().reverse().filter((l) => filter === 'all' || l.lvl === filter);
   const errorCount = getLogs().filter((l) => l.lvl === 'error').length;
   const copy = () => { const t = exportLogs(version); navigator.clipboard?.writeText(t).catch(() => {}); };
@@ -38,10 +41,12 @@ export default function Diagnostics({ version, onClose, onShare, confirm }: {
             ))}
           </div>
           <div className="acc-form-actions">
-            {onShare && <button className="loan-submit" onClick={() => onShare(exportLogs(version))}>📤 اشتراکِ گزارش</button>}
+            <button className="loan-submit" disabled={sending} onClick={send}>{sending ? 'در حالِ ارسال…' : '🛰️ ارسال به پشتیبانی'}</button>
+            {onShare && <button className="acc-addline" onClick={() => onShare(exportLogs(version))}>📤 اشتراک</button>}
             <button className="acc-addline" onClick={copy}>📋 کپی</button>
-            <button className="acc-cancel" onClick={() => confirm('همه‌ی لاگ‌ها پاک شود؟', () => { clearLogs(); setTick((n) => n + 1); })}>🗑 پاک‌کردن</button>
+            <button className="acc-cancel" onClick={() => confirm('همه‌ی لاگ‌ها پاک شود؟', () => { clearLogs(); setTick((n) => n + 1); })}>🗑 پاک</button>
           </div>
+          {sent !== null && <div className={`att-kiosk-msg ${sent ? 'ok' : 'bad'}`}>{sent ? `گزارش برای پشتیبانی ارسال شد ✓ (کدِ شما: ${installId()})` : 'ارسال ناموفق بود — اتصال به سرور را بررسی کنید یا «کپی/اشتراک» را بزنید.'}</div>}
           <div className="diag-list">
             {logs.length === 0 ? <div className="tool-note">لاگی برای نمایش نیست.</div> : logs.map((l, i) => (
               <div key={i} className={`diag-row diag-${l.lvl}`}>

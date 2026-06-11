@@ -23,6 +23,27 @@ export function logEvent(lvl: LogLevel, msg: string, data?: unknown): void {
 export const getLogs = (): LogEntry[] => read();
 export const clearLogs = (): void => { try { localStorage.removeItem(KEY); } catch { /* ignore */ } };
 
+// Stable per-install id so the developer can group a user's reports.
+export function installId(): string {
+  try {
+    let id = localStorage.getItem('simorghInstallId');
+    if (!id) { id = 'i-' + Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4); localStorage.setItem('simorghInstallId', id); }
+    return id;
+  } catch { return 'i-anon'; }
+}
+
+// Send the diagnostics report to the server sink. Returns true on success.
+export async function sendReport(version: string): Promise<boolean> {
+  try {
+    const base = localStorage.getItem('apiBase') || 'https://ledger.simorghai.com';
+    const r = await fetch(`${base}/api/diag`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: installId(), version, report: exportLogs(version) }),
+    });
+    return r.ok;
+  } catch { return false; }
+}
+
 // Build a shareable plain-text report (newest first) with environment context.
 export function exportLogs(version: string): string {
   const ua = typeof navigator !== 'undefined' ? navigator.userAgent : '';
