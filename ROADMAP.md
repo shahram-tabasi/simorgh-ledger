@@ -154,6 +154,8 @@ flowchart TD
             payable tagged on credit purchases
       - ◻ next: link invoices to inventory stock levels, statutory statement layout, multi-book/period
 - ◻ Windows desktop installer (.exe) via Electron + Windows CI  (deferred — not yet)
+- ✓ Inventory product groups (گروه کالا): definable hierarchical category tree (e.g. الکتریکال ›
+      اندازه‌گیری/حفاظت/مصرفی/اداری), assigned on item entry; group filter + column in the stock report & CSV.
 - ◑ Inventory barcodes: ✓ auto-generate + print Code39 label (pure JS, offline) per item; ✓ warehouse
       location, partner code (کد همکار), company standard code; ✓ scan to look up stock/price (استعلام) and
       pick items for in/out — via hardware keyboard-wedge scanner OR the **phone camera** (ZXing, works in the
