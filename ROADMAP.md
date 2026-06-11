@@ -179,7 +179,10 @@ flowchart TD
         punch device. Print a Code39 badge card per employee (🪪 in the staff tab); scanning the badge
         (camera, continuous, or a keyboard-wedge RFID/barcode card reader) records in/out with the exact
         time, auto-marks the day present, and feeds the punch kardex (تأخیر/تعجیل/کسرِ کار) → payroll.
-      - ◻ phase 1: device biometric unlock (WebAuthn / Capacitor biometric) for worker self check-in
+      - ✓ phase 1: **biometric self check-in (WebAuthn)** — the worker registers once on their own phone
+        (platform authenticator, userVerification required); every punch then requires the phone's OS
+        fingerprint/face prompt and records in/out into the same punch kardex. Falls back gracefully with
+        a message where WebAuthn is unavailable (use the web app in Chrome, or the kiosk badge card).
       - ◻ phase 2: integrate external hardware (e.g. ZKTeco face/fingerprint) via the SaaS server (push logs to /api)
 - ◻ CSV/Excel export of all reports
 - ◑ Server multi-tenant foundation: orgs + members(role) + shared org data with **server-enforced** role gating (workers are read-only). Endpoints: `/api/org*`. (Done & tested; client wiring next.)

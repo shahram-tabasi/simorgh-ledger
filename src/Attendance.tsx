@@ -138,6 +138,9 @@ export interface AttendanceState {
   records: { [empId: string]: { [dayKey: string]: DayStatus } }; // وضعیتِ هر روز؛ dayKey = "y-m-d" (شمسی، ماه ۰مبنا)
   overtime: { [empId: string]: { [ym: string]: number } };       // ساعتِ اضافه‌کارِ هر ماه؛ ym = "y-m"
   punches?: { [empId: string]: { [dayKey: string]: Punch } };    // ورود/خروجِ روزانه (کاردکسِ ساعتی)
+  // WebAuthn credential id per employee — registered on the worker's own phone; the OS biometric
+  // (fingerprint/face) must pass before a self check-in punch is accepted.
+  bio?: { [empId: string]: string };
   payComponents?: SalaryComponent[];                       // company salary-component catalogue (اجزای حکم)
   // Per-month allowances/deductions for the payslip (bonuses, insurance, advances, ...).
   adjust?: { [empId: string]: { [ym: string]: { allow?: number; deduct?: number } } };
@@ -251,25 +254,77 @@ export default function AttendancePanel({ state, onChange, onClose, confirm, onP
     tick(); const t = setInterval(tick, 1000);
     return () => clearInterval(t);
   }, [tab]);
-  const kioskPunch = (raw: string) => {
-    const code = cleanBarcode(raw); setKioskScan('');
-    const emp = employees.find((e) => empBadge(e) === code);
-    if (!emp) { setKioskMsg({ text: `کارتِ «${raw}» شناخته نشد.`, ok: false }); return; }
+  // Record an in/out punch for NOW (shared by the kiosk and the biometric self check-in).
+  // First punch of the day = in; later punches update the exit time. The day is auto-marked present.
+  const recordPunch = (emp: Employee): { action: string; hm: string } => {
     const t = getToday('jalali');                       // punch on the real current date
     const key = `${t.year}-${t.month}-${t.day}`;
     const hm = new Date().toTimeString().slice(0, 5);   // "HH:MM" now
     const empP = { ...(punches[emp.id] || {}) };
     const cur: Punch = { ...(empP[key] || { in: '', out: '' }) };
     const action = !cur.in ? 'ورود' : 'خروج';
-    if (!cur.in) cur.in = hm; else cur.out = hm;        // first scan = in; later scans update the exit
+    if (!cur.in) cur.in = hm; else cur.out = hm;
     empP[key] = cur;
     const empRec = { ...(records[emp.id] || {}) };
-    if (!empRec[key]) empRec[key] = 'present';          // auto-mark the day present
+    if (!empRec[key]) empRec[key] = 'present';
     onChange({ ...state, punches: { ...punches, [emp.id]: empP }, records: { ...records, [emp.id]: empRec } });
-    setKioskMsg({ text: `${emp.name} — ${action} ${hm} ✓`, ok: true });
+    return { action, hm };
+  };
+  const kioskPunch = (raw: string) => {
+    const code = cleanBarcode(raw); setKioskScan('');
+    const emp = employees.find((e) => empBadge(e) === code);
+    if (!emp) { setKioskMsg({ text: `کارتِ «${raw}» شناخته نشد.`, ok: false }); return; }
+    const r = recordPunch(emp);
+    setKioskMsg({ text: `${emp.name} — ${r.action} ${r.hm} ✓`, ok: true });
   };
   // Badge card being printed (from the staff tab).
   const [badgeEmp, setBadgeEmp] = useState<Employee | null>(null);
+
+  // ---------- بیومتریکِ گوشیِ کارمند (WebAuthn): اثرانگشت/چهره برای ثبتِ حضورِ خودش ----------
+  // The credential is created with userVerification:'required' on a platform authenticator, so the
+  // phone's OS biometric prompt (fingerprint/face) must pass for every punch. Device-bound: works on
+  // the phone where it was registered; re-registering replaces it.
+  const [bioMsg, setBioMsg] = useState<{ text: string; ok: boolean } | null>(null);
+  const bioSupported = typeof window !== 'undefined' && !!window.PublicKeyCredential && !!navigator.credentials;
+  const b64u = (buf: ArrayBuffer) => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  const b64uDecode = (s: string) => Uint8Array.from(atob(s.replace(/-/g, '+').replace(/_/g, '/')), (c) => c.charCodeAt(0));
+  const bioRegister = async () => {
+    const emp = employees.find((e) => e.id === selfEmpId); if (!emp) return;
+    if (!bioSupported) { setBioMsg({ text: 'این دستگاه/مرورگر از تأییدِ بیومتریک پشتیبانی نمی‌کند. از نسخه‌ی وب (Chrome) یا کارتِ ساعت‌زنی استفاده کنید.', ok: false }); return; }
+    try {
+      const cred = (await navigator.credentials.create({
+        publicKey: {
+          challenge: crypto.getRandomValues(new Uint8Array(32)),
+          rp: { name: 'simorgh-ledger' },
+          user: { id: new TextEncoder().encode(emp.id), name: emp.name, displayName: emp.name },
+          pubKeyCredParams: [{ type: 'public-key', alg: -7 }, { type: 'public-key', alg: -257 }],
+          authenticatorSelection: { authenticatorAttachment: 'platform', userVerification: 'required' },
+          timeout: 60000,
+        },
+      })) as PublicKeyCredential | null;
+      if (!cred) throw new Error('no credential');
+      onChange({ ...state, bio: { ...(state.bio || {}), [emp.id]: b64u(cred.rawId) } });
+      setBioMsg({ text: 'اثرانگشت/چهره فعال شد ✓ — از این پس با همین دکمه ورود/خروج بزنید.', ok: true });
+    } catch { setBioMsg({ text: 'فعال‌سازی ناموفق بود یا لغو شد.', ok: false }); }
+  };
+  const bioPunch = async () => {
+    const emp = employees.find((e) => e.id === selfEmpId); if (!emp) return;
+    const credId = state.bio?.[emp.id];
+    if (!credId) { await bioRegister(); return; }
+    try {
+      const assertion = await navigator.credentials.get({
+        publicKey: {
+          challenge: crypto.getRandomValues(new Uint8Array(32)),
+          allowCredentials: [{ type: 'public-key', id: b64uDecode(credId) }],
+          userVerification: 'required',
+          timeout: 60000,
+        },
+      });
+      if (!assertion) throw new Error('no assertion');
+      const r = recordPunch(emp);
+      setBioMsg({ text: `${r.action} ${r.hm} ثبت شد ✓`, ok: true });
+    } catch { setBioMsg({ text: 'تأییدِ هویت ناموفق بود. اگر دستگاه عوض شده، دوباره فعال‌سازی کنید.', ok: false }); }
+  };
 
   // ---------- کاردکسِ ساعتی: محاسبه‌ی یک روز از روی ترددِ ورود/خروج ----------
   // Returns null when there is no punch for that day. Applies the company policy: unpaid breaks are
@@ -543,6 +598,18 @@ export default function AttendancePanel({ state, onChange, onClose, confirm, onP
             <div className="tool-note">اول از تبِ «کارمندان» چند نفر اضافه کنید.</div>
           ) : (
             <>
+              {/* biometric self check-in (worker's own phone fingerprint/face) */}
+              {selfMode && selfEmpId && (
+                <div className="att-bio">
+                  {bioMsg && <div className={`att-kiosk-msg ${bioMsg.ok ? 'ok' : 'bad'}`}>{bioMsg.text}</div>}
+                  {(() => { const t = getToday('jalali'); const k = `${t.year}-${t.month}-${t.day}`; const pp = punches[selfEmpId]?.[k];
+                    return <div className="att-bio-today" dir="rtl">امروز: {pp?.in ? `ورود ${pp.in}` : '—'}{pp?.out ? ` · خروج ${pp.out}` : ''}</div>; })()}
+                  {state.bio?.[selfEmpId]
+                    ? <button className="loan-submit" onClick={bioPunch}>🔒 ثبتِ ورود/خروج با اثرانگشت/چهره</button>
+                    : <button className="loan-submit" onClick={bioRegister}>🔒 فعال‌سازیِ ثبتِ حضور با اثرانگشت/چهره</button>}
+                  <div className="tool-note">هویت با اثرانگشت/چهره‌ی همین گوشی تأیید و زمانِ دقیق ثبت می‌شود؛ مستقیم در کاردکس و حقوق حساب می‌شود.</div>
+                </div>
+              )}
               <div className="att-monthnav">
                 <button onClick={() => shiftMonth(-1)}>‹</button>
                 <span>{monthLabel}</span>

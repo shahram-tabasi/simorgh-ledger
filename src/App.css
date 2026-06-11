@@ -2382,6 +2382,11 @@ body.dark .acc-print-org { color: #dce4f2; }
 .inv-low-row td { background: #fdf3e8; }
 body.dark .inv-alert { background: #3a2a14; border-color: #6b4a1e; color: #f0c486; }
 body.dark .inv-low-row td { background: #2c2210; }
+/* biometric self check-in */
+.att-bio { border: 1px solid #d3deee; border-radius: 12px; padding: 12px; margin-bottom: 10px; background: #f8fbff; }
+.att-bio-today { font-size: 13px; font-weight: 700; color: #2b3654; margin-bottom: 8px; text-align: center; }
+body.dark .att-bio { background: #16203a; border-color: #2a3654; }
+body.dark .att-bio-today { color: #cdd7ea; }
 /* attendance kiosk (guard's phone as the punch device) */
 .att-kiosk-clock { font-size: 40px; font-weight: 800; text-align: center; letter-spacing: 2px; color: #1c2c4a; margin: 8px 0 4px; font-variant-numeric: tabular-nums; }
 .att-kiosk-msg { border-radius: 12px; padding: 12px; text-align: center; font-size: 16px; font-weight: 800; margin: 8px 0; }
