@@ -5,7 +5,8 @@
 import { useState } from 'react';
 import { getToday, getMonthNames } from './calendar';
 import { downloadCsv } from './csv';
-import { code39Bars, cleanBarcode, genBarcode } from './barcode';
+import { cleanBarcode, genBarcode } from './barcode';
+import Barcode from './BarcodeView';
 import CameraScanner from './Scanner';
 import { sendScan } from './relay';
 import type { AccType } from './Accounting';
@@ -68,18 +69,6 @@ function RemoteScanSender({ onClose }: { onClose: () => void }) {
         </div>
       </div>
     </div>
-  );
-}
-
-// Inline SVG barcode (Code39) — renders the filled bars; used on-screen and for printable labels.
-function Barcode({ value, height = 48 }: { value: string; height?: number }) {
-  const { bars, width } = code39Bars(value);
-  if (!value) return null;
-  return (
-    <svg className="inv-barcode" viewBox={`0 0 ${width} ${height}`} width="100%" height={height} preserveAspectRatio="none" role="img" aria-label={value}>
-      <rect x={0} y={0} width={width} height={height} fill="#fff" />
-      {bars.map((b, i) => <rect key={i} x={b.x} y={0} width={b.w} height={height} fill="#000" />)}
-    </svg>
   );
 }
 

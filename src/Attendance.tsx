@@ -2,9 +2,12 @@
 // راهبرد در برابرِ «کسری»: بدونِ دستگاهِ ساعت‌زنی، موبایل/ابری، ساده، با محاسبه‌ی کارکرد و
 // اضافه‌کار (۱.۴ برابر طبقِ عرفِ قانونِ کار) و حقوقِ تخمینی و گزارشِ ماهانه‌ی قابلِ چاپ.
 // مدل عمداً ساده است تا صاحبِ کسب‌وکارِ کوچک بدونِ آموزش بتواند کار کند.
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { getToday, getMonthNames, getMonthDays, getFirstWeekdayOffset } from './calendar';
 import { downloadCsv } from './csv';
+import { cleanBarcode } from './barcode';
+import Barcode from './BarcodeView';
+import CameraScanner from './Scanner';
 import type { AccType } from './Accounting';
 
 const fmt = (n: number): string => Math.round(n || 0).toLocaleString('en-US');
@@ -174,7 +177,7 @@ interface Props {
   // The current user's own employee id (if linked) — used to default their کارتابل (manager inbox).
   viewerEmpId?: string;
 }
-type Tab = 'log' | 'kardex' | 'report' | 'slip' | 'decree' | 'leave' | 'inbox' | 'rules' | 'staff';
+type Tab = 'kiosk' | 'log' | 'kardex' | 'report' | 'slip' | 'decree' | 'leave' | 'inbox' | 'rules' | 'staff';
 
 export default function AttendancePanel({ state, onChange, onClose, confirm, onPostJournal, selfMode, selfEmpId, viewerEmpId }: Props) {
   const employees = state.employees || [];
@@ -232,6 +235,41 @@ export default function AttendancePanel({ state, onChange, onClose, confirm, onP
     if (!cur.in && !cur.out) delete emp[`${y}-${m}-${d}`]; else emp[`${y}-${m}-${d}`] = cur;
     onChange({ ...state, punches: { ...punches, [empId]: emp } });
   };
+
+  // ---------- ساعت‌زنی (kiosk): گوشیِ نگهبان به‌جای دستگاهِ حضور و غیاب ----------
+  // Each employee has a badge barcode (their personnel code, or a stable code from their id).
+  // Scanning the badge punches in (first scan of the day) or updates the exit time (later scans),
+  // feeding the same punch kardex used for تأخیر/تعجیل/کسرِ کار and payroll.
+  const empBadge = (e: Employee) => cleanBarcode(e.code || '') || ('E' + e.id.replace(/\D/g, '').slice(-8));
+  const [kioskScan, setKioskScan] = useState('');
+  const [kioskCam, setKioskCam] = useState(false);
+  const [kioskMsg, setKioskMsg] = useState<{ text: string; ok: boolean } | null>(null);
+  const [clock, setClock] = useState('');
+  useEffect(() => {
+    if (tab !== 'kiosk') return;
+    const tick = () => setClock(new Date().toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+    tick(); const t = setInterval(tick, 1000);
+    return () => clearInterval(t);
+  }, [tab]);
+  const kioskPunch = (raw: string) => {
+    const code = cleanBarcode(raw); setKioskScan('');
+    const emp = employees.find((e) => empBadge(e) === code);
+    if (!emp) { setKioskMsg({ text: `کارتِ «${raw}» شناخته نشد.`, ok: false }); return; }
+    const t = getToday('jalali');                       // punch on the real current date
+    const key = `${t.year}-${t.month}-${t.day}`;
+    const hm = new Date().toTimeString().slice(0, 5);   // "HH:MM" now
+    const empP = { ...(punches[emp.id] || {}) };
+    const cur: Punch = { ...(empP[key] || { in: '', out: '' }) };
+    const action = !cur.in ? 'ورود' : 'خروج';
+    if (!cur.in) cur.in = hm; else cur.out = hm;        // first scan = in; later scans update the exit
+    empP[key] = cur;
+    const empRec = { ...(records[emp.id] || {}) };
+    if (!empRec[key]) empRec[key] = 'present';          // auto-mark the day present
+    onChange({ ...state, punches: { ...punches, [emp.id]: empP }, records: { ...records, [emp.id]: empRec } });
+    setKioskMsg({ text: `${emp.name} — ${action} ${hm} ✓`, ok: true });
+  };
+  // Badge card being printed (from the staff tab).
+  const [badgeEmp, setBadgeEmp] = useState<Employee | null>(null);
 
   // ---------- کاردکسِ ساعتی: محاسبه‌ی یک روز از روی ترددِ ورود/خروج ----------
   // Returns null when there is no punch for that day. Applies the company policy: unpaid breaks are
@@ -456,6 +494,7 @@ export default function AttendancePanel({ state, onChange, onClose, confirm, onP
         </div>
         <div className="tool-panel-body">
           <div className="mini-toggle fund-tabs">
+            {!selfMode && <button type="button" className={`mini-toggle-btn ${tab === 'kiosk' ? 'active' : ''}`} onClick={() => setTab('kiosk')}>ساعت‌زنی</button>}
             <button type="button" className={`mini-toggle-btn ${tab === 'log' ? 'active' : ''}`} onClick={() => setTab('log')}>{selfMode ? 'حضورِ من' : 'ثبتِ ماهانه'}</button>
             <button type="button" className={`mini-toggle-btn ${tab === 'kardex' ? 'active' : ''}`} onClick={() => setTab('kardex')}>{selfMode ? 'کارکردِ من' : 'کارکرد روزانه'}</button>
             {!selfMode && <button type="button" className={`mini-toggle-btn ${tab === 'report' ? 'active' : ''}`} onClick={() => setTab('report')}>گزارش</button>}
@@ -466,6 +505,38 @@ export default function AttendancePanel({ state, onChange, onClose, confirm, onP
             {!selfMode && <button type="button" className={`mini-toggle-btn ${tab === 'rules' ? 'active' : ''}`} onClick={() => setTab('rules')}>قوانین</button>}
             {!selfMode && <button type="button" className={`mini-toggle-btn ${tab === 'staff' ? 'active' : ''}`} onClick={() => setTab('staff')}>کارمندان</button>}
           </div>
+
+          {/* ---------------- ساعت‌زنی (kiosk: گوشیِ نگهبان به‌جای دستگاه) ---------------- */}
+          {tab === 'kiosk' && (employees.length === 0 ? (
+            <div className="tool-note">اول از تبِ «کارمندان» چند نفر اضافه کنید و کارتِ هرکدام را چاپ کنید (🪪).</div>
+          ) : (
+            <>
+              <div className="att-kiosk-clock" dir="ltr">{clock}</div>
+              <div className="fund-help">گوشی/تبلت را به نگهبان بدهید: کارتِ بارکدیِ کارمند را با دوربین یا کارت‌خوان اسکن کنید. اولین اسکنِ روز = ورود؛ اسکن‌های بعدی = خروج. زمان‌ها مستقیم در کاردکس (تأخیر/تعجیل) و حقوق حساب می‌شوند.</div>
+              {kioskMsg && <div className={`att-kiosk-msg ${kioskMsg.ok ? 'ok' : 'bad'}`}>{kioskMsg.text}</div>}
+              <div className="att-addgrid">
+                <input className="tool-text-input" type="text" dir="ltr" autoFocus placeholder="کارت را اسکن کنید…" value={kioskScan} onChange={(e) => setKioskScan(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && kioskScan.trim()) kioskPunch(kioskScan.trim()); }} />
+                <button className="acc-addline" onClick={() => setKioskCam(true)}>📷 دوربین</button>
+              </div>
+              <div className="loan-sched-head"><span>ترددهای امروز</span></div>
+              <div className="loan-detail-list">
+                {(() => {
+                  const t = getToday('jalali'); const key = `${t.year}-${t.month}-${t.day}`;
+                  const rows = employees.map((e) => ({ e, p: punches[e.id]?.[key] })).filter((x) => x.p && (x.p.in || x.p.out));
+                  return rows.length === 0 ? <div className="tool-note">امروز هنوز ترددی ثبت نشده.</div> : rows.map(({ e, p }) => (
+                    <div key={e.id} className="loan-detail-row">
+                      <div className="ld-info">
+                        <span className="ld-amt">{e.name}</span>
+                        <span className="ld-date" dir="ltr">{p!.in ? `ورود ${p!.in}` : ''}{p!.out ? ` · خروج ${p!.out}` : ''}</span>
+                      </div>
+                    </div>
+                  ));
+                })()}
+              </div>
+              <div className="tool-note">کارت‌خوان‌های RFID/بارکدیِ ارزان که مثلِ صفحه‌کلید عمل می‌کنند هم با همین فیلد کار می‌کنند. دستگاه‌های چهره/اثرانگشتِ شبکه‌ای (مثلاً ZKTeco) در فازِ سرور وصل می‌شوند.</div>
+              {kioskCam && <CameraScanner continuous onClose={() => setKioskCam(false)} onResult={(code) => kioskPunch(code)} />}
+            </>
+          ))}
 
           {/* ---------------- ثبتِ ماهانه ---------------- */}
           {tab === 'log' && (employees.length === 0 ? (
@@ -1065,11 +1136,25 @@ export default function AttendancePanel({ state, onChange, onClose, confirm, onP
                         {employees.filter((m) => m.id !== e.id).map((m) => <option key={m.id} value={m.id}>سرپرست: {m.name}</option>)}
                       </select>
                     </div>
+                    <button className="att-inlinebtn" title="کارتِ ساعت‌زنی" onClick={() => setBadgeEmp(e)}>🪪</button>
                     <button className="fm-notify" title="حذف" onClick={() => delEmployee(e.id)}>🗑</button>
                   </div>
                 ))}
               </div>
-              <div className="tool-note">با تعیینِ «سرپرست» برای هر فرد، سلسله‌مراتبِ تایید ساخته می‌شود: درخواست‌ها از سرپرست تا بالاترین مدیر در «کارتابلِ» هر مدیر بالا می‌روند. هر کس زیرمجموعه داشته باشد، «مدیر» محسوب می‌شود.</div>
+              <div className="tool-note">با تعیینِ «سرپرست» برای هر فرد، سلسله‌مراتبِ تایید ساخته می‌شود: درخواست‌ها از سرپرست تا بالاترین مدیر در «کارتابلِ» هر مدیر بالا می‌روند. هر کس زیرمجموعه داشته باشد، «مدیر» محسوب می‌شود. با 🪪 کارتِ بارکدیِ ساعت‌زنیِ هر نفر را چاپ کنید.</div>
+
+              {/* printable badge card for kiosk punching */}
+              {badgeEmp && (
+                <div className="inv-label-wrap">
+                  <div className="inv-label acc-print">
+                    <div className="inv-label-name">{badgeEmp.name}</div>
+                    <div className="inv-label-sub">{badgeEmp.position || 'کارتِ ساعت‌زنی'}{badgeEmp.code ? ` · #${badgeEmp.code}` : ''}</div>
+                    <Barcode value={empBadge(badgeEmp)} />
+                    <div className="inv-label-code">{empBadge(badgeEmp)}</div>
+                  </div>
+                  <button className="loan-submit acc-noprint" onClick={() => window.print()}>🖨️ چاپِ کارت</button>
+                </div>
+              )}
             </>
           )}
         </div>

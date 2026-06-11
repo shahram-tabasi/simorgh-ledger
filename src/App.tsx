@@ -151,10 +151,10 @@ function resolveAcc(accs: AccLite[], defName: { [k in AccType]: string }, t: Acc
   return a.id;
 }
 
-const APP_VERSION = '1.0.74';
+const APP_VERSION = '1.0.75';
 const CHANGELOG: string[] = [
-  'اسکنرِ بی‌سیم: گوشی اسکن می‌کند و قلم روی فاکتورِ رایانه ظاهر می‌شود — اتصال با کدِ ۶رقمی از طریقِ سرور',
-  'حالتِ اسکنِ پیوسته در دوربین + دکمه‌ی «📡 اسکنرِ بی‌سیم» در انبار و «📡 اسکنرِ همراه» در فاکتور',
+  'ساعت‌زنی با گوشیِ نگهبان: کارتِ بارکدیِ هر کارمند را چاپ کنید (🪪)؛ اسکنِ کارت = ثبتِ ورود/خروج با ساعتِ دقیق',
+  'ترددهای ساعت‌زنی مستقیم در کاردکس (تأخیر/تعجیل/کسرِ کار) و حقوق حساب می‌شوند؛ کارت‌خوان‌های صفحه‌کلیدی هم پشتیبانی می‌شوند',
 ];
 
 function App() {
@@ -1803,7 +1803,7 @@ function App() {
               <button className={`theme-btn ${theme === 'dark' ? 'active' : ''}`} onClick={() => setTheme('dark')}>🌙 تیره</button>
             </div>
 
-            <div className="drawer-foot">نسخه ۱۴۰۵ · ۱.۰.۷۴</div>
+            <div className="drawer-foot">نسخه ۱۴۰۵ · ۱.۰.۷۵</div>
           </aside>
         </div>
       )}
