@@ -1,0 +1,27 @@
+{
+  "name": "simorgh-shop",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "صندوقِ فروشگاهیِ سیمرغ — POS سبک با بارکد، فاکتور، صندوق و اسکنرِ بی‌سیمِ گوشی",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "serve": "node server/index.mjs"
+  },
+  "dependencies": {
+    "@fontsource/vazirmatn": "^5.0.0",
+    "@zxing/browser": "^0.2.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "@vitejs/plugin-react": "^4.3.1",
+    "express": "^4.19.2",
+    "typescript": "^5.5.3",
+    "vite": "^5.4.0"
+  }
+}
