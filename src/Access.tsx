@@ -19,7 +19,9 @@ export const PERMISSIONS: { key: string; label: string }[] = [
 const ALL_PERMS = PERMISSIONS.map((p) => p.key);
 
 export interface Group { id: string; name: string; perms: string[]; }
-export interface AppUser { id: string; name: string; groupId: string; empId?: string; } // empId links to an attendance employee
+// badge = a card/barcode code; bio = WebAuthn credential id (registered on a terminal). Either one lets
+// the operator identify themselves at any terminal and gain this user's predefined access.
+export interface AppUser { id: string; name: string; groupId: string; empId?: string; badge?: string; bio?: string; }
 export interface AccessState { enabled: boolean; pin: string; groups: Group[]; users: AppUser[]; activeUserId: string | null; }
 
 export function emptyAccess(): AccessState {
@@ -81,6 +83,60 @@ export default function AccessPanel({ state, onChange, onClose, confirm, employe
   const delUser = (id: string) => confirm('این کاربر حذف شود؟', () => onChange({ ...state, users: users.filter((u) => u.id !== id), activeUserId: state.activeUserId === id ? null : state.activeUserId }));
   const setActive = (id: string | null) => onChange({ ...state, activeUserId: id });
 
+  // ---------- protective access: identify the operator at a terminal via card or biometric ----------
+  const bioSupported = typeof window !== 'undefined' && !!window.PublicKeyCredential && !!navigator.credentials;
+  const b64u = (buf: ArrayBuffer) => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  const b64uDecode = (s: string) => Uint8Array.from(atob(s.replace(/-/g, '+').replace(/_/g, '/')), (c) => c.charCodeAt(0));
+  const [authMsg, setAuthMsg] = useState<{ text: string; ok: boolean } | null>(null);
+  const [badgeScan, setBadgeScan] = useState('');
+  const setUserBadge = (id: string, code: string) => onChange({ ...state, users: users.map((u) => (u.id === id ? { ...u, badge: code.trim() || undefined } : u)) });
+  // Register a biometric credential for a user (on THIS terminal). userVerification:'required' = the
+  // device biometric (face/fingerprint) must pass.
+  const registerBio = async (u: AppUser) => {
+    if (!bioSupported) { setAuthMsg({ text: 'این دستگاه از تأییدِ بیومتریک پشتیبانی نمی‌کند.', ok: false }); return; }
+    try {
+      const cred = (await navigator.credentials.create({
+        publicKey: {
+          challenge: crypto.getRandomValues(new Uint8Array(32)),
+          rp: { name: 'simorgh-ledger' },
+          user: { id: new TextEncoder().encode(u.id), name: u.name, displayName: u.name },
+          pubKeyCredParams: [{ type: 'public-key', alg: -7 }, { type: 'public-key', alg: -257 }],
+          authenticatorSelection: { authenticatorAttachment: 'platform', userVerification: 'required' },
+          timeout: 60000,
+        },
+      })) as PublicKeyCredential | null;
+      if (!cred) throw new Error('none');
+      onChange({ ...state, users: users.map((x) => (x.id === u.id ? { ...x, bio: b64u(cred.rawId) } : x)) });
+      setAuthMsg({ text: `بیومتریکِ «${u.name}» روی این دستگاه ثبت شد ✓`, ok: true });
+    } catch { setAuthMsg({ text: 'ثبتِ بیومتریک ناموفق/لغو شد.', ok: false }); }
+  };
+  // Terminal login by card: find the user whose badge matches and make them active.
+  const identifyByBadge = (code: string) => {
+    setBadgeScan('');
+    const u = users.find((x) => x.badge && x.badge === code.trim());
+    if (!u) { setAuthMsg({ text: `کارتِ «${code}» شناخته نشد.`, ok: false }); return; }
+    setActive(u.id); setAuthMsg({ text: `${u.name} (${groupName(u.groupId)}) واردِ سیستم شد ✓`, ok: true });
+  };
+  // Terminal login by biometric: verify, then match the returned credential id to a user.
+  const identifyByBio = async () => {
+    const creds = users.filter((u) => u.bio);
+    if (!creds.length) { setAuthMsg({ text: 'هیچ کاربری بیومتریکِ ثبت‌شده روی این دستگاه ندارد.', ok: false }); return; }
+    try {
+      const assertion = (await navigator.credentials.get({
+        publicKey: {
+          challenge: crypto.getRandomValues(new Uint8Array(32)),
+          allowCredentials: creds.map((u) => ({ type: 'public-key' as const, id: b64uDecode(u.bio!) })),
+          userVerification: 'required', timeout: 60000,
+        },
+      })) as PublicKeyCredential | null;
+      if (!assertion) throw new Error('none');
+      const rid = b64u(assertion.rawId);
+      const u = creds.find((x) => x.bio === rid);
+      if (!u) { setAuthMsg({ text: 'هویت تطبیق نشد.', ok: false }); return; }
+      setActive(u.id); setAuthMsg({ text: `${u.name} (${groupName(u.groupId)}) با چهره/اثرانگشت وارد شد ✓`, ok: true });
+    } catch { setAuthMsg({ text: 'تأییدِ هویت ناموفق بود.', ok: false }); }
+  };
+
   // ---------- groups ----------
   // Admin can create AND edit groups (raise/lower their access by toggling permissions).
   const [gName, setGName] = useState(''); const [gPerms, setGPerms] = useState<string[]>([]);
@@ -121,6 +177,15 @@ export default function AccessPanel({ state, onChange, onClose, confirm, employe
           {/* ---------------- users ---------------- */}
           {tab === 'users' && (
             <>
+              {/* protective access: identify the operator at this terminal → predefined access */}
+              <div className="loan-sched-head"><span>ورودِ حفاظتی (کارت / چهره / اثرانگشت)</span></div>
+              <div className="tool-note">هرکس پشتِ این ترمینال می‌نشیند با کارت یا چهره/اثرانگشت تأیید می‌شود و به دسترسی‌های گروهِ خودش می‌رسد.</div>
+              {authMsg && <div className={`att-kiosk-msg ${authMsg.ok ? 'ok' : 'bad'}`}>{authMsg.text}</div>}
+              <div className="att-addgrid">
+                <input className="tool-text-input" type="text" dir="ltr" placeholder="کارت را اسکن کنید…" value={badgeScan} onChange={(e) => setBadgeScan(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && badgeScan.trim()) identifyByBadge(badgeScan.trim()); }} />
+                <button className="acc-addline" onClick={identifyByBio}>🔒 چهره/اثرانگشت</button>
+              </div>
+
               <div className="loan-sched-head"><span>افزودنِ کاربر</span></div>
               <input className="tool-text-input" type="text" placeholder="نامِ کاربر" value={uName} onChange={(e) => setUName(e.target.value)} />
               <label className="field-label">گروه (سطحِ دسترسی)</label>
@@ -137,10 +202,14 @@ export default function AccessPanel({ state, onChange, onClose, confirm, employe
               <div className="loan-sched-head"><span>فهرستِ کاربران</span><span className="loan-sched-hint">{users.length} نفر</span></div>
               <div className="loan-detail-list">
                 {users.map((u) => (
-                  <div key={u.id} className={`loan-detail-row ${state.activeUserId === u.id ? 'paid' : ''}`}>
+                  <div key={u.id} className={`loan-detail-row att-emprow ${state.activeUserId === u.id ? 'paid' : ''}`}>
                     <div className="ld-info">
-                      <span className="ld-amt">{u.name} <span className="fm-shares">{groupName(u.groupId)}</span></span>
+                      <span className="ld-amt">{u.name} <span className="fm-shares">{groupName(u.groupId)}</span>{u.bio ? <span className="acc-lvl-tag">بیومتریک</span> : null}</span>
                       <span className="ld-date">{state.activeUserId === u.id ? 'کاربرِ فعال ✓' : 'برای فعال‌کردن بزنید'}</span>
+                      <div className="att-addgrid">
+                        <input className="tool-text-input att-mgrsel" type="text" dir="ltr" placeholder="کدِ کارت" value={u.badge || ''} onChange={(e) => setUserBadge(u.id, e.target.value)} />
+                        <button className="acc-addline" onClick={() => registerBio(u)}>{u.bio ? '🔒 ثبتِ مجددِ بیومتریک' : '🔒 ثبتِ بیومتریک'}</button>
+                      </div>
                     </div>
                     <button className="fm-notify" title="کاربرِ فعال" onClick={() => setActive(u.id)}>▶</button>
                     <button className="fm-notify" title="حذف" onClick={() => delUser(u.id)}>🗑</button>

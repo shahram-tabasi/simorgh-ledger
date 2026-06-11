@@ -111,6 +111,9 @@ flowchart TD
 - ✓ Inventory module (items, in/out, stock, value, report) with auto-accounting (purchase/sale → journal)
 - ✓ Payslip (base + overtime + allowances − deductions = net), printable
 - ✓ Access control: groups + permissions + users, device-side gating, admin PIN, worker self-service mode
+- ✓ Protective access (terminal login): each user can carry a card/badge code and/or a WebAuthn biometric
+      credential; at any terminal the operator identifies by card or face/fingerprint and becomes the active
+      user, gaining their group's predefined permissions (`can()`).
 - ✓ Admin can edit group permissions (raise/lower access per group)
 - ✓ Leave management (kardex like Kasra): annual entitlement (استحقاقی), carry-in, used/remaining (مانده),
       required-to-use (ملزم به استفاده), annual carryover/savings (ذخیره‌ی سالیانه); CSV export of the kardex
@@ -183,6 +186,8 @@ flowchart TD
         (platform authenticator, userVerification required); every punch then requires the phone's OS
         fingerprint/face prompt and records in/out into the same punch kardex. Falls back gracefully with
         a message where WebAuthn is unavailable (use the web app in Chrome, or the kiosk badge card).
+      - ✓ admin chooses which capture methods are active (card/badge · phone biometric · network device)
+        in the «قوانین» tab; disabled methods are hidden in the kiosk / self screens.
       - ✓ phase 2: **network device relay** — external face/fingerprint/card devices (or a tiny bridge
         script beside them) POST punch logs `{code, time?, dir?}` to `/api/att/:channel` on the server
         (`server/attRelay.js`, in-memory, 30-min idle TTL); the kiosk tab opens a listen channel, shows

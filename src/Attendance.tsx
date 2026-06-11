@@ -34,9 +34,11 @@ export interface WorkRules {
   otMinMin?: number;        // overtime threshold: staying less than this past end-time does NOT count as overtime
   breakfastMin?: number;    // unpaid breakfast break deducted from worked hours
   lunchMin?: number;        // unpaid lunch break deducted from worked hours
+  // Which attendance capture methods the admin enables (kiosk badge / self biometric / network device).
+  attMethods?: { badge?: boolean; bio?: boolean; device?: boolean };
   note?: string;
 }
-export const DEFAULT_RULES: WorkRules = { start: '08:00', end: '16:00', weekend: [6], thuPolicy: 'normal', thuEarlyMin: 90, shift2: null, altWeeksOff: false, graceLateMin: 0, lateAllowPerMonth: 0, otMinMin: 0, breakfastMin: 0, lunchMin: 0, note: '' };
+export const DEFAULT_RULES: WorkRules = { start: '08:00', end: '16:00', weekend: [6], thuPolicy: 'normal', thuEarlyMin: 90, shift2: null, altWeeksOff: false, graceLateMin: 0, lateAllowPerMonth: 0, otMinMin: 0, breakfastMin: 0, lunchMin: 0, attMethods: { badge: true, bio: true, device: true }, note: '' };
 
 // ---- Leave / permits workflow (modeled on Kasra's kardex + کارتابل + payroll) ----
 // Leave TYPES are user-definable (the combobox the user can extend). Each type carries its own
@@ -211,6 +213,7 @@ export default function AttendancePanel({ state, onChange, onClose, confirm, onP
   const dayKey = (d: number) => `${y}-${m}-${d}`;
   // Work rules + weekday helpers (to reflect weekly day-off / Thursday policy on the grid)
   const rules = state.rules || DEFAULT_RULES;
+  const attMethods = rules.attMethods || { badge: true, bio: true, device: true };
   const monthOffset = getFirstWeekdayOffset('jalali', y, m);   // column (0=شنبه) of day 1
   const weekdayOf = (d: number) => (monthOffset + d - 1) % 7;  // 0=شنبه … 5=پنجشنبه … 6=جمعه
   const isWeekendDay = (d: number) => rules.weekend.includes(weekdayOf(d)) || (weekdayOf(d) === 5 && rules.thuPolicy === 'off');
@@ -618,10 +621,12 @@ export default function AttendancePanel({ state, onChange, onClose, confirm, onP
               <div className="att-kiosk-clock" dir="ltr">{clock}</div>
               <div className="fund-help">گوشی/تبلت را به نگهبان بدهید: کارتِ بارکدیِ کارمند را با دوربین یا کارت‌خوان اسکن کنید. اولین اسکنِ روز = ورود؛ اسکن‌های بعدی = خروج. زمان‌ها مستقیم در کاردکس (تأخیر/تعجیل) و حقوق حساب می‌شوند.</div>
               {kioskMsg && <div className={`att-kiosk-msg ${kioskMsg.ok ? 'ok' : 'bad'}`}>{kioskMsg.text}</div>}
-              <div className="att-addgrid">
-                <input className="tool-text-input" type="text" dir="ltr" autoFocus placeholder="کارت را اسکن کنید…" value={kioskScan} onChange={(e) => setKioskScan(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && kioskScan.trim()) kioskPunch(kioskScan.trim()); }} />
-                <button className="acc-addline" onClick={() => setKioskCam(true)}>📷 دوربین</button>
-              </div>
+              {attMethods.badge && (
+                <div className="att-addgrid">
+                  <input className="tool-text-input" type="text" dir="ltr" autoFocus placeholder="کارت را اسکن کنید…" value={kioskScan} onChange={(e) => setKioskScan(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && kioskScan.trim()) kioskPunch(kioskScan.trim()); }} />
+                  <button className="acc-addline" onClick={() => setKioskCam(true)}>📷 دوربین</button>
+                </div>
+              )}
               <div className="loan-sched-head"><span>ترددهای امروز</span></div>
               <div className="loan-detail-list">
                 {(() => {
@@ -637,9 +642,10 @@ export default function AttendancePanel({ state, onChange, onClose, confirm, onP
                   ));
                 })()}
               </div>
-              <div className="tool-note">کارت‌خوان‌های RFID/بارکدیِ ارزان که مثلِ صفحه‌کلید عمل می‌کنند هم با همین فیلد کار می‌کنند.</div>
+              {attMethods.badge && <div className="tool-note">کارت‌خوان‌های RFID/بارکدیِ ارزان که مثلِ صفحه‌کلید عمل می‌کنند هم با همین فیلد کار می‌کنند.</div>}
 
               {/* network face/fingerprint/card devices via the server relay */}
+              {attMethods.device && (<>
               <div className="loan-sched-head"><span>دستگاهِ شبکه‌ای (چهره/اثرانگشت/کارت)</span></div>
               {!devCh ? (
                 <>
@@ -665,6 +671,8 @@ export default function AttendancePanel({ state, onChange, onClose, confirm, onP
                   )}
                 </>
               )}
+              </>)}
+              {!attMethods.badge && !attMethods.device && <div className="tool-note">روشِ ساعت‌زنیِ این بخش در «قوانین» غیرفعال است. کارمندان می‌توانند با اثرانگشت/چهره‌ی گوشیِ خود (در «حضورِ من») ثبت کنند.</div>}
               {kioskCam && <CameraScanner continuous onClose={() => setKioskCam(false)} onResult={(code) => kioskPunch(code)} />}
             </>
           ))}
@@ -675,7 +683,7 @@ export default function AttendancePanel({ state, onChange, onClose, confirm, onP
           ) : (
             <>
               {/* biometric self check-in (worker's own phone fingerprint/face) */}
-              {selfMode && selfEmpId && (
+              {selfMode && selfEmpId && attMethods.bio && (
                 <div className="att-bio">
                   {bioMsg && <div className={`att-kiosk-msg ${bioMsg.ok ? 'ok' : 'bad'}`}>{bioMsg.text}</div>}
                   {(() => { const t = getToday('jalali'); const k = `${t.year}-${t.month}-${t.day}`; const pp = punches[selfEmpId]?.[k];
@@ -1221,6 +1229,12 @@ export default function AttendancePanel({ state, onChange, onClose, confirm, onP
                     <input className="tool-text-input" type="time" dir="ltr" value={rules.shift2.end} onChange={(e) => setRules({ shift2: { ...rules.shift2!, end: e.target.value } })} />
                   </div>
                 )}
+
+                <div className="loan-sched-head"><span>روشِ ثبتِ حضور و غیاب</span></div>
+                <div className="tool-note">انتخاب کنید کارمندان با کدام روش‌ها ساعت بزنند؛ روش‌های غیرفعال در تبِ «ساعت‌زنی»/«حضورِ من» نمایش داده نمی‌شوند.</div>
+                <label className="fund-switch"><input type="checkbox" checked={attMethods.badge !== false} onChange={(e) => setRules({ attMethods: { ...attMethods, badge: e.target.checked } })} /><span>کارت/بارکد (گوشیِ نگهبان یا کارت‌خوان)</span></label>
+                <label className="fund-switch"><input type="checkbox" checked={attMethods.bio !== false} onChange={(e) => setRules({ attMethods: { ...attMethods, bio: e.target.checked } })} /><span>اثرانگشت/چهره‌ی گوشیِ خودِ کارمند</span></label>
+                <label className="fund-switch"><input type="checkbox" checked={attMethods.device !== false} onChange={(e) => setRules({ attMethods: { ...attMethods, device: e.target.checked } })} /><span>دستگاهِ شبکه‌ای (چهره/اثرانگشت/کارت)</span></label>
 
                 <div className="loan-sched-head"><span>قوانینِ پیشرفته‌ی کارکرد (محاسبه‌ی حقوق)</span></div>
                 <div className="att-addgrid">
