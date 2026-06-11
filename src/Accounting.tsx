@@ -21,7 +21,10 @@ export interface JournalEntry { id: string; y: number; m: number; d: number; des
 export interface Party { id: string; name: string; kind: 'customer' | 'supplier' | 'both'; }
 export interface CostCenter { id: string; name: string; }
 export const PARTY_KIND_LABEL: { [k in Party['kind']]: string } = { customer: 'مشتری', supplier: 'تأمین‌کننده', both: 'هر دو' };
-export interface AccountingState { accounts: Account[]; entries: JournalEntry[]; vatRate?: number; parties?: Party[]; centers?: CostCenter[]; orgName?: string; }
+// Official sales invoice (فاکتورِ فروش): header + line items; on save it posts the sale journal and is reprintable.
+export interface InvoiceItem { name: string; qty: number; price: number; }
+export interface Invoice { id: string; number: number; y: number; m: number; d: number; partyId?: string; buyerName?: string; items: InvoiceItem[]; discount: number; vatRate: number; paid: 'cash' | 'bank' | 'credit'; }
+export interface AccountingState { accounts: Account[]; entries: JournalEntry[]; vatRate?: number; parties?: Party[]; centers?: CostCenter[]; orgName?: string; invoices?: Invoice[]; invoiceSeq?: number; }
 
 const TYPE_LABEL: { [k in AccType]: string } = { asset: 'دارایی', liability: 'بدهی', equity: 'سرمایه', income: 'درآمد', expense: 'هزینه' };
 export const LEVEL_LABEL: { [k in AccLevel]: string } = { group: 'گروه', total: 'کل', sub: 'معین', detail: 'تفصیلی' };
@@ -74,7 +77,7 @@ interface Props {
   confirm: (msg: string, onYes: () => void) => void;
 }
 
-type Tab = 'quick' | 'journal' | 'reports' | 'parties' | 'accounts';
+type Tab = 'quick' | 'invoice' | 'journal' | 'reports' | 'parties' | 'accounts';
 
 export default function AccountingPanel({ state, onChange, onClose, confirm }: Props) {
   const accounts = state.accounts && state.accounts.length ? state.accounts : DEFAULT_ACCOUNTS;
@@ -108,8 +111,9 @@ export default function AccountingPanel({ state, onChange, onClose, confirm }: P
     const acc: Account = { id: `a-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, code, name, type, level: 'sub', parent: group?.id };
     return { acc, list: [...list, acc] };
   };
-  // Post a balanced quick entry (used by the guided non-accountant operations).
-  const postQuick = (date: { y: number; m: number; d: number }, desc: string, spec: { name: string; type: AccType; debit?: number; credit?: number; party?: string; center?: string }[]) => {
+  // Pure builder: resolve accounts and produce a balanced entry without committing (so callers can
+  // merge it with other state changes in a single onChange).
+  const buildQuick = (date: { y: number; m: number; d: number }, desc: string, spec: { name: string; type: AccType; debit?: number; credit?: number; party?: string; center?: string }[]): { accounts: Account[]; entry: JournalEntry } | null => {
     let list = accounts.slice();
     const lines: EntryLine[] = spec.filter((s) => (s.debit || 0) > 0 || (s.credit || 0) > 0).map((s) => {
       const r = resolveLocal(list, s.name, s.type); list = r.list;
@@ -119,9 +123,14 @@ export default function AccountingPanel({ state, onChange, onClose, confirm }: P
       return line;
     });
     const td = lines.reduce((t, l) => t + l.debit, 0); const tc = lines.reduce((t, l) => t + l.credit, 0);
-    if (lines.length < 2 || Math.round(td) !== Math.round(tc) || td <= 0) { confirm('مبالغ نامعتبر است؛ سند ساخته نشد.', () => {}); return false; }
-    const entry: JournalEntry = { id: `je-${Date.now()}`, ...date, desc, lines };
-    onChange({ ...state, accounts: list, entries: [...entries, entry] });
+    if (lines.length < 2 || Math.round(td) !== Math.round(tc) || td <= 0) return null;
+    return { accounts: list, entry: { id: `je-${Date.now()}`, ...date, desc, lines } };
+  };
+  // Post a balanced quick entry (used by the guided non-accountant operations).
+  const postQuick = (date: { y: number; m: number; d: number }, desc: string, spec: { name: string; type: AccType; debit?: number; credit?: number; party?: string; center?: string }[]) => {
+    const r = buildQuick(date, desc, spec);
+    if (!r) { confirm('مبالغ نامعتبر است؛ سند ساخته نشد.', () => {}); return false; }
+    onChange({ ...state, accounts: r.accounts, entries: [...entries, r.entry] });
     return true;
   };
 
@@ -196,6 +205,30 @@ export default function AccountingPanel({ state, onChange, onClose, confirm }: P
     const entry: JournalEntry = { id: `je-${Date.now()}`, y: yr, m: 0, d: 1, desc: `سندِ افتتاحیه‌ی سالِ ${yr}`, lines, ref: `opening-${yr}` };
     onChange({ ...state, accounts: list, entries: [...entries.filter((e) => e.ref !== `opening-${yr}`), entry] });
     return true;
+  };
+
+  // ---------- فاکتورِ فروش ----------
+  const invoices = state.invoices || [];
+  // Persist a new invoice and post its sale journal (Debit cash/AR / Credit فروش / Credit VAT), tagging the party.
+  const saveInvoice = (inv: Omit<Invoice, 'id' | 'number'>): Invoice | null => {
+    const number = (state.invoiceSeq || 0) + 1;
+    const full: Invoice = { ...inv, id: `inv-${Date.now()}`, number };
+    const subtotal = inv.items.reduce((s, it) => s + it.qty * it.price, 0);
+    const net = Math.max(0, subtotal - (inv.discount || 0));
+    const vat = Math.round(net * (inv.vatRate || 0) / 100);
+    const total = net + vat;
+    if (total <= 0) { confirm('مبلغِ فاکتور صفر است.', () => {}); return null; }
+    const channelName = inv.paid === 'bank' ? 'بانک' : 'صندوق (نقد)';
+    const spec: { name: string; type: AccType; debit?: number; credit?: number; party?: string }[] = [
+      { name: inv.paid === 'credit' ? 'حساب‌های دریافتنی' : channelName, type: 'asset', debit: total, party: inv.paid === 'credit' ? inv.partyId : undefined },
+      { name: 'فروش', type: 'income', credit: net },
+      ...(vat ? [{ name: 'مالیات بر ارزش افزوده (فروش)', type: 'liability' as AccType, credit: vat }] : []),
+    ];
+    const built = buildQuick({ y: inv.y, m: inv.m, d: inv.d }, `فاکتورِ فروش #${number}${inv.buyerName ? ` — ${inv.buyerName}` : ''}`, spec);
+    if (!built) { confirm('سندِ فاکتور ساخته نشد.', () => {}); return null; }
+    // single commit: posted journal + saved invoice + sequence
+    onChange({ ...state, accounts: built.accounts, entries: [...entries, built.entry], invoices: [...invoices, full], invoiceSeq: number });
+    return full;
   };
 
   // ---------- طرف‌حساب‌ها (تفصیلی) و مرکزِ هزینه ----------
@@ -299,6 +332,7 @@ export default function AccountingPanel({ state, onChange, onClose, confirm }: P
         <div className="tool-panel-body">
           <div className="mini-toggle fund-tabs">
             <button type="button" className={`mini-toggle-btn ${tab === 'quick' ? 'active' : ''}`} onClick={() => setTab('quick')}>ثبتِ سریع</button>
+            <button type="button" className={`mini-toggle-btn ${tab === 'invoice' ? 'active' : ''}`} onClick={() => setTab('invoice')}>فاکتور</button>
             <button type="button" className={`mini-toggle-btn ${tab === 'journal' ? 'active' : ''}`} onClick={() => setTab('journal')}>اسناد</button>
             <button type="button" className={`mini-toggle-btn ${tab === 'reports' ? 'active' : ''}`} onClick={() => setTab('reports')}>دفتر و تراز</button>
             <button type="button" className={`mini-toggle-btn ${tab === 'parties' ? 'active' : ''}`} onClick={() => setTab('parties')}>طرف‌حساب</button>
@@ -307,6 +341,9 @@ export default function AccountingPanel({ state, onChange, onClose, confirm }: P
 
           {/* ---------------- ثبتِ سریع (راهنمای غیرحسابدار) ---------------- */}
           {tab === 'quick' && <QuickEntry today={today} vatRate={vatRate} parties={parties} centers={centers} postQuick={postQuick} onDone={() => setTab('journal')} />}
+
+          {/* ---------------- فاکتورِ فروش ---------------- */}
+          {tab === 'invoice' && <InvoicePanel today={today} vatRate={vatRate} orgName={orgName} parties={parties} invoices={invoices} partyName={partyName} monthNames={monthNames} saveInvoice={saveInvoice} />}
 
           {/* ---------------- اسناد ---------------- */}
           {tab === 'journal' && !creating && (
@@ -806,6 +843,149 @@ function OpeningEntry({ accounts, today, postOpening }: {
         <div className="tool-result-row closing"><span>اختلاف (به سرمایه)</span><strong>{fmt(Math.abs(plug))} {plug === 0 ? '' : plug > 0 ? '← بستانکارِ سرمایه' : '← بدهکارِ سرمایه'}</strong></div>
       </div>
       <button className="loan-submit" disabled={debit + credit <= 0} onClick={submit}>🔓 ثبتِ سندِ افتتاحیه</button>
+    </>
+  );
+}
+
+// ---------------- Official sales invoice (فاکتورِ فروش) ----------------
+function InvoicePanel({ today, vatRate, orgName, parties, invoices, partyName, monthNames, saveInvoice }: {
+  today: { year: number; month: number; day: number };
+  vatRate: number;
+  orgName: string;
+  parties: Party[];
+  invoices: Invoice[];
+  partyName: (id?: string) => string;
+  monthNames: string[];
+  saveInvoice: (inv: Omit<Invoice, 'id' | 'number'>) => Invoice | null;
+}) {
+  const [partyId, setPartyId] = useState('');
+  const [buyerName, setBuyerName] = useState('');
+  const [items, setItems] = useState<{ name: string; qty: string; price: string }[]>([{ name: '', qty: '1', price: '' }]);
+  const [discount, setDiscount] = useState('');
+  const [vr, setVr] = useState(String(vatRate));
+  const [paid, setPaid] = useState<'cash' | 'bank' | 'credit'>('cash');
+  const [eY, setEY] = useState(String(today.year)); const [eM, setEM] = useState(String(today.month + 1)); const [eD, setED] = useState(String(today.day));
+  const [shown, setShown] = useState<Invoice | null>(null);   // invoice to print (just-saved or reprint)
+
+  const setItem = (i: number, patch: Partial<{ name: string; qty: string; price: string }>) => setItems((s) => s.map((x, k) => (k === i ? { ...x, ...patch } : x)));
+  const subtotal = items.reduce((s, it) => s + (digits(it.qty) * digits(it.price)), 0);
+  const disc = digits(discount);
+  const net = Math.max(0, subtotal - disc);
+  const vat = Math.round(net * (digits(vr) || 0) / 100);
+  const total = net + vat;
+
+  const submit = () => {
+    const cleanItems: InvoiceItem[] = items.filter((it) => it.name.trim() && digits(it.price) > 0).map((it) => ({ name: it.name.trim(), qty: digits(it.qty) || 1, price: digits(it.price) }));
+    if (cleanItems.length === 0) return;
+    const m0 = Math.min(11, Math.max(0, (digits(eM) || 1) - 1));
+    const inv = saveInvoice({ y: digits(eY) || today.year, m: m0, d: Math.min(31, Math.max(1, digits(eD) || 1)), partyId: partyId || undefined, buyerName: partyId ? partyName(partyId) : (buyerName.trim() || undefined), items: cleanItems, discount: disc, vatRate: digits(vr) || 0, paid });
+    if (inv) { setShown(inv); setItems([{ name: '', qty: '1', price: '' }]); setDiscount(''); setBuyerName(''); }
+  };
+
+  const dateStr = (e: { y: number; m: number; d: number }) => `${e.d} ${monthNames[e.m]} ${e.y}`;
+  // Printable invoice block
+  const printInvoice = (inv: Invoice) => {
+    const sub = inv.items.reduce((s, it) => s + it.qty * it.price, 0);
+    const n = Math.max(0, sub - inv.discount); const v = Math.round(n * inv.vatRate / 100); const t = n + v;
+    return (
+      <div className="acc-print acc-invoice">
+        <div className="acc-print-org">{orgName || 'فاکتورِ فروش'}</div>
+        <div className="acc-inv-head">
+          <span>فاکتورِ فروش شماره‌ی {inv.number}</span>
+          <span>تاریخ: {dateStr(inv)}</span>
+        </div>
+        <div className="acc-inv-buyer">خریدار: {inv.buyerName || partyName(inv.partyId) || '—'} · پرداخت: {inv.paid === 'credit' ? 'نسیه' : inv.paid === 'bank' ? 'بانک' : 'نقدی'}</div>
+        <table className="acc-table">
+          <thead><tr><th>ردیف</th><th>شرح</th><th>تعداد</th><th>مبلغِ واحد</th><th>مبلغِ کل</th></tr></thead>
+          <tbody>
+            {inv.items.map((it, i) => <tr key={i}><td>{i + 1}</td><td>{it.name}</td><td>{it.qty}</td><td>{fmt(it.price)}</td><td>{fmt(it.qty * it.price)}</td></tr>)}
+            <tr><td colSpan={4}>جمعِ کل</td><td>{fmt(sub)}</td></tr>
+            {inv.discount > 0 && <tr><td colSpan={4}>تخفیف</td><td>−{fmt(inv.discount)}</td></tr>}
+            {v > 0 && <tr><td colSpan={4}>مالیات بر ارزش افزوده ({inv.vatRate}٪)</td><td>{fmt(v)}</td></tr>}
+            <tr className="acc-total"><td colSpan={4}>مبلغِ قابلِ پرداخت</td><td>{fmt(t)} تومان</td></tr>
+          </tbody>
+        </table>
+      </div>
+    );
+  };
+
+  return (
+    <>
+      <div className="acc-inv-form acc-noprint">
+        <div className="att-addgrid">
+          <div><label className="field-label">خریدار (طرف‌حساب)</label>
+            <select className="tool-text-input" value={partyId} onChange={(e) => setPartyId(e.target.value)}>
+              <option value="">— نام را دستی بنویسید —</option>
+              {parties.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
+          </div>
+          {!partyId && <div><label className="field-label">نامِ خریدار</label><input className="tool-text-input" type="text" value={buyerName} onChange={(e) => setBuyerName(e.target.value)} /></div>}
+        </div>
+
+        <div className="loan-sched-head"><span>اقلامِ فاکتور</span></div>
+        <div className="acc-inv-items">
+          <div className="acc-inv-item acc-inv-item-head"><span>شرح</span><span>تعداد</span><span>مبلغِ واحد</span><span></span></div>
+          {items.map((it, i) => (
+            <div className="acc-inv-item" key={i}>
+              <input className="tool-text-input" type="text" placeholder="کالا/خدمت" value={it.name} onChange={(e) => setItem(i, { name: e.target.value })} />
+              <input className="tool-text-input" type="text" inputMode="numeric" dir="ltr" value={it.qty} onChange={(e) => setItem(i, { qty: e.target.value.replace(/[^0-9]/g, '') })} />
+              <input className="tool-text-input" type="text" inputMode="numeric" dir="ltr" value={it.price} onChange={(e) => setItem(i, { price: withSep(e.target.value) })} />
+              <button className="acc-line-del" onClick={() => setItems(items.length > 1 ? items.filter((_, k) => k !== i) : items)}>✕</button>
+            </div>
+          ))}
+        </div>
+        <button className="acc-addline" onClick={() => setItems([...items, { name: '', qty: '1', price: '' }])}>+ ردیف</button>
+
+        <div className="att-addgrid">
+          <div><label className="field-label">تخفیف</label><input className="tool-text-input" type="text" inputMode="numeric" dir="ltr" value={discount} onChange={(e) => setDiscount(withSep(e.target.value))} /></div>
+          <div><label className="field-label">مالیات (٪)</label><input className="tool-text-input" type="text" inputMode="numeric" dir="ltr" value={vr} onChange={(e) => setVr(e.target.value.replace(/[^0-9]/g, ''))} /></div>
+        </div>
+        <div className="acc-quick-seg">
+          <button type="button" className={`mini-toggle-btn ${paid === 'cash' ? 'active' : ''}`} onClick={() => setPaid('cash')}>نقدی</button>
+          <button type="button" className={`mini-toggle-btn ${paid === 'bank' ? 'active' : ''}`} onClick={() => setPaid('bank')}>بانک</button>
+          <button type="button" className={`mini-toggle-btn ${paid === 'credit' ? 'active' : ''}`} onClick={() => setPaid('credit')}>نسیه</button>
+        </div>
+        <label className="field-label">تاریخ (روز / ماه / سال)</label>
+        <div className="acc-date">
+          <input className="tool-text-input" type="number" inputMode="numeric" dir="ltr" value={eD} onChange={(e) => setED(e.target.value.replace(/[^0-9]/g, ''))} />
+          <input className="tool-text-input" type="number" inputMode="numeric" dir="ltr" value={eM} onChange={(e) => setEM(e.target.value.replace(/[^0-9]/g, ''))} />
+          <input className="tool-text-input" type="number" inputMode="numeric" dir="ltr" value={eY} onChange={(e) => setEY(e.target.value.replace(/[^0-9]/g, ''))} />
+        </div>
+
+        <div className="tool-result">
+          <div className="tool-result-row"><span>جمعِ کل</span><strong>{fmt(subtotal)}</strong></div>
+          {disc > 0 && <div className="tool-result-row"><span>تخفیف</span><strong>−{fmt(disc)}</strong></div>}
+          <div className="tool-result-row"><span>مالیات</span><strong>{fmt(vat)}</strong></div>
+          <div className="tool-result-row closing"><span>قابلِ پرداخت</span><strong>{fmt(total)}</strong></div>
+        </div>
+        <button className="loan-submit" disabled={total <= 0} onClick={submit}>🧾 ثبت و صدورِ فاکتور</button>
+        {paid === 'credit' && !partyId && <div className="tool-note">برای فروشِ نسیه بهتر است خریدار را به‌عنوانِ طرف‌حساب انتخاب کنید تا بدهی‌اش در «کارتِ حساب» ثبت شود.</div>}
+      </div>
+
+      {shown && (<>
+        {printInvoice(shown)}
+        <button className="loan-submit acc-noprint" onClick={() => window.print()}>🖨️ چاپِ فاکتور / PDF</button>
+      </>)}
+
+      {invoices.length > 0 && (
+        <div className="acc-noprint">
+          <div className="loan-sched-head"><span>فاکتورهای صادرشده</span><span className="loan-sched-hint">{invoices.length}</span></div>
+          <div className="loan-detail-list">
+            {invoices.slice().reverse().slice(0, 30).map((inv) => {
+              const sub = inv.items.reduce((s, it) => s + it.qty * it.price, 0); const n = Math.max(0, sub - inv.discount); const t = n + Math.round(n * inv.vatRate / 100);
+              return (
+                <div key={inv.id} className="loan-detail-row">
+                  <div className="ld-info">
+                    <span className="ld-amt">#{inv.number} {inv.buyerName || partyName(inv.partyId) || ''} <span className="fm-shares">{fmt(t)}</span></span>
+                    <span className="ld-date">{dateStr(inv)} · {inv.items.length} قلم · {inv.paid === 'credit' ? 'نسیه' : inv.paid === 'bank' ? 'بانک' : 'نقدی'}</span>
+                  </div>
+                  <button className="att-inlinebtn" onClick={() => setShown(inv)}>نمایش</button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </>
   );
 }

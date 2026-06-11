@@ -151,10 +151,10 @@ function resolveAcc(accs: AccLite[], defName: { [k in AccType]: string }, t: Acc
   return a.id;
 }
 
-const APP_VERSION = '1.0.62';
+const APP_VERSION = '1.0.63';
 const CHANGELOG: string[] = [
-  'سندِ افتتاحیه: ثبتِ مانده‌ی اول دوره برای هر حساب؛ اختلاف خودکار به «سرمایه» متوازن می‌شود',
-  'نامِ شرکت در سربرگِ گزارش‌های چاپی (صورت‌های مالی)',
+  'فاکتورِ فروش: صدورِ فاکتورِ چنداقلامی با تخفیف و مالیات؛ خودکار سندِ حسابداری می‌زند و قابلِ چاپ است',
+  'فروشِ نسیه به طرف‌حساب در «کارتِ حساب» ثبت می‌شود؛ فهرستِ فاکتورهای صادرشده با امکانِ نمایش/چاپِ مجدد',
 ];
 
 function App() {
@@ -1795,7 +1795,7 @@ function App() {
               <button className={`theme-btn ${theme === 'dark' ? 'active' : ''}`} onClick={() => setTheme('dark')}>🌙 تیره</button>
             </div>
 
-            <div className="drawer-foot">نسخه ۱۴۰۵ · ۱.۰.۶۲</div>
+            <div className="drawer-foot">نسخه ۱۴۰۵ · ۱.۰.۶۳</div>
           </aside>
         </div>
       )}

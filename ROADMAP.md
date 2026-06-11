@@ -148,7 +148,9 @@ flowchart TD
       - ✓ Cost centers (مرکز هزینه): tag expenses, per-center expense report
       - ✓ Opening entry (سندِ افتتاحیه): per-account starting balances, auto-plugged to سرمایه to balance
       - ✓ Company name on printed financial statements (سربرگ)
-      - ◻ next: official sales invoice (فاکتورِ رسمی), statutory statement layout, multi-book/period
+      - ✓ Official sales invoice (فاکتورِ فروش): multi-item, discount + VAT, cash/bank/credit; auto-posts the
+            sale journal (party-tagged for credit) and is printable + reprintable from the issued list
+      - ◻ next: link invoice to inventory stock-out, purchase invoice, statutory statement layout, multi-book
 - ◻ Windows desktop installer (.exe) via Electron + Windows CI  (deferred — not yet)
 - ◻ Attendance device matching: face / fingerprint / RFID-card readers
       - phase 1: device biometric unlock (WebAuthn / Capacitor biometric) for worker self check-in
