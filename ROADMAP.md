@@ -140,8 +140,10 @@ flowchart TD
       - ✓ VAT (مالیات بر ارزش افزوده) with a configurable rate, applied on sales/purchases
       - ✓ Guided quick-entry for non-accountants (ثبتِ سریع): sale / purchase / receive / pay / cash-bank
             transfer / capital — auto-builds the correct balanced double-entry with a live preview
-      - ◻ next: opening/closing entries & fiscal-year close, cost centers (مرکز هزینه), تفصیلی (4th level),
-            multi-level grouped trial balance, statutory/VAT return reports
+      - ✓ Multi-level grouped trial balance (گروه/کل/معین) with rolled-up subtotals
+      - ✓ Fiscal-year close (سندِ اختتامیه): zero income/expense into retained earnings; reversible
+      - ✓ VAT return (اظهارنامه): output VAT − input VAT = net payable/credit
+      - ◻ next: cost centers (مرکز هزینه), تفصیلی (4th level), opening entry for a new book, statutory reports
 - ◻ Windows desktop installer (.exe) via Electron + Windows CI  (deferred — not yet)
 - ◻ Attendance device matching: face / fingerprint / RFID-card readers
       - phase 1: device biometric unlock (WebAuthn / Capacitor biometric) for worker self check-in

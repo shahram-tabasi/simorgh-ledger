@@ -186,6 +186,42 @@ export default function AccountingPanel({ state, onChange, onClose, confirm }: P
   const equityPlusProfit = equityTotal + profit;          // سرمایه + سودِ دوره
   const balanceSheetOk = Math.round(assetsTotal) === Math.round(liabilitiesTotal + equityPlusProfit);
 
+  // Rolled-up debit/credit for a node = its own lines + all descendants' (for the multi-level trial balance).
+  const sumById: { [id: string]: { d: number; c: number } } = {};
+  sums.forEach((x) => { sumById[x.a.id] = { d: x.debit, c: x.credit }; });
+  const rolled = (id: string): { d: number; c: number } => {
+    const own = sumById[id] || { d: 0, c: 0 };
+    let d = own.d, c = own.c;
+    accounts.filter((a) => a.parent === id).forEach((ch) => { const r = rolled(ch.id); d += r.d; c += r.c; });
+    return { d, c };
+  };
+  // VAT return (اظهارنامه): output VAT (on sales) − input VAT (on purchases) = net payable.
+  const vatOut = sums.filter((x) => x.a.type === 'liability' && x.a.name.includes('ارزش افزوده')).reduce((s, x) => s + x.bal, 0);
+  const vatIn = sums.filter((x) => x.a.type === 'asset' && x.a.name.includes('ارزش افزوده')).reduce((s, x) => s + x.bal, 0);
+  const vatPayable = vatOut - vatIn;
+
+  // Fiscal-year close: zero the temporary accounts (income/expense) into retained earnings.
+  const [closeY, setCloseY] = useState(String(today.year));
+  const closeFiscalYear = () => {
+    const temps = sums.filter((x) => (x.a.type === 'income' || x.a.type === 'expense') && isPostable(x.a) && Math.abs(x.bal) >= 1);
+    if (temps.length === 0) { confirm('حساب‌های موقتی (درآمد/هزینه) برای بستن وجود ندارد.', () => {}); return; }
+    confirm('سندِ اختتامیه ساخته شود؟ حساب‌های درآمد و هزینه صفر و سود/زیان به «سود و زیانِ انباشته» منتقل می‌شود.', () => {
+      let list = accounts.slice();
+      const lines: EntryLine[] = [];
+      let net = 0; // + = profit
+      temps.forEach((x) => {
+        if (x.a.type === 'income') { lines.push({ accountId: x.a.id, debit: x.bal, credit: 0 }); net += x.bal; }
+        else { lines.push({ accountId: x.a.id, debit: 0, credit: x.bal }); net -= x.bal; }
+      });
+      const r = resolveLocal(list, 'سود و زیانِ انباشته', 'equity'); list = r.list;
+      if (net > 0) lines.push({ accountId: r.acc.id, debit: 0, credit: net });
+      else if (net < 0) lines.push({ accountId: r.acc.id, debit: -net, credit: 0 });
+      const yr = digits(closeY) || today.year;
+      const entry: JournalEntry = { id: `je-${Date.now()}`, y: yr, m: 11, d: 29, desc: `سندِ اختتامیه‌ی سالِ ${yr}`, lines, ref: `close-${yr}` };
+      onChange({ ...state, accounts: list, entries: [...entries.filter((e) => e.ref !== `close-${yr}`), entry] });
+    });
+  };
+
   const [ledgerAcc, setLedgerAcc] = useState<string>(postable[0]?.id || '');
   const ledgerRows = (() => {
     const acc = accById(ledgerAcc); if (!acc) return [];
@@ -304,6 +340,33 @@ export default function AccountingPanel({ state, onChange, onClose, confirm }: P
                   </tbody>
                 </table>
 
+                <div className="acc-print-title">ترازِ گروه‌بندی‌شده (گروه / کل / معین)</div>
+                <table className="acc-table">
+                  <thead><tr><th>حساب</th><th>بدهکار</th><th>بستانکار</th><th>مانده</th></tr></thead>
+                  <tbody>
+                    {treeOrder.filter((a) => { const r = rolled(a.id); return r.d || r.c; }).map((a) => {
+                      const r = rolled(a.id); const lvl = a.level || 'sub';
+                      const bal = isDebitNormal(a.type) ? r.d - r.c : r.c - r.d;
+                      return (
+                        <tr key={a.id} className={lvl === 'group' ? 'acc-grp-row' : lvl === 'total' ? 'acc-tot-row' : ''}>
+                          <td style={{ paddingInlineStart: 4 + depthOf(a) * 14 }}>{a.code} · {a.name}</td>
+                          <td>{fmt(r.d)}</td><td>{fmt(r.c)}</td>
+                          <td>{fmt(Math.abs(bal))} {bal === 0 ? '' : isDebitNormal(a.type) === bal > 0 ? 'بد' : 'بس'}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+
+                <div className="acc-print-title">اظهارنامه‌ی مالیات بر ارزش افزوده</div>
+                <table className="acc-table">
+                  <tbody>
+                    <tr><td>مالیاتِ فروش (دریافتی)</td><td>{fmt(vatOut)}</td></tr>
+                    <tr><td>مالیاتِ خرید (پرداختی، قابلِ کسر)</td><td>{fmt(vatIn)}</td></tr>
+                    <tr className="acc-total"><td>{vatPayable >= 0 ? 'مالیاتِ قابلِ پرداخت' : 'اعتبارِ مالیاتی (طلب)'}</td><td>{fmt(Math.abs(vatPayable))}</td></tr>
+                  </tbody>
+                </table>
+
                 <div className="acc-print-title">صورتِ سود و زیان</div>
                 <table className="acc-table">
                   <tbody>
@@ -339,6 +402,12 @@ export default function AccountingPanel({ state, onChange, onClose, confirm }: P
                   </tbody>
                 </table>
               </div>
+              <div className="loan-sched-head acc-noprint"><span>بستنِ سالِ مالی (سندِ اختتامیه)</span></div>
+              <div className="acc-addacc acc-noprint">
+                <input className="tool-text-input" type="number" inputMode="numeric" dir="ltr" value={closeY} onChange={(e) => setCloseY(e.target.value.replace(/[^0-9]/g, ''))} />
+                <button className="loan-submit" onClick={closeFiscalYear}>🔒 بستنِ سال و انتقالِ سود/زیان</button>
+              </div>
+              <div className="tool-note acc-noprint">حساب‌های درآمد و هزینه صفر و سود/زیانِ دوره به «سود و زیانِ انباشته» منتقل می‌شود. برای لغو، سندِ اختتامیه را از تبِ «اسناد» حذف کنید.</div>
               <button className="loan-submit acc-noprint" onClick={printReport}>🖨️ چاپ / ذخیره‌ی PDF</button>
               <button className="acc-addline acc-noprint" onClick={() => downloadCsv('trial-balance.csv', [['حساب', 'بدهکار', 'بستانکار', 'مانده'], ...sums.map((x) => [`${x.a.code} ${x.a.name}`, x.debit, x.credit, x.bal]), ['جمع', grandDebit, grandCredit, '']])}>📤 خروجیِ اکسل (CSV)</button>
             </>
