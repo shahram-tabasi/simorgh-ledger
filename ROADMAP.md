@@ -162,6 +162,8 @@ flowchart TD
       ✓ Accounting integration: each warehouse posts to its own inventory account «موجودیِ کالا (نام)»;
       warehouse transfer posts one balanced entry (Debit dest inventory / Credit source inventory at cost).
       ✓ Per-warehouse stock matrix report (items × warehouses) + minimum-stock / reorder-point alerts (نقطه سفارش).
+      ✓ Barcode scan into the sales invoice: adds the item line, reduces inventory stock, and posts COGS
+        (Debit بهای تمام‌شده / Credit موجودیِ کالا) — invoice ↔ inventory ↔ accounting fully wired.
 - ◑ Inventory barcodes: ✓ auto-generate + print Code39 label (pure JS, offline) per item; ✓ warehouse
       location, partner code (کد همکار), company standard code; ✓ scan to look up stock/price (استعلام) and
       pick items for in/out — via hardware keyboard-wedge scanner OR the **phone camera** (ZXing, works in the

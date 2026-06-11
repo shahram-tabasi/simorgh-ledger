@@ -151,10 +151,10 @@ function resolveAcc(accs: AccLite[], defName: { [k in AccType]: string }, t: Acc
   return a.id;
 }
 
-const APP_VERSION = '1.0.71';
+const APP_VERSION = '1.0.72';
 const CHANGELOG: string[] = [
-  'حداقلِ موجودی و نقطهٔ سفارش: برای هر کالا تعریف می‌شود و وقتی موجودی به آن می‌رسد هشدار می‌دهد',
-  'هشدارِ کالاهای رو به اتمام در بالای گزارشِ موجودی + نشانه‌گذاریِ ردیف‌ها',
+  'اسکنِ بارکد داخلِ فاکتورِ فروش: قلم خودکار اضافه می‌شود و موجودیِ انبار کم می‌شود',
+  'با فروشِ کالا، بهای تمام‌شده هم در حسابداری ثبت می‌شود (فاکتور ↔ انبار ↔ حسابداری یکپارچه)',
 ];
 
 function App() {
@@ -1671,7 +1671,15 @@ function App() {
       )}
 
       {showAccModal && (
-        <AccountingPanel state={accounting} onChange={saveAccounting} onClose={() => setShowAccModal(false)} confirm={askConfirm} />
+        <AccountingPanel
+          state={accounting} onChange={saveAccounting} onClose={() => setShowAccModal(false)} confirm={askConfirm}
+          invItems={(inventory.items || []).map((i) => ({ id: i.id, name: i.name, sell: i.sell, buy: i.buy, barcode: i.barcode, code: i.code, stdCode: i.stdCode }))}
+          onSellStock={(lines, date) => {
+            // reduce inventory stock for items sold via invoice (the invoice already posts the accounting)
+            const ts = lines.map((l, k) => ({ id: `tx-${Date.now()}-${k}`, itemId: l.itemId, kind: 'out' as const, qty: l.qty, price: 0, y: date.y, m: date.m, d: date.d }));
+            saveInventory({ ...inventory, txns: [...(inventory.txns || []), ...ts] });
+          }}
+        />
       )}
 
       {showAttModal && (
@@ -1795,7 +1803,7 @@ function App() {
               <button className={`theme-btn ${theme === 'dark' ? 'active' : ''}`} onClick={() => setTheme('dark')}>🌙 تیره</button>
             </div>
 
-            <div className="drawer-foot">نسخه ۱۴۰۵ · ۱.۰.۷۱</div>
+            <div className="drawer-foot">نسخه ۱۴۰۵ · ۱.۰.۷۲</div>
           </aside>
         </div>
       )}

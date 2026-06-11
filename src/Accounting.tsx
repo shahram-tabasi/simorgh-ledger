@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { getToday, getMonthNames } from './calendar';
 import { downloadCsv } from './csv';
+import { cleanBarcode } from './barcode';
 
 const fmt = (n: number): string => Math.round(n || 0).toLocaleString('en-US');
 const digits = (s: string): number => parseInt((s || '').replace(/[^0-9]/g, ''), 10) || 0;
@@ -22,7 +23,10 @@ export interface Party { id: string; name: string; kind: 'customer' | 'supplier'
 export interface CostCenter { id: string; name: string; }
 export const PARTY_KIND_LABEL: { [k in Party['kind']]: string } = { customer: 'مشتری', supplier: 'تأمین‌کننده', both: 'هر دو' };
 // Official sales invoice (فاکتورِ فروش): header + line items; on save it posts the sale journal and is reprintable.
-export interface InvoiceItem { name: string; qty: number; price: number; }
+// itemId/cost link a line to an inventory item (set when added by barcode scan) → enables COGS + stock-out.
+export interface InvoiceItem { name: string; qty: number; price: number; itemId?: string; cost?: number; }
+// Minimal inventory item shape passed in for barcode lookup inside the invoice.
+export interface InvLookupItem { id: string; name: string; sell?: number; buy?: number; barcode?: string; code?: string; stdCode?: string; }
 export interface Invoice { id: string; number: number; kind?: 'sale' | 'purchase'; y: number; m: number; d: number; partyId?: string; buyerName?: string; items: InvoiceItem[]; discount: number; vatRate: number; paid: 'cash' | 'bank' | 'credit'; asInventory?: boolean; }
 export interface AccountingState { accounts: Account[]; entries: JournalEntry[]; vatRate?: number; parties?: Party[]; centers?: CostCenter[]; orgName?: string; invoices?: Invoice[]; invoiceSeq?: number; }
 
@@ -75,11 +79,14 @@ interface Props {
   onChange: (s: AccountingState) => void;
   onClose: () => void;
   confirm: (msg: string, onYes: () => void) => void;
+  // Inventory bridge (optional): scan items into the invoice, then reduce stock on a sale.
+  invItems?: InvLookupItem[];
+  onSellStock?: (lines: { itemId: string; qty: number }[], date: { y: number; m: number; d: number }) => void;
 }
 
 type Tab = 'quick' | 'invoice' | 'journal' | 'reports' | 'parties' | 'accounts';
 
-export default function AccountingPanel({ state, onChange, onClose, confirm }: Props) {
+export default function AccountingPanel({ state, onChange, onClose, confirm, invItems, onSellStock }: Props) {
   const accounts = state.accounts && state.accounts.length ? state.accounts : DEFAULT_ACCOUNTS;
   const entries = state.entries || [];
   const vatRate = state.vatRate ?? DEFAULT_VAT_RATE;
@@ -232,10 +239,21 @@ export default function AccountingPanel({ state, onChange, onClose, confirm }: P
           { name: 'فروش', type: 'income', credit: net },
           ...(vat ? [{ name: 'مالیات بر ارزش افزوده (فروش)', type: 'liability' as AccType, credit: vat }] : []),
         ];
+    // For a sale of inventory-linked items, also record cost of goods sold (COGS) and reduce stock.
+    const cogs = isPurchase ? 0 : inv.items.reduce((s, it) => s + (it.itemId ? (it.cost || 0) * it.qty : 0), 0);
+    if (cogs > 0) {
+      spec.push({ name: 'بهای تمام‌شده‌ی کالای فروش‌رفته', type: 'expense', debit: cogs });
+      spec.push({ name: 'موجودیِ کالا', type: 'asset', credit: cogs });
+    }
     const built = buildQuick({ y: inv.y, m: inv.m, d: inv.d }, `فاکتورِ ${kindLabel} #${number}${inv.buyerName ? ` — ${inv.buyerName}` : ''}`, spec);
     if (!built) { confirm('سندِ فاکتور ساخته نشد.', () => {}); return null; }
     // single commit: posted journal + saved invoice + sequence
     onChange({ ...state, accounts: built.accounts, entries: [...entries, built.entry], invoices: [...invoices, full], invoiceSeq: number });
+    // reduce inventory stock for the scanned/linked items (sales only)
+    if (!isPurchase && onSellStock) {
+      const stockLines = inv.items.filter((it) => it.itemId).map((it) => ({ itemId: it.itemId!, qty: it.qty }));
+      if (stockLines.length) onSellStock(stockLines, { y: inv.y, m: inv.m, d: inv.d });
+    }
     return full;
   };
 
@@ -351,7 +369,7 @@ export default function AccountingPanel({ state, onChange, onClose, confirm }: P
           {tab === 'quick' && <QuickEntry today={today} vatRate={vatRate} parties={parties} centers={centers} postQuick={postQuick} onDone={() => setTab('journal')} />}
 
           {/* ---------------- فاکتورِ فروش ---------------- */}
-          {tab === 'invoice' && <InvoicePanel today={today} vatRate={vatRate} orgName={orgName} parties={parties} invoices={invoices} partyName={partyName} monthNames={monthNames} saveInvoice={saveInvoice} />}
+          {tab === 'invoice' && <InvoicePanel today={today} vatRate={vatRate} orgName={orgName} parties={parties} invoices={invoices} partyName={partyName} monthNames={monthNames} saveInvoice={saveInvoice} invItems={invItems || []} confirm={confirm} />}
 
           {/* ---------------- اسناد ---------------- */}
           {tab === 'journal' && !creating && (
@@ -856,7 +874,7 @@ function OpeningEntry({ accounts, today, postOpening }: {
 }
 
 // ---------------- Official sales invoice (فاکتورِ فروش) ----------------
-function InvoicePanel({ today, vatRate, orgName, parties, invoices, partyName, monthNames, saveInvoice }: {
+function InvoicePanel({ today, vatRate, orgName, parties, invoices, partyName, monthNames, saveInvoice, invItems, confirm }: {
   today: { year: number; month: number; day: number };
   vatRate: number;
   orgName: string;
@@ -865,28 +883,48 @@ function InvoicePanel({ today, vatRate, orgName, parties, invoices, partyName, m
   partyName: (id?: string) => string;
   monthNames: string[];
   saveInvoice: (inv: Omit<Invoice, 'id' | 'number'>) => Invoice | null;
+  invItems: InvLookupItem[];
+  confirm: (msg: string, onYes: () => void) => void;
 }) {
+  type Row = { name: string; qty: string; price: string; itemId?: string; cost?: number };
   const [mode, setMode] = useState<'sale' | 'purchase'>('sale');
   const [partyId, setPartyId] = useState('');
   const [buyerName, setBuyerName] = useState('');
-  const [items, setItems] = useState<{ name: string; qty: string; price: string }[]>([{ name: '', qty: '1', price: '' }]);
+  const [items, setItems] = useState<Row[]>([{ name: '', qty: '1', price: '' }]);
   const [discount, setDiscount] = useState('');
   const [vr, setVr] = useState(String(vatRate));
   const [paid, setPaid] = useState<'cash' | 'bank' | 'credit'>('cash');
   const [asInv, setAsInv] = useState(true);                   // purchase: ثبت به‌عنوانِ موجودیِ کالا یا هزینه
   const [eY, setEY] = useState(String(today.year)); const [eM, setEM] = useState(String(today.month + 1)); const [eD, setED] = useState(String(today.day));
   const [shown, setShown] = useState<Invoice | null>(null);   // invoice to print (just-saved or reprint)
+  const [scan, setScan] = useState('');
   const counterpartyLabel = mode === 'purchase' ? 'فروشنده' : 'خریدار';
 
-  const setItem = (i: number, patch: Partial<{ name: string; qty: string; price: string }>) => setItems((s) => s.map((x, k) => (k === i ? { ...x, ...patch } : x)));
+  const setItem = (i: number, patch: Partial<Row>) => setItems((s) => s.map((x, k) => (k === i ? { ...x, ...patch } : x)));
   const subtotal = items.reduce((s, it) => s + (digits(it.qty) * digits(it.price)), 0);
   const disc = digits(discount);
   const net = Math.max(0, subtotal - disc);
   const vat = Math.round(net * (digits(vr) || 0) / 100);
   const total = net + vat;
 
+  // Barcode scan → look up an inventory item by barcode/code/std-code and add (or increment) its invoice line.
+  const onScan = (codeRaw: string) => {
+    const code = cleanBarcode(codeRaw); setScan('');
+    const it = invItems.find((x) => cleanBarcode(x.barcode || '') === code || cleanBarcode(x.code || '') === code || cleanBarcode(x.stdCode || '') === code);
+    if (!it) { confirm(`بارکدِ «${codeRaw}» در انبار نیست.`, () => {}); return; }
+    setItems((s) => {
+      const idx = s.findIndex((r) => r.itemId === it.id);
+      if (idx >= 0) { const c = s.slice(); c[idx] = { ...c[idx], qty: String((digits(c[idx].qty) || 0) + 1) }; return c; }
+      const line: Row = { name: it.name, qty: '1', price: withSep(String(mode === 'purchase' ? (it.buy || 0) : (it.sell || 0))), itemId: it.id, cost: it.buy || 0 };
+      // replace the first empty row, else append
+      const empty = s.findIndex((r) => !r.name.trim());
+      if (empty >= 0) { const c = s.slice(); c[empty] = line; return c; }
+      return [...s, line];
+    });
+  };
+
   const submit = () => {
-    const cleanItems: InvoiceItem[] = items.filter((it) => it.name.trim() && digits(it.price) > 0).map((it) => ({ name: it.name.trim(), qty: digits(it.qty) || 1, price: digits(it.price) }));
+    const cleanItems: InvoiceItem[] = items.filter((it) => it.name.trim() && digits(it.price) > 0).map((it) => ({ name: it.name.trim(), qty: digits(it.qty) || 1, price: digits(it.price), itemId: it.itemId, cost: it.cost }));
     if (cleanItems.length === 0) return;
     const m0 = Math.min(11, Math.max(0, (digits(eM) || 1) - 1));
     const inv = saveInvoice({ kind: mode, y: digits(eY) || today.year, m: m0, d: Math.min(31, Math.max(1, digits(eD) || 1)), partyId: partyId || undefined, buyerName: partyId ? partyName(partyId) : (buyerName.trim() || undefined), items: cleanItems, discount: disc, vatRate: digits(vr) || 0, paid, asInventory: mode === 'purchase' ? asInv : undefined });
@@ -942,6 +980,13 @@ function InvoicePanel({ today, vatRate, orgName, parties, invoices, partyName, m
           <label className="fund-switch"><input type="checkbox" checked={asInv} onChange={(e) => setAsInv(e.target.checked)} /><span>ثبت به‌عنوانِ «موجودیِ کالا» (در غیرِ این‌صورت هزینه)</span></label>
         )}
 
+        {invItems.length > 0 && (
+          <>
+            <label className="field-label">افزودن با بارکد (اسکنر یا تایپ + Enter)</label>
+            <input className="tool-text-input" type="text" dir="ltr" placeholder="بارکدِ کالا را بخوانید…" value={scan} onChange={(e) => setScan(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && scan.trim()) onScan(scan.trim()); }} />
+            {mode === 'sale' && <div className="tool-note">با ثبتِ فاکتورِ فروش، موجودیِ این کالاها از انبار کم و بهای تمام‌شده در حسابداری ثبت می‌شود.</div>}
+          </>
+        )}
         <div className="loan-sched-head"><span>اقلامِ فاکتور</span></div>
         <div className="acc-inv-items">
           <div className="acc-inv-item acc-inv-item-head"><span>شرح</span><span>تعداد</span><span>مبلغِ واحد</span><span></span></div>
