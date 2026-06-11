@@ -2369,6 +2369,18 @@ body.dark .acc-preview { background: #16203a; border-color: #33415e; }
 body.dark .acc-inv-buyer { color: #cdd7ea; }
 body.dark .acc-open-name { color: #cdd7ea; }
 body.dark .acc-print-org { color: #dce4f2; }
+/* inventory barcode + scanner */
+.inv-barcode { display: block; background: #fff; }
+.inv-label-wrap { margin: 10px 0; }
+.inv-label { border: 1px solid #d3deee; border-radius: 10px; padding: 12px; text-align: center; background: #fff; max-width: 320px; }
+.inv-label-name { font-weight: 800; font-size: 14px; color: #1c2c4a; margin-bottom: 2px; }
+.inv-label-sub { font-size: 11px; color: #6b7894; margin-bottom: 6px; }
+.inv-label-code { font-family: monospace; letter-spacing: 2px; font-size: 13px; margin-top: 4px; color: #1c2c4a; }
+.inv-scanmsg { background: #eaf6ee; border: 1px solid #bfe3cc; color: #1f6b3a; border-radius: 9px; padding: 8px 10px; font-size: 12.5px; margin: 6px 0; }
+.inv-cam { max-width: 420px; padding: 0; overflow: hidden; }
+.inv-cam-video { width: 100%; max-height: 60vh; background: #000; display: block; }
+body.dark .inv-label, body.dark .inv-barcode { background: #fff; }
+body.dark .inv-scanmsg { background: #16302099; border-color: #2f6b46; color: #9fe0b8; }
 .acc-grp-row td { background: #eef3fb; font-weight: 800; color: #1c2c4a; }
 .acc-tot-row td { background: #f5f8fd; font-weight: 700; }
 body.dark .acc-grp-row td { background: #1e2942; color: #dce4f2; }

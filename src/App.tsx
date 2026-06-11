@@ -151,10 +151,10 @@ function resolveAcc(accs: AccLite[], defName: { [k in AccType]: string }, t: Acc
   return a.id;
 }
 
-const APP_VERSION = '1.0.64';
+const APP_VERSION = '1.0.65';
 const CHANGELOG: string[] = [
-  'فاکتورِ خرید: مثلِ فاکتورِ فروش، با ثبتِ موجودیِ کالا یا هزینه و مالیاتِ خرید؛ خودکار سند می‌زند',
-  'انتخابِ نوعِ فاکتور (فروش/خرید) در یک محیط؛ خریدِ نسیه به کارتِ حسابِ فروشنده ثبت می‌شود',
+  'بارکدِ انبار: ساخت و چاپِ خودکارِ بارکد برای هر کالا (لیبل قابلِ چاپ) + جایگاه/کدِ همکار/کدِ استانداردِ شرکت',
+  'بارکدخوان: اسکنرِ سخت‌افزاری (صفحه‌کلیدی) و اسکن با دوربینِ گوشی — استعلامِ موجودی/قیمت و انتخابِ کالا برای ورود/خروج',
 ];
 
 function App() {
@@ -1795,7 +1795,7 @@ function App() {
               <button className={`theme-btn ${theme === 'dark' ? 'active' : ''}`} onClick={() => setTheme('dark')}>🌙 تیره</button>
             </div>
 
-            <div className="drawer-foot">نسخه ۱۴۰۵ · ۱.۰.۶۴</div>
+            <div className="drawer-foot">نسخه ۱۴۰۵ · ۱.۰.۶۵</div>
           </aside>
         </div>
       )}
