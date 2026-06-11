@@ -159,6 +159,8 @@ flowchart TD
 - ✓ Multi-warehouse (چند انبار) + sections (بخش): define warehouses and their sections; each movement is
       tagged with a warehouse (and optional section); stock is tracked per warehouse; report warehouse filter
       and per-warehouse stock shown in the barcode scan inquiry.
+      ✓ Accounting integration: each warehouse posts to its own inventory account «موجودیِ کالا (نام)»;
+      warehouse transfer posts one balanced entry (Debit dest inventory / Credit source inventory at cost).
 - ◑ Inventory barcodes: ✓ auto-generate + print Code39 label (pure JS, offline) per item; ✓ warehouse
       location, partner code (کد همکار), company standard code; ✓ scan to look up stock/price (استعلام) and
       pick items for in/out — via hardware keyboard-wedge scanner OR the **phone camera** (ZXing, works in the

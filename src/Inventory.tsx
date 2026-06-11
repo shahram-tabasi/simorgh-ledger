@@ -21,7 +21,8 @@ export interface ItemGroup { id: string; name: string; parent?: string; }
 export interface Warehouse { id: string; name: string; }
 export interface Section { id: string; name: string; warehouseId: string; }
 // Each movement records which warehouse (and optional section) it happened in, so stock is per-warehouse.
-export interface InvTxn { id: string; itemId: string; kind: 'in' | 'out'; qty: number; price: number; y: number; m: number; d: number; warehouseId?: string; sectionId?: string; }
+// A transfer between warehouses is stored as a linked out+in pair (transferId) and is NOT a sale/purchase.
+export interface InvTxn { id: string; itemId: string; kind: 'in' | 'out'; qty: number; price: number; y: number; m: number; d: number; warehouseId?: string; sectionId?: string; transferId?: string; }
 export interface InventoryState { items: InvItem[]; txns: InvTxn[]; groups?: ItemGroup[]; warehouses?: Warehouse[]; sections?: Section[]; }
 
 export function emptyInventory(): InventoryState { return { items: [], txns: [] }; }
@@ -165,10 +166,11 @@ export default function InventoryPanel({ state, onChange, onClose, confirm, onPo
 
   // ---------- stock movement (in/out) ----------
   const [mItem, setMItem] = useState<string>(items[0]?.id || '');
-  const [mKind, setMKind] = useState<'in' | 'out'>('in');
+  const [mKind, setMKind] = useState<'in' | 'out' | 'transfer'>('in');
   const [mQty, setMQty] = useState(''); const [mPrice, setMPrice] = useState('');
-  const [mWh, setMWh] = useState<string>(warehouses[0]?.id || '');   // انبارِ گردش
+  const [mWh, setMWh] = useState<string>(warehouses[0]?.id || '');   // انبارِ گردش (یا مبدا برای انتقال)
   const [mSec, setMSec] = useState<string>('');                       // بخشِ گردش (اختیاری)
+  const [mWhDest, setMWhDest] = useState<string>('');                 // انبارِ مقصد (برای انتقال)
   // ---------- barcode scanning (hardware wedge + phone camera) ----------
   const [scan, setScan] = useState('');
   const [showCam, setShowCam] = useState<null | 'move' | 'item'>(null);
@@ -182,24 +184,28 @@ export default function InventoryPanel({ state, onChange, onClose, confirm, onPo
     setScanMsg(`${it.name} · موجودیِ کل: ${stockOf(it.id)} ${it.unit || ''}${whTxt} · فروش: ${fmt(it.sell || 0)} · جایگاه: ${it.location || '—'}`);
   };
 
+  // Inventory account name — per warehouse, so the books show stock value of each warehouse separately
+  // (matches the inventory module). Falls back to a single «موجودیِ کالا» when no warehouse is set.
+  const invAcct = (whId?: string) => (warehouses.length && whId) ? `موجودیِ کالا (${whName(whId)})` : 'موجودیِ کالا';
   // Build the accounting spec for a transaction (purchase or sale).
   const journalSpec = (t: InvTxn): Spec => {
     if (t.kind === 'in') {
-      // Purchase: Debit Inventory (asset)  /  Credit Cash (asset)
+      // Purchase: Debit Inventory (this warehouse)  /  Credit Cash
       const amount = t.qty * t.price;
-      return [{ type: 'asset', name: 'موجودیِ کالا', debit: amount }, { type: 'asset', name: 'صندوق (نقد)', credit: amount }];
+      return [{ type: 'asset', name: invAcct(t.warehouseId), debit: amount }, { type: 'asset', name: 'صندوق (نقد)', credit: amount }];
     }
-    // Sale (compound, balanced): Debit Cash + Debit COGS  /  Credit Sales + Credit Inventory
+    // Sale (compound, balanced): Debit Cash + Debit COGS  /  Credit Sales + Credit Inventory (this warehouse)
     const it = itemById(t.itemId);
     const revenue = t.qty * t.price;
     const cost = t.qty * (it?.buy || 0);
     return [
       { type: 'asset', name: 'صندوق (نقد)', debit: revenue },
       { type: 'income', name: 'فروش', credit: revenue },
-      ...(cost > 0 ? [{ type: 'expense' as AccType, name: 'بهای تمام‌شده‌ی کالای فروش‌رفته', debit: cost }, { type: 'asset' as AccType, name: 'موجودیِ کالا', credit: cost }] : []),
+      ...(cost > 0 ? [{ type: 'expense' as AccType, name: 'بهای تمام‌شده‌ی کالای فروش‌رفته', debit: cost }, { type: 'asset' as AccType, name: invAcct(t.warehouseId), credit: cost }] : []),
     ];
   };
   const addTxn = () => {
+    if (mKind === 'transfer') { addTransfer(); return; }
     const item = itemById(mItem); if (!item) return;
     const qty = digits(mQty); const price = digits(mPrice) || (mKind === 'in' ? item.buy : item.sell) || 0;
     if (qty <= 0) return;
@@ -211,9 +217,33 @@ export default function InventoryPanel({ state, onChange, onClose, confirm, onPo
     if (onPostJournal) onPostJournal(`inv-${t.id}`, { y: t.y, m: t.m, d: t.d }, `${mKind === 'in' ? 'خریدِ' : 'فروشِ'} ${item.name} (${qty} ${item.unit || ''})`, journalSpec(t));
     setMQty(''); setMPrice('');
   };
-  const delTxn = (t: InvTxn) => confirm('این گردش حذف شود؟', () => {
-    onChange({ ...state, items, txns: txns.filter((x) => x.id !== t.id) });
-    if (onRemoveJournal) onRemoveJournal(`inv-${t.id}`);   // remove its auto-posted journal entry
+  // Transfer between warehouses: stored as a linked out(source)+in(dest) pair; posts ONE balanced journal
+  // moving the value (at cost) from the source warehouse's inventory account to the destination's.
+  const addTransfer = () => {
+    const item = itemById(mItem); if (!item) return;
+    const qty = digits(mQty); if (qty <= 0) return;
+    if (!mWhDest || mWhDest === mWh) { confirm('انبارِ مقصد را (متفاوت از مبدا) انتخاب کنید.', () => {}); return; }
+    if (qty > stockOf(mItem, mWh)) { confirm(`موجودیِ کافی نیست (موجودیِ ${whName(mWh)}: ${stockOf(mItem, mWh)}).`, () => {}); return; }
+    const cost = qty * (item.buy || 0);
+    const tid = `trf-${Date.now()}`;
+    const out: InvTxn = { id: `tx-${Date.now()}o`, itemId: mItem, kind: 'out', qty, price: item.buy || 0, y: today.year, m: today.month, d: today.day, warehouseId: mWh || undefined, transferId: tid };
+    const inn: InvTxn = { id: `tx-${Date.now()}i`, itemId: mItem, kind: 'in', qty, price: item.buy || 0, y: today.year, m: today.month, d: today.day, warehouseId: mWhDest, transferId: tid };
+    onChange({ ...state, items, txns: [...txns, out, inn] });
+    // One journal: Debit Inventory(dest) / Credit Inventory(source) at cost.
+    if (onPostJournal && cost > 0) onPostJournal(`inv-${tid}`, { y: today.year, m: today.month, d: today.day }, `انتقالِ ${item.name} از ${whName(mWh)} به ${whName(mWhDest)} (${qty} ${item.unit || ''})`, [
+      { type: 'asset', name: invAcct(mWhDest), debit: cost },
+      { type: 'asset', name: invAcct(mWh), credit: cost },
+    ]);
+    setMQty('');
+  };
+  const delTxn = (t: InvTxn) => confirm(t.transferId ? 'این انتقال (هر دو طرف) حذف شود؟' : 'این گردش حذف شود؟', () => {
+    if (t.transferId) {
+      onChange({ ...state, items, txns: txns.filter((x) => x.transferId !== t.transferId) });
+      if (onRemoveJournal) onRemoveJournal(`inv-${t.transferId}`);
+    } else {
+      onChange({ ...state, items, txns: txns.filter((x) => x.id !== t.id) });
+      if (onRemoveJournal) onRemoveJournal(`inv-${t.id}`);   // remove its auto-posted journal entry
+    }
   });
 
   const totalValue = items.reduce((s, i) => s + stockOf(i.id) * (i.buy || 0), 0);
@@ -243,6 +273,7 @@ export default function InventoryPanel({ state, onChange, onClose, confirm, onPo
               <div className="mini-toggle">
                 <button type="button" className={`mini-toggle-btn ${mKind === 'in' ? 'active' : ''}`} onClick={() => setMKind('in')}>ورود (خرید)</button>
                 <button type="button" className={`mini-toggle-btn ${mKind === 'out' ? 'active' : ''}`} onClick={() => setMKind('out')}>خروج (فروش)</button>
+                {warehouses.length >= 2 && <button type="button" className={`mini-toggle-btn ${mKind === 'transfer' ? 'active' : ''}`} onClick={() => setMKind('transfer')}>انتقال</button>}
               </div>
               {/* بارکدخوان: اسکنرِ سخت‌افزاری مثلِ صفحه‌کلید تایپ می‌کند و Enter می‌زند؛ یا با دوربینِ گوشی */}
               <label className="field-label">اسکنِ بارکد (استعلام/انتخاب)</label>
@@ -253,17 +284,26 @@ export default function InventoryPanel({ state, onChange, onClose, confirm, onPo
               {scanMsg && <div className="inv-scanmsg">{scanMsg}</div>}
               {warehouses.length > 0 && (
                 <div className="att-addgrid">
-                  <div><label className="field-label">انبار</label>
+                  <div><label className="field-label">{mKind === 'transfer' ? 'انبارِ مبدا' : 'انبار'}</label>
                     <select className="tool-text-input" value={mWh} onChange={(e) => { setMWh(e.target.value); setMSec(''); }}>
                       {warehouses.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
                     </select>
                   </div>
-                  <div><label className="field-label">بخش (اختیاری)</label>
-                    <select className="tool-text-input" value={mSec} onChange={(e) => setMSec(e.target.value)}>
-                      <option value="">— بدون بخش —</option>
-                      {sectionsOf(mWh).map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-                    </select>
-                  </div>
+                  {mKind === 'transfer' ? (
+                    <div><label className="field-label">انبارِ مقصد</label>
+                      <select className="tool-text-input" value={mWhDest} onChange={(e) => setMWhDest(e.target.value)}>
+                        <option value="">— انتخابِ مقصد —</option>
+                        {warehouses.filter((w) => w.id !== mWh).map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
+                      </select>
+                    </div>
+                  ) : (
+                    <div><label className="field-label">بخش (اختیاری)</label>
+                      <select className="tool-text-input" value={mSec} onChange={(e) => setMSec(e.target.value)}>
+                        <option value="">— بدون بخش —</option>
+                        {sectionsOf(mWh).map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                      </select>
+                    </div>
+                  )}
                 </div>
               )}
               <label className="field-label">کالا</label>
@@ -272,10 +312,10 @@ export default function InventoryPanel({ state, onChange, onClose, confirm, onPo
               </select>
               <div className="att-addgrid">
                 <input className="tool-text-input" type="text" inputMode="numeric" dir="ltr" placeholder="تعداد" value={mQty} onChange={(e) => setMQty(e.target.value.replace(/[^0-9]/g, ''))} />
-                <input className="tool-text-input" type="text" inputMode="numeric" dir="ltr" placeholder={mKind === 'in' ? 'قیمتِ خرید' : 'قیمتِ فروش'} value={mPrice} onChange={(e) => setMPrice(withSep(e.target.value))} />
+                {mKind !== 'transfer' && <input className="tool-text-input" type="text" inputMode="numeric" dir="ltr" placeholder={mKind === 'in' ? 'قیمتِ خرید' : 'قیمتِ فروش'} value={mPrice} onChange={(e) => setMPrice(withSep(e.target.value))} />}
               </div>
-              <div className="tool-note">اگر قیمت را خالی بگذارید، قیمتِ پیش‌فرضِ کالا استفاده می‌شود. هر ثبت، خودکار سندِ حسابداری می‌زند.</div>
-              <button className="loan-submit" onClick={addTxn}>ثبتِ {mKind === 'in' ? 'ورود' : 'خروج'}</button>
+              <div className="tool-note">{mKind === 'transfer' ? 'انتقال به بهای تمام‌شده انجام می‌شود و یک سندِ حسابداری بین انبارها می‌زند.' : 'اگر قیمت را خالی بگذارید، قیمتِ پیش‌فرضِ کالا استفاده می‌شود. هر ثبت، خودکار سندِ حسابداری می‌زند.'}</div>
+              <button className="loan-submit" onClick={addTxn}>{mKind === 'transfer' ? 'ثبتِ انتقال' : `ثبتِ ${mKind === 'in' ? 'ورود' : 'خروج'}`}</button>
 
               <div className="loan-sched-head"><span>آخرین گردش‌ها</span></div>
               <div className="loan-detail-list">
@@ -283,7 +323,7 @@ export default function InventoryPanel({ state, onChange, onClose, confirm, onPo
                   <div key={t.id} className="loan-detail-row">
                     <div className="ld-info">
                       <span className="ld-amt">{it?.name || '—'} <span className="fm-shares">{t.kind === 'in' ? '+' : '−'}{t.qty}</span></span>
-                      <span className="ld-date">{dstr(t)} · {t.kind === 'in' ? 'خرید' : 'فروش'} · {fmt(t.qty * t.price)} تومان{t.warehouseId ? ` · ${whName(t.warehouseId)}` : ''}{t.sectionId ? ` (${sections.find((s) => s.id === t.sectionId)?.name || ''})` : ''}</span>
+                      <span className="ld-date">{dstr(t)} · {t.transferId ? `انتقال (${t.kind === 'in' ? 'به' : 'از'} ${whName(t.warehouseId)})` : `${t.kind === 'in' ? 'خرید' : 'فروش'} · ${fmt(t.qty * t.price)} تومان${t.warehouseId ? ` · ${whName(t.warehouseId)}` : ''}${t.sectionId ? ` (${sections.find((s) => s.id === t.sectionId)?.name || ''})` : ''}`}</span>
                     </div>
                     <button className="fm-notify" title="حذف" onClick={() => delTxn(t)}>🗑</button>
                   </div>
