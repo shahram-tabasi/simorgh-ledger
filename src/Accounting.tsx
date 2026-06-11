@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { getToday, getMonthNames } from './calendar';
 import { downloadCsv } from './csv';
 import { cleanBarcode } from './barcode';
+import CameraScanner from './Scanner';
 
 const fmt = (n: number): string => Math.round(n || 0).toLocaleString('en-US');
 const digits = (s: string): number => parseInt((s || '').replace(/[^0-9]/g, ''), 10) || 0;
@@ -898,6 +899,7 @@ function InvoicePanel({ today, vatRate, orgName, parties, invoices, partyName, m
   const [eY, setEY] = useState(String(today.year)); const [eM, setEM] = useState(String(today.month + 1)); const [eD, setED] = useState(String(today.day));
   const [shown, setShown] = useState<Invoice | null>(null);   // invoice to print (just-saved or reprint)
   const [scan, setScan] = useState('');
+  const [showCam, setShowCam] = useState(false);              // phone-camera scanner overlay
   const counterpartyLabel = mode === 'purchase' ? 'فروشنده' : 'خریدار';
 
   const setItem = (i: number, patch: Partial<Row>) => setItems((s) => s.map((x, k) => (k === i ? { ...x, ...patch } : x)));
@@ -982,8 +984,11 @@ function InvoicePanel({ today, vatRate, orgName, parties, invoices, partyName, m
 
         {invItems.length > 0 && (
           <>
-            <label className="field-label">افزودن با بارکد (اسکنر یا تایپ + Enter)</label>
-            <input className="tool-text-input" type="text" dir="ltr" placeholder="بارکدِ کالا را بخوانید…" value={scan} onChange={(e) => setScan(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && scan.trim()) onScan(scan.trim()); }} />
+            <label className="field-label">افزودن با بارکد (اسکنر، دوربین یا تایپ + Enter)</label>
+            <div className="att-addgrid">
+              <input className="tool-text-input" type="text" dir="ltr" placeholder="بارکدِ کالا را بخوانید…" value={scan} onChange={(e) => setScan(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && scan.trim()) onScan(scan.trim()); }} />
+              <button className="acc-addline" onClick={() => setShowCam(true)}>📷 دوربین</button>
+            </div>
             {mode === 'sale' && <div className="tool-note">با ثبتِ فاکتورِ فروش، موجودیِ این کالاها از انبار کم و بهای تمام‌شده در حسابداری ثبت می‌شود.</div>}
           </>
         )}
@@ -1050,6 +1055,10 @@ function InvoicePanel({ today, vatRate, orgName, parties, invoices, partyName, m
             })}
           </div>
         </div>
+      )}
+
+      {showCam && (
+        <CameraScanner onClose={() => setShowCam(false)} onResult={(code) => { setShowCam(false); onScan(code); }} />
       )}
     </>
   );

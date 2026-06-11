@@ -2,11 +2,11 @@
 // Goal vs Mahak/Rahkaran: a simple, mobile/cloud, integrated warehouse:
 // items + stock in/out, live stock & value, printable report, and AUTOMATIC accounting:
 // every purchase/sale auto-posts a balanced journal entry (and is removed if the txn is deleted).
-import { useState, useEffect, useRef } from 'react';
-import { BrowserMultiFormatReader, type IScannerControls } from '@zxing/browser';
+import { useState } from 'react';
 import { getToday, getMonthNames } from './calendar';
 import { downloadCsv } from './csv';
 import { code39Bars, cleanBarcode, genBarcode } from './barcode';
+import CameraScanner from './Scanner';
 import type { AccType } from './Accounting';
 
 const fmt = (n: number): string => Math.round(n || 0).toLocaleString('en-US');
@@ -37,38 +37,6 @@ function Barcode({ value, height = 48 }: { value: string; height?: number }) {
       <rect x={0} y={0} width={width} height={height} fill="#fff" />
       {bars.map((b, i) => <rect key={i} x={b.x} y={0} width={b.w} height={height} fill="#000" />)}
     </svg>
-  );
-}
-
-// Camera-based barcode scanner (turns the phone into a scanner). Uses ZXing, which decodes 1D/2D barcodes
-// from the camera in pure JS — so it works in the Android app WebView too, not only browsers with
-// BarcodeDetector. The mobile app requests CAMERA permission natively (see MainActivity).
-function CameraScanner({ onResult, onClose }: { onResult: (code: string) => void; onClose: () => void }) {
-  const videoRef = useRef<HTMLVideoElement | null>(null);
-  const cbRef = useRef(onResult); cbRef.current = onResult;
-  const [err, setErr] = useState('');
-  useEffect(() => {
-    const reader = new BrowserMultiFormatReader();
-    let controls: IScannerControls | null = null; let done = false;
-    (async () => {
-      try {
-        controls = await reader.decodeFromVideoDevice(undefined, videoRef.current!, (result, _e, ctrls) => {
-          if (result && !done) { done = true; ctrls.stop(); cbRef.current(result.getText().trim()); }
-        });
-      } catch {
-        setErr('دسترسی به دوربین ممکن نشد. اجازه‌ی دوربین را بدهید، یا از اسکنرِ سخت‌افزاری/واردکردنِ دستی استفاده کنید.');
-      }
-    })();
-    return () => { done = true; try { controls?.stop(); } catch { /* ignore */ } };
-  }, []);
-  return (
-    <div className="modal" onClick={onClose}>
-      <div className="modal-box inv-cam" onClick={(e) => e.stopPropagation()}>
-        <div className="tool-panel-head"><span /><h3>اسکنِ بارکد با دوربین</h3><button className="close-modal" onClick={onClose}>✕</button></div>
-        {err ? <div className="tool-note" style={{ padding: 16 }}>{err}</div> : <video ref={videoRef} className="inv-cam-video" playsInline muted />}
-        <div className="tool-note" style={{ padding: '8px 12px' }}>بارکد را مقابلِ دوربین بگیرید؛ پس از تشخیص خودکار بسته می‌شود.</div>
-      </div>
-    </div>
   );
 }
 

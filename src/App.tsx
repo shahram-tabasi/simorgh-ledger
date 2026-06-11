@@ -151,10 +151,9 @@ function resolveAcc(accs: AccLite[], defName: { [k in AccType]: string }, t: Acc
   return a.id;
 }
 
-const APP_VERSION = '1.0.72';
+const APP_VERSION = '1.0.73';
 const CHANGELOG: string[] = [
-  'اسکنِ بارکد داخلِ فاکتورِ فروش: قلم خودکار اضافه می‌شود و موجودیِ انبار کم می‌شود',
-  'با فروشِ کالا، بهای تمام‌شده هم در حسابداری ثبت می‌شود (فاکتور ↔ انبار ↔ حسابداری یکپارچه)',
+  'اسکن با دوربینِ گوشی داخلِ فاکتور: دکمه‌ی 📷 کنارِ فیلدِ بارکدِ فاکتور — گوشی به‌جای بارکدخوان در صندوقِ فروش',
 ];
 
 function App() {
@@ -1803,7 +1802,7 @@ function App() {
               <button className={`theme-btn ${theme === 'dark' ? 'active' : ''}`} onClick={() => setTheme('dark')}>🌙 تیره</button>
             </div>
 
-            <div className="drawer-foot">نسخه ۱۴۰۵ · ۱.۰.۷۲</div>
+            <div className="drawer-foot">نسخه ۱۴۰۵ · ۱.۰.۷۳</div>
           </aside>
         </div>
       )}
