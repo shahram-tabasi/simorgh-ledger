@@ -201,7 +201,10 @@ flowchart TD
 - ◻ Relational journal storage on server (replace blob) for per-record role filtering & heavy reports
 - ◻ Client wiring: read/write via `/api/org/data`, role from `/api/org` (keep offline cache)
 - ◻ Personnel order / employment decree (حکم کارگزینی): printable per employee
-- ◻ Multi-company/multi-book, statutory reports
+- ✓ Multi-company/multi-book (چندشرکت/چنددفتر): each company keeps its own snapshot of all data keys
+      (`co:<id>` slots); create empty or clone-of-current, switch (auto-saves the current company first),
+      rename, delete — from the «شرکت‌ها / دفترها» screen. Backup/cloud sync cover the active company.
+- ◻ Statutory reports
 - ✓ In-app diagnostics log (`src/logger.ts` + `src/Diagnostics.tsx`): captures uncaught errors, promise
       rejections, console.error/warn and cloud-sync failures into a localStorage ring buffer; the «عیب‌یابی و
       لاگ» screen (left menu) shows/filters them and copies/shares a report with version+device context.

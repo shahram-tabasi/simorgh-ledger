@@ -153,10 +153,10 @@ function resolveAcc(accs: AccLite[], defName: { [k in AccType]: string }, t: Acc
   return a.id;
 }
 
-const APP_VERSION = '1.0.81';
+const APP_VERSION = '1.0.82';
 const CHANGELOG: string[] = [
-  'ارسالِ گزارشِ عیب‌یابی به پشتیبانی: با یک دکمه لاگ به سرور می‌رود تا مشکل از راه دور بررسی شود',
-  'هر نصب یک «کدِ شما» دارد تا گزارش‌هایتان قابلِ پیگیری باشد',
+  'چندشرکت/چنددفتر: چند شرکت با داده‌ی کاملاً جدا بسازید و بینشان جابه‌جا شوید (مناسبِ حسابدارها)',
+  'ساختِ شرکتِ خالی یا کپی از شرکتِ فعلی؛ تغییرِ نام و حذف — از منوی چپ «شرکت‌ها / دفترها»',
 ];
 
 function App() {
@@ -285,6 +285,11 @@ function App() {
   const [showLeftDrawer, setShowLeftDrawer] = useState<boolean>(false);
   const [showAboutModal, setShowAboutModal] = useState<boolean>(false);
   const [showDiag, setShowDiag] = useState<boolean>(false);
+  // Multi-company (چندشرکت/چنددفتر): each company keeps its own snapshot of all data keys.
+  const [showCompanies, setShowCompanies] = useState<boolean>(false);
+  const [companies, setCompanies] = useState<{ id: string; name: string }[]>(() => { try { return JSON.parse(localStorage.getItem('companies') || '[]'); } catch { return []; } });
+  const [activeCompanyId, setActiveCompanyId] = useState<string>(() => localStorage.getItem('activeCompanyId') || '');
+  const [newCoName, setNewCoName] = useState<string>('');
   const [toolsInitialSection, setToolsInitialSection] = useState<string>('report');
   const [editingTxId, setEditingTxId] = useState<string | null>(null);
   const [dayPreview, setDayPreview] = useState<{ x: number; y: number; day: number } | null>(null);
@@ -371,6 +376,7 @@ function App() {
       [showAccessModal, () => setShowAccessModal(false)],
       [showAboutModal, () => setShowAboutModal(false)],
       [showDiag, () => setShowDiag(false)],
+      [showCompanies, () => setShowCompanies(false)],
       [showYearMonthModal, () => setShowYearMonthModal(false)],
       [showDayModal, () => setShowDayModal(false)],
       [showRightDrawer, () => setShowRightDrawer(false)],
@@ -386,7 +392,7 @@ function App() {
       else { lastBack.current = now; setExitHint(true); setTimeout(() => setExitHint(false), 2000); }
     });
     return () => { sub.then((h) => h.remove()); };
-  }, [showTour, dialog, showAddModal, showDashboard, showCompany, showTeam, showReminderModal, showPrayerModal, showToolsModal, selectedLoanId, showLoansModal, showFundModal, showAccModal, showAttModal, showInvModal, showAccessModal, showAboutModal, showDiag, showYearMonthModal, showDayModal, showRightDrawer, showLeftDrawer, showWhatsNew, showOnboarding]);
+  }, [showTour, dialog, showAddModal, showDashboard, showCompany, showTeam, showReminderModal, showPrayerModal, showToolsModal, selectedLoanId, showLoansModal, showFundModal, showAccModal, showAttModal, showInvModal, showAccessModal, showAboutModal, showDiag, showCompanies, showYearMonthModal, showDayModal, showRightDrawer, showLeftDrawer, showWhatsNew, showOnboarding]);
 
   // هنگام تغییر تقویم، انتخابِ نظام را ذخیره و ماهِ در حال نمایش را تبدیل می‌کنیم
   const switchCalendar = (system: CalendarSystem) => {
@@ -794,6 +800,57 @@ function App() {
     BACKUP_KEYS.forEach((k) => { const v = localStorage.getItem(k); if (v !== null) o[k] = v; });
     return o;
   };
+
+  // ---------- multi-company (workspaces) ----------
+  const slotKey = (id: string) => 'co:' + id;
+  const snapshotInto = (id: string) => localStorage.setItem(slotKey(id), JSON.stringify(backupDataObject()));
+  // Load a company's snapshot into the live data keys (keys missing in the slot are cleared).
+  const loadSlot = (id: string) => {
+    let o: { [k: string]: string } = {};
+    try { o = JSON.parse(localStorage.getItem(slotKey(id)) || '{}'); } catch { o = {}; }
+    BACKUP_KEYS.forEach((k) => { if (typeof o[k] === 'string') localStorage.setItem(k, o[k]); else localStorage.removeItem(k); });
+  };
+  const persistCompanies = (list: { id: string; name: string }[], active: string) => {
+    localStorage.setItem('companies', JSON.stringify(list)); localStorage.setItem('activeCompanyId', active);
+    setCompanies(list); setActiveCompanyId(active);
+  };
+  // First time: adopt the current data as the default company so nothing is lost.
+  const ensureDefaultCompany = () => {
+    if (companies.length) return;
+    const id = 'c-' + Date.now(); snapshotInto(id);
+    persistCompanies([{ id, name: 'شرکتِ پیش‌فرض' }], id);
+    logEvent('info', 'company: default created');
+  };
+  const switchCompany = (id: string) => {
+    if (id === activeCompanyId) { setShowCompanies(false); return; }
+    askConfirm('تعویضِ شرکت: داده‌های روی صفحه ذخیره و داده‌های شرکتِ دیگر بارگذاری می‌شود. ادامه؟', () => {
+      if (activeCompanyId) snapshotInto(activeCompanyId);   // keep current company's data
+      loadSlot(id);
+      localStorage.setItem('activeCompanyId', id);
+      notify('در حالِ تعویضِ شرکت…');
+      setTimeout(() => window.location.reload(), 600);
+    });
+  };
+  const createCompany = (name: string, clone: boolean) => {
+    if (!name.trim()) return;
+    if (activeCompanyId) snapshotInto(activeCompanyId);
+    const id = 'c-' + Date.now();
+    localStorage.setItem(slotKey(id), clone ? JSON.stringify(backupDataObject()) : '{}');
+    const list = [...companies, { id, name: name.trim() }];
+    localStorage.setItem('companies', JSON.stringify(list)); localStorage.setItem('activeCompanyId', id);
+    loadSlot(id);
+    notify(`شرکتِ «${name.trim()}» ساخته شد…`);
+    setTimeout(() => window.location.reload(), 600);
+  };
+  const renameCompany = (id: string, name: string) => persistCompanies(companies.map((c) => (c.id === id ? { ...c, name } : c)), activeCompanyId);
+  const deleteCompany = (id: string) => {
+    if (id === activeCompanyId) { notify('شرکتِ فعال را نمی‌توان حذف کرد؛ اول به شرکتِ دیگری بروید.'); return; }
+    askConfirm('این شرکت و همه‌ی داده‌هایش حذف شود؟', () => {
+      localStorage.removeItem(slotKey(id));
+      persistCompanies(companies.filter((c) => c.id !== id), activeCompanyId);
+    });
+  };
+  const openCompanies = () => { ensureDefaultCompany(); setShowCompanies(true); };
   const saveAuth = (token: string, phone: string) => {
     localStorage.setItem('authToken', token); localStorage.setItem('authPhone', phone);
     setAuthToken(token); setAuthPhone(phone);
@@ -1751,6 +1808,7 @@ function App() {
               <button className="drawer-close" onClick={() => setShowLeftDrawer(false)} aria-label="بستن">✕</button>
             </div>
             <button className="drawer-item" onClick={() => { setShowLeftDrawer(false); setShowAboutModal(true); }}><span className="di-icon"><IconUsers /></span> طراحان و خدمات</button>
+            <button className="drawer-item" onClick={() => { setShowLeftDrawer(false); openCompanies(); }}><span className="di-icon">🏢</span> شرکت‌ها / دفترها{activeCompanyId && companies.find((c) => c.id === activeCompanyId) ? ` · ${companies.find((c) => c.id === activeCompanyId)!.name}` : ''}</button>
             <button className="drawer-item" onClick={() => { setShowLeftDrawer(false); setShowDiag(true); }}><span className="di-icon">🩺</span> عیب‌یابی و لاگ</button>
             <button className="drawer-item" onClick={() => { setShowLeftDrawer(false); setTimeout(() => setShowTour(true), 250); }}><span className="di-icon"><IconInfo /></span> راهنمای تصویری</button>
             <button className="drawer-item" onClick={shareApp}><span className="di-icon"><IconShare /></span> ارسال نرم‌افزار</button>
@@ -1808,13 +1866,48 @@ function App() {
               <button className={`theme-btn ${theme === 'dark' ? 'active' : ''}`} onClick={() => setTheme('dark')}>🌙 تیره</button>
             </div>
 
-            <div className="drawer-foot">نسخه ۱۴۰۵ · ۱.۰.۸۱</div>
+            <div className="drawer-foot">نسخه ۱۴۰۵ · ۱.۰.۸۲</div>
           </aside>
         </div>
       )}
 
       {showDiag && (
         <Diagnostics version={APP_VERSION} onClose={() => setShowDiag(false)} onShare={shareText} confirm={askConfirm} />
+      )}
+
+      {showCompanies && (
+        <div className="modal" onClick={() => setShowCompanies(false)}>
+          <div className="modal-box tool-panel" onClick={(e) => e.stopPropagation()}>
+            <div className="tool-panel-head">
+              <button className="close-modal" onClick={() => setShowCompanies(false)}>‹</button>
+              <h3>🏢 شرکت‌ها / دفترها</h3>
+              <button className="close-modal" onClick={() => setShowCompanies(false)}>✕</button>
+            </div>
+            <div className="tool-panel-body">
+              <div className="tool-note">هر شرکت داده‌ی کاملاً جدا دارد (حسابداری، انبار، حضور و غیاب و…). با تعویضِ شرکت، داده‌های فعلی ذخیره و شرکتِ دیگر بارگذاری می‌شود.</div>
+              <div className="loan-sched-head"><span>شرکت‌های شما</span><span className="loan-sched-hint">{companies.length}</span></div>
+              <div className="loan-detail-list">
+                {companies.map((c) => (
+                  <div key={c.id} className={`loan-detail-row ${c.id === activeCompanyId ? 'paid' : ''}`}>
+                    <div className="ld-info">
+                      <input className="tool-text-input" type="text" value={c.name} onChange={(e) => renameCompany(c.id, e.target.value)} />
+                      <span className="ld-date">{c.id === activeCompanyId ? 'شرکتِ فعال ✓' : 'برای ورود بزنید'}</span>
+                    </div>
+                    {c.id !== activeCompanyId && <button className="fm-notify" title="ورود به این شرکت" onClick={() => switchCompany(c.id)}>▶</button>}
+                    {c.id !== activeCompanyId && <button className="fm-notify" title="حذف" onClick={() => deleteCompany(c.id)}>🗑</button>}
+                  </div>
+                ))}
+              </div>
+              <div className="loan-sched-head"><span>افزودنِ شرکتِ جدید</span></div>
+              <input className="tool-text-input" type="text" placeholder="نامِ شرکت/دفتر" value={newCoName} onChange={(e) => setNewCoName(e.target.value)} />
+              <div className="acc-form-actions">
+                <button className="loan-submit" disabled={!newCoName.trim()} onClick={() => createCompany(newCoName, false)}>➕ شرکتِ خالی</button>
+                <button className="acc-addline" disabled={!newCoName.trim()} onClick={() => createCompany(newCoName, true)}>📑 کپی از شرکتِ فعلی</button>
+              </div>
+              <div className="tool-note">«خالی» = شروعِ تمیز؛ «کپی» = همه‌ی تنظیمات و داده‌های شرکتِ فعلی را می‌گیرد. پشتیبان‌گیری و همگام‌سازیِ ابری، شرکتِ فعال را در بر می‌گیرد.</div>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* درباره: طراحان و خدمات */}
