@@ -2386,6 +2386,28 @@ body.dark .inv-alert { background: #3a2a14; border-color: #6b4a1e; color: #f0c48
 body.dark .inv-low-row td { background: #2c2210; }
 .att-dev-url { font-family: monospace; font-size: 12px; word-break: break-all; direction: ltr; }
 .att-dev-bad { color: #d2453b; }
+/* insights dashboard */
+.ins-kpis { display: grid; grid-template-columns: repeat(3,1fr); gap: 8px; margin: 8px 0; }
+.ins-kpi { background: #f6f9fe; border: 1px solid #e3eaf4; border-radius: 12px; padding: 10px; text-align: center; }
+.ins-kpi span { display: block; font-size: 11px; color: #6b7894; }
+.ins-kpi b { font-size: 16px; color: #1c2c4a; }
+.ins-kpi.good b { color: #2e9d5b; }
+.ins-kpi.bad b { color: #d2453b; }
+.ins-card-title { font-weight: 800; font-size: 13px; margin: 12px 0 6px; color: #2b3654; }
+.ins-chart-wrap { background: #fff; border: 1px solid #e3eaf4; border-radius: 12px; padding: 8px; }
+.ins-legend { display: flex; gap: 14px; font-size: 11px; color: #6b7894; padding: 2px 6px; }
+.ins-legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-inline-end: 4px; vertical-align: middle; }
+.ins-chart { display: block; }
+.ins-bars { display: flex; flex-direction: column; gap: 6px; }
+.ins-bar-row { display: grid; grid-template-columns: 90px 1fr auto; gap: 8px; align-items: center; font-size: 12px; }
+.ins-bar-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ins-bar-track { background: #eef3fb; border-radius: 6px; height: 14px; overflow: hidden; }
+.ins-bar-fill { height: 100%; background: linear-gradient(90deg,#1c6fd6,#4f9bf0); }
+.ins-bar-val { font-weight: 700; color: #33415e; }
+body.dark .ins-kpi { background: #16203a; border-color: #2a3654; }
+body.dark .ins-kpi b { color: #dce4f2; }
+body.dark .ins-chart-wrap { background: #16203a; border-color: #2a3654; }
+body.dark .ins-bar-track { background: #1e2942; }
 /* diagnostics / logs */
 .diag-summary { display: flex; gap: 16px; font-size: 13px; font-weight: 700; margin: 6px 0; }
 .diag-summary .diag-err { color: #d2453b; }

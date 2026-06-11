@@ -35,6 +35,7 @@ import AttendancePanel, { type AttendanceState, emptyAttendance } from './Attend
 import InventoryPanel, { type InventoryState, emptyInventory } from './Inventory';
 import AccessPanel, { type AccessState, emptyAccess, PERMISSIONS } from './Access';
 import Diagnostics from './Diagnostics';
+import Insights from './Insights';
 import { logEvent } from './logger';
 import CoachTour, { type CoachStep } from './Coach';
 import {
@@ -153,10 +154,10 @@ function resolveAcc(accs: AccLite[], defName: { [k in AccType]: string }, t: Acc
   return a.id;
 }
 
-const APP_VERSION = '1.0.83';
+const APP_VERSION = '1.0.84';
 const CHANGELOG: string[] = [
-  'پشتیبان و همگام‌سازیِ ابری حالا همه‌ی شرکت‌ها را در بر می‌گیرد (نه فقط شرکتِ فعال)',
-  'بازیابی روی دستگاهِ دیگر، همه‌ی شرکت‌ها و داده‌هایشان را برمی‌گرداند',
+  'داشبوردِ تحلیلی با نمودار: درآمد/هزینه‌ی ماهانه، سود، نقد، طلب/بدهی و ارزش و کالاهای انبار',
+  'نمودارها کاملاً آفلاین (SVG) و از اسنادِ حسابداری و موجودیِ انبار محاسبه می‌شوند',
 ];
 
 function App() {
@@ -285,6 +286,7 @@ function App() {
   const [showLeftDrawer, setShowLeftDrawer] = useState<boolean>(false);
   const [showAboutModal, setShowAboutModal] = useState<boolean>(false);
   const [showDiag, setShowDiag] = useState<boolean>(false);
+  const [showInsights, setShowInsights] = useState<boolean>(false);
   // Multi-company (چندشرکت/چنددفتر): each company keeps its own snapshot of all data keys.
   const [showCompanies, setShowCompanies] = useState<boolean>(false);
   const [companies, setCompanies] = useState<{ id: string; name: string }[]>(() => { try { return JSON.parse(localStorage.getItem('companies') || '[]'); } catch { return []; } });
@@ -376,6 +378,7 @@ function App() {
       [showAccessModal, () => setShowAccessModal(false)],
       [showAboutModal, () => setShowAboutModal(false)],
       [showDiag, () => setShowDiag(false)],
+      [showInsights, () => setShowInsights(false)],
       [showCompanies, () => setShowCompanies(false)],
       [showYearMonthModal, () => setShowYearMonthModal(false)],
       [showDayModal, () => setShowDayModal(false)],
@@ -392,7 +395,7 @@ function App() {
       else { lastBack.current = now; setExitHint(true); setTimeout(() => setExitHint(false), 2000); }
     });
     return () => { sub.then((h) => h.remove()); };
-  }, [showTour, dialog, showAddModal, showDashboard, showCompany, showTeam, showReminderModal, showPrayerModal, showToolsModal, selectedLoanId, showLoansModal, showFundModal, showAccModal, showAttModal, showInvModal, showAccessModal, showAboutModal, showDiag, showCompanies, showYearMonthModal, showDayModal, showRightDrawer, showLeftDrawer, showWhatsNew, showOnboarding]);
+  }, [showTour, dialog, showAddModal, showDashboard, showCompany, showTeam, showReminderModal, showPrayerModal, showToolsModal, selectedLoanId, showLoansModal, showFundModal, showAccModal, showAttModal, showInvModal, showAccessModal, showAboutModal, showDiag, showInsights, showCompanies, showYearMonthModal, showDayModal, showRightDrawer, showLeftDrawer, showWhatsNew, showOnboarding]);
 
   // هنگام تغییر تقویم، انتخابِ نظام را ذخیره و ماهِ در حال نمایش را تبدیل می‌کنیم
   const switchCalendar = (system: CalendarSystem) => {
@@ -1602,6 +1605,7 @@ function App() {
                 {can('fund') && <button className="dash-card dc-fund" onClick={() => go(() => { setFundStartReport(false); setShowFundModal(true); })}><span className="dc-ic">💰</span><span className="dc-t">صندوق</span><span className="dc-s">قرض‌الحسنه‌ی گردشی</span></button>}
                 {can('loans') && <button className="dash-card dc-loan" onClick={() => go(() => setShowLoansModal(true))}><span className="dc-ic">🏦</span><span className="dc-t">وام‌ها</span><span className="dc-s">اقساط و گزارش</span></button>}
                 {can('tools') && <button className="dash-card dc-rep" onClick={() => go(() => openTool('report'))}><span className="dc-ic">📊</span><span className="dc-t">گزارش‌ها</span><span className="dc-s">مالیِ بازه‌ای</span></button>}
+                {(can('accounting') || can('inventory')) && <button className="dash-card dc-rep" onClick={() => go(() => setShowInsights(true))}><span className="dc-ic">📈</span><span className="dc-t">تحلیل و نمودار</span><span className="dc-s">درآمد، سود، انبار</span></button>}
                 {can('users') && <button className="dash-card dc-usr" onClick={() => go(() => setShowAccessModal(true))}><span className="dc-ic">👤</span><span className="dc-t">کاربران</span><span className="dc-s">گروه‌ها و دسترسی</span></button>}
                 {(can('users') || (!access.enabled && !orgActive)) && <button className="dash-card dc-pro" onClick={() => go(() => setShowCompany(true))}><span className="dc-ic">⭐</span><span className="dc-t">نسخه‌ی شرکتی</span><span className="dc-s">چندکاربره و ابری</span></button>}
               </div>
@@ -1877,13 +1881,17 @@ function App() {
               <button className={`theme-btn ${theme === 'dark' ? 'active' : ''}`} onClick={() => setTheme('dark')}>🌙 تیره</button>
             </div>
 
-            <div className="drawer-foot">نسخه ۱۴۰۵ · ۱.۰.۸۳</div>
+            <div className="drawer-foot">نسخه ۱۴۰۵ · ۱.۰.۸۴</div>
           </aside>
         </div>
       )}
 
       {showDiag && (
         <Diagnostics version={APP_VERSION} onClose={() => setShowDiag(false)} onShare={shareText} confirm={askConfirm} />
+      )}
+
+      {showInsights && (
+        <Insights accounting={accounting} inventory={inventory} onClose={() => setShowInsights(false)} />
       )}
 
       {showCompanies && (
