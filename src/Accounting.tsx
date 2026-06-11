@@ -23,7 +23,7 @@ export interface CostCenter { id: string; name: string; }
 export const PARTY_KIND_LABEL: { [k in Party['kind']]: string } = { customer: 'مشتری', supplier: 'تأمین‌کننده', both: 'هر دو' };
 // Official sales invoice (فاکتورِ فروش): header + line items; on save it posts the sale journal and is reprintable.
 export interface InvoiceItem { name: string; qty: number; price: number; }
-export interface Invoice { id: string; number: number; y: number; m: number; d: number; partyId?: string; buyerName?: string; items: InvoiceItem[]; discount: number; vatRate: number; paid: 'cash' | 'bank' | 'credit'; }
+export interface Invoice { id: string; number: number; kind?: 'sale' | 'purchase'; y: number; m: number; d: number; partyId?: string; buyerName?: string; items: InvoiceItem[]; discount: number; vatRate: number; paid: 'cash' | 'bank' | 'credit'; asInventory?: boolean; }
 export interface AccountingState { accounts: Account[]; entries: JournalEntry[]; vatRate?: number; parties?: Party[]; centers?: CostCenter[]; orgName?: string; invoices?: Invoice[]; invoiceSeq?: number; }
 
 const TYPE_LABEL: { [k in AccType]: string } = { asset: 'دارایی', liability: 'بدهی', equity: 'سرمایه', income: 'درآمد', expense: 'هزینه' };
@@ -219,12 +219,20 @@ export default function AccountingPanel({ state, onChange, onClose, confirm }: P
     const total = net + vat;
     if (total <= 0) { confirm('مبلغِ فاکتور صفر است.', () => {}); return null; }
     const channelName = inv.paid === 'bank' ? 'بانک' : 'صندوق (نقد)';
-    const spec: { name: string; type: AccType; debit?: number; credit?: number; party?: string }[] = [
-      { name: inv.paid === 'credit' ? 'حساب‌های دریافتنی' : channelName, type: 'asset', debit: total, party: inv.paid === 'credit' ? inv.partyId : undefined },
-      { name: 'فروش', type: 'income', credit: net },
-      ...(vat ? [{ name: 'مالیات بر ارزش افزوده (فروش)', type: 'liability' as AccType, credit: vat }] : []),
-    ];
-    const built = buildQuick({ y: inv.y, m: inv.m, d: inv.d }, `فاکتورِ فروش #${number}${inv.buyerName ? ` — ${inv.buyerName}` : ''}`, spec);
+    const isPurchase = inv.kind === 'purchase';
+    const kindLabel = isPurchase ? 'خرید' : 'فروش';
+    const spec: { name: string; type: AccType; debit?: number; credit?: number; party?: string }[] = isPurchase
+      ? [ // purchase: Debit inventory/expense + input VAT / Credit cash|bank|payable(supplier)
+          { name: inv.asInventory ? 'موجودیِ کالا' : 'هزینه‌های عمومی و اداری', type: inv.asInventory ? 'asset' : 'expense', debit: net },
+          ...(vat ? [{ name: 'مالیات بر ارزش افزوده (خرید)', type: 'asset' as AccType, debit: vat }] : []),
+          { name: inv.paid === 'credit' ? 'حساب‌های پرداختنی' : channelName, type: inv.paid === 'credit' ? 'liability' : 'asset', credit: total, party: inv.paid === 'credit' ? inv.partyId : undefined },
+        ]
+      : [ // sale: Debit cash|bank|receivable(customer) / Credit sales + output VAT
+          { name: inv.paid === 'credit' ? 'حساب‌های دریافتنی' : channelName, type: 'asset', debit: total, party: inv.paid === 'credit' ? inv.partyId : undefined },
+          { name: 'فروش', type: 'income', credit: net },
+          ...(vat ? [{ name: 'مالیات بر ارزش افزوده (فروش)', type: 'liability' as AccType, credit: vat }] : []),
+        ];
+    const built = buildQuick({ y: inv.y, m: inv.m, d: inv.d }, `فاکتورِ ${kindLabel} #${number}${inv.buyerName ? ` — ${inv.buyerName}` : ''}`, spec);
     if (!built) { confirm('سندِ فاکتور ساخته نشد.', () => {}); return null; }
     // single commit: posted journal + saved invoice + sequence
     onChange({ ...state, accounts: built.accounts, entries: [...entries, built.entry], invoices: [...invoices, full], invoiceSeq: number });
@@ -858,14 +866,17 @@ function InvoicePanel({ today, vatRate, orgName, parties, invoices, partyName, m
   monthNames: string[];
   saveInvoice: (inv: Omit<Invoice, 'id' | 'number'>) => Invoice | null;
 }) {
+  const [mode, setMode] = useState<'sale' | 'purchase'>('sale');
   const [partyId, setPartyId] = useState('');
   const [buyerName, setBuyerName] = useState('');
   const [items, setItems] = useState<{ name: string; qty: string; price: string }[]>([{ name: '', qty: '1', price: '' }]);
   const [discount, setDiscount] = useState('');
   const [vr, setVr] = useState(String(vatRate));
   const [paid, setPaid] = useState<'cash' | 'bank' | 'credit'>('cash');
+  const [asInv, setAsInv] = useState(true);                   // purchase: ثبت به‌عنوانِ موجودیِ کالا یا هزینه
   const [eY, setEY] = useState(String(today.year)); const [eM, setEM] = useState(String(today.month + 1)); const [eD, setED] = useState(String(today.day));
   const [shown, setShown] = useState<Invoice | null>(null);   // invoice to print (just-saved or reprint)
+  const counterpartyLabel = mode === 'purchase' ? 'فروشنده' : 'خریدار';
 
   const setItem = (i: number, patch: Partial<{ name: string; qty: string; price: string }>) => setItems((s) => s.map((x, k) => (k === i ? { ...x, ...patch } : x)));
   const subtotal = items.reduce((s, it) => s + (digits(it.qty) * digits(it.price)), 0);
@@ -878,7 +889,7 @@ function InvoicePanel({ today, vatRate, orgName, parties, invoices, partyName, m
     const cleanItems: InvoiceItem[] = items.filter((it) => it.name.trim() && digits(it.price) > 0).map((it) => ({ name: it.name.trim(), qty: digits(it.qty) || 1, price: digits(it.price) }));
     if (cleanItems.length === 0) return;
     const m0 = Math.min(11, Math.max(0, (digits(eM) || 1) - 1));
-    const inv = saveInvoice({ y: digits(eY) || today.year, m: m0, d: Math.min(31, Math.max(1, digits(eD) || 1)), partyId: partyId || undefined, buyerName: partyId ? partyName(partyId) : (buyerName.trim() || undefined), items: cleanItems, discount: disc, vatRate: digits(vr) || 0, paid });
+    const inv = saveInvoice({ kind: mode, y: digits(eY) || today.year, m: m0, d: Math.min(31, Math.max(1, digits(eD) || 1)), partyId: partyId || undefined, buyerName: partyId ? partyName(partyId) : (buyerName.trim() || undefined), items: cleanItems, discount: disc, vatRate: digits(vr) || 0, paid, asInventory: mode === 'purchase' ? asInv : undefined });
     if (inv) { setShown(inv); setItems([{ name: '', qty: '1', price: '' }]); setDiscount(''); setBuyerName(''); }
   };
 
@@ -887,14 +898,16 @@ function InvoicePanel({ today, vatRate, orgName, parties, invoices, partyName, m
   const printInvoice = (inv: Invoice) => {
     const sub = inv.items.reduce((s, it) => s + it.qty * it.price, 0);
     const n = Math.max(0, sub - inv.discount); const v = Math.round(n * inv.vatRate / 100); const t = n + v;
+    const kl = inv.kind === 'purchase' ? 'خرید' : 'فروش';
+    const cpl = inv.kind === 'purchase' ? 'فروشنده' : 'خریدار';
     return (
       <div className="acc-print acc-invoice">
-        <div className="acc-print-org">{orgName || 'فاکتورِ فروش'}</div>
+        <div className="acc-print-org">{orgName || `فاکتورِ ${kl}`}</div>
         <div className="acc-inv-head">
-          <span>فاکتورِ فروش شماره‌ی {inv.number}</span>
+          <span>فاکتورِ {kl} شماره‌ی {inv.number}</span>
           <span>تاریخ: {dateStr(inv)}</span>
         </div>
-        <div className="acc-inv-buyer">خریدار: {inv.buyerName || partyName(inv.partyId) || '—'} · پرداخت: {inv.paid === 'credit' ? 'نسیه' : inv.paid === 'bank' ? 'بانک' : 'نقدی'}</div>
+        <div className="acc-inv-buyer">{cpl}: {inv.buyerName || partyName(inv.partyId) || '—'} · پرداخت: {inv.paid === 'credit' ? 'نسیه' : inv.paid === 'bank' ? 'بانک' : 'نقدی'}</div>
         <table className="acc-table">
           <thead><tr><th>ردیف</th><th>شرح</th><th>تعداد</th><th>مبلغِ واحد</th><th>مبلغِ کل</th></tr></thead>
           <tbody>
@@ -912,15 +925,22 @@ function InvoicePanel({ today, vatRate, orgName, parties, invoices, partyName, m
   return (
     <>
       <div className="acc-inv-form acc-noprint">
+        <div className="acc-quick-seg">
+          <button type="button" className={`mini-toggle-btn ${mode === 'sale' ? 'active' : ''}`} onClick={() => setMode('sale')}>فاکتورِ فروش</button>
+          <button type="button" className={`mini-toggle-btn ${mode === 'purchase' ? 'active' : ''}`} onClick={() => setMode('purchase')}>فاکتورِ خرید</button>
+        </div>
         <div className="att-addgrid">
-          <div><label className="field-label">خریدار (طرف‌حساب)</label>
+          <div><label className="field-label">{counterpartyLabel} (طرف‌حساب)</label>
             <select className="tool-text-input" value={partyId} onChange={(e) => setPartyId(e.target.value)}>
               <option value="">— نام را دستی بنویسید —</option>
               {parties.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
             </select>
           </div>
-          {!partyId && <div><label className="field-label">نامِ خریدار</label><input className="tool-text-input" type="text" value={buyerName} onChange={(e) => setBuyerName(e.target.value)} /></div>}
+          {!partyId && <div><label className="field-label">نامِ {counterpartyLabel}</label><input className="tool-text-input" type="text" value={buyerName} onChange={(e) => setBuyerName(e.target.value)} /></div>}
         </div>
+        {mode === 'purchase' && (
+          <label className="fund-switch"><input type="checkbox" checked={asInv} onChange={(e) => setAsInv(e.target.checked)} /><span>ثبت به‌عنوانِ «موجودیِ کالا» (در غیرِ این‌صورت هزینه)</span></label>
+        )}
 
         <div className="loan-sched-head"><span>اقلامِ فاکتور</span></div>
         <div className="acc-inv-items">
@@ -958,8 +978,8 @@ function InvoicePanel({ today, vatRate, orgName, parties, invoices, partyName, m
           <div className="tool-result-row"><span>مالیات</span><strong>{fmt(vat)}</strong></div>
           <div className="tool-result-row closing"><span>قابلِ پرداخت</span><strong>{fmt(total)}</strong></div>
         </div>
-        <button className="loan-submit" disabled={total <= 0} onClick={submit}>🧾 ثبت و صدورِ فاکتور</button>
-        {paid === 'credit' && !partyId && <div className="tool-note">برای فروشِ نسیه بهتر است خریدار را به‌عنوانِ طرف‌حساب انتخاب کنید تا بدهی‌اش در «کارتِ حساب» ثبت شود.</div>}
+        <button className="loan-submit" disabled={total <= 0} onClick={submit}>🧾 ثبت و صدورِ فاکتورِ {mode === 'purchase' ? 'خرید' : 'فروش'}</button>
+        {paid === 'credit' && !partyId && <div className="tool-note">برای معامله‌ی نسیه بهتر است {counterpartyLabel} را به‌عنوانِ طرف‌حساب انتخاب کنید تا در «کارتِ حساب» ثبت شود.</div>}
       </div>
 
       {shown && (<>
@@ -976,7 +996,7 @@ function InvoicePanel({ today, vatRate, orgName, parties, invoices, partyName, m
               return (
                 <div key={inv.id} className="loan-detail-row">
                   <div className="ld-info">
-                    <span className="ld-amt">#{inv.number} {inv.buyerName || partyName(inv.partyId) || ''} <span className="fm-shares">{fmt(t)}</span></span>
+                    <span className="ld-amt">{inv.kind === 'purchase' ? 'خرید' : 'فروش'} #{inv.number} {inv.buyerName || partyName(inv.partyId) || ''} <span className="fm-shares">{fmt(t)}</span></span>
                     <span className="ld-date">{dateStr(inv)} · {inv.items.length} قلم · {inv.paid === 'credit' ? 'نسیه' : inv.paid === 'bank' ? 'بانک' : 'نقدی'}</span>
                   </div>
                   <button className="att-inlinebtn" onClick={() => setShown(inv)}>نمایش</button>

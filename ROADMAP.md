@@ -150,7 +150,9 @@ flowchart TD
       - ✓ Company name on printed financial statements (سربرگ)
       - ✓ Official sales invoice (فاکتورِ فروش): multi-item, discount + VAT, cash/bank/credit; auto-posts the
             sale journal (party-tagged for credit) and is printable + reprintable from the issued list
-      - ◻ next: link invoice to inventory stock-out, purchase invoice, statutory statement layout, multi-book
+      - ✓ Purchase invoice (فاکتورِ خرید): same UI/mode toggle; posts inventory-or-expense + input VAT, supplier
+            payable tagged on credit purchases
+      - ◻ next: link invoices to inventory stock levels, statutory statement layout, multi-book/period
 - ◻ Windows desktop installer (.exe) via Electron + Windows CI  (deferred — not yet)
 - ◻ Attendance device matching: face / fingerprint / RFID-card readers
       - phase 1: device biometric unlock (WebAuthn / Capacitor biometric) for worker self check-in
