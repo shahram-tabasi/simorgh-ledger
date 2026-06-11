@@ -203,7 +203,9 @@ flowchart TD
 - ◻ Personnel order / employment decree (حکم کارگزینی): printable per employee
 - ✓ Multi-company/multi-book (چندشرکت/چنددفتر): each company keeps its own snapshot of all data keys
       (`co:<id>` slots); create empty or clone-of-current, switch (auto-saves the current company first),
-      rename, delete — from the «شرکت‌ها / دفترها» screen. Backup/cloud sync cover the active company.
+      rename, delete — from the «شرکت‌ها / دفترها» screen.
+- ✓ Backup & cloud sync now carry ALL companies (live keys + companies list + every `co:*` slot), so a
+      file/cloud restore on another device brings back every company, not just the active one.
 - ◻ Statutory reports
 - ✓ In-app diagnostics log (`src/logger.ts` + `src/Diagnostics.tsx`): captures uncaught errors, promise
       rejections, console.error/warn and cloud-sync failures into a localStorage ring buffer; the «عیب‌یابی و

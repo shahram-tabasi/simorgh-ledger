@@ -153,10 +153,10 @@ function resolveAcc(accs: AccLite[], defName: { [k in AccType]: string }, t: Acc
   return a.id;
 }
 
-const APP_VERSION = '1.0.82';
+const APP_VERSION = '1.0.83';
 const CHANGELOG: string[] = [
-  'چندشرکت/چنددفتر: چند شرکت با داده‌ی کاملاً جدا بسازید و بینشان جابه‌جا شوید (مناسبِ حسابدارها)',
-  'ساختِ شرکتِ خالی یا کپی از شرکتِ فعلی؛ تغییرِ نام و حذف — از منوی چپ «شرکت‌ها / دفترها»',
+  'پشتیبان و همگام‌سازیِ ابری حالا همه‌ی شرکت‌ها را در بر می‌گیرد (نه فقط شرکتِ فعال)',
+  'بازیابی روی دستگاهِ دیگر، همه‌ی شرکت‌ها و داده‌هایشان را برمی‌گرداند',
 ];
 
 function App() {
@@ -696,17 +696,18 @@ function App() {
   const [acctPhone, setAcctPhone] = useState<string>('');
   const [acctPw, setAcctPw] = useState<string>('');
 
-  // ساختِ متنِ پشتیبان از داده‌های فعلی
-  const buildBackup = (): string => {
-    const payload: { [k: string]: string } = {};
-    BACKUP_KEYS.forEach((k) => { const v = localStorage.getItem(k); if (v !== null) payload[k] = v; });
-    return JSON.stringify({ app: 'simorgh-ledger', version: APP_VERSION, date: new Date().toISOString(), data: payload }, null, 2);
-  };
-  // اعمالِ داده‌ی پشتیبان روی حافظه و بازگشاییِ برنامه
+  // ساختِ متنِ پشتیبان از همه‌ی شرکت‌ها (داده‌ی فعلی + اسلاتِ هر شرکت)
+  const buildBackup = (): string =>
+    JSON.stringify({ app: 'simorgh-ledger', version: APP_VERSION, date: new Date().toISOString(), data: backupDataObject() }, null, 2);
+  // اعمالِ داده‌ی پشتیبان روی حافظه و بازگشاییِ برنامه (شاملِ همه‌ی شرکت‌ها)
   const applyBackup = (data: any) => {
     if (!data || typeof data !== 'object' || (!data.calendarData && !data.funds && !data.loans)) { notify('فایل پشتیبانِ معتبری نیست.'); return; }
     askConfirm('بازیابیِ پشتیبان جایگزینِ داده‌های فعلی می‌شود. ادامه می‌دهید؟', () => {
-      BACKUP_KEYS.forEach((k) => { if (typeof data[k] === 'string') localStorage.setItem(k, data[k]); });
+      // restore live keys + multi-company metadata + every company slot
+      Object.keys(data).forEach((k) => {
+        if (typeof data[k] !== 'string') return;
+        if (BACKUP_KEYS.includes(k) || k === 'companies' || k === 'activeCompanyId' || k.startsWith('co:')) localStorage.setItem(k, data[k]);
+      });
       notify('پشتیبان بازیابی شد. برنامه دوباره باز می‌شود…');
       setTimeout(() => window.location.reload(), 900);
     });
@@ -795,15 +796,25 @@ function App() {
   };
 
   // ---------- حساب کاربری و همگام‌سازی با سرورِ خودمان ----------
-  const backupDataObject = (): { [k: string]: string } => {
+  // Live data = only the current company's keys (used for per-company slot snapshots).
+  const liveDataObject = (): { [k: string]: string } => {
     const o: { [k: string]: string } = {};
     BACKUP_KEYS.forEach((k) => { const v = localStorage.getItem(k); if (v !== null) o[k] = v; });
+    return o;
+  };
+  // Full backup = the active company's live keys + ALL companies (metadata + every co:* slot), so a
+  // backup/cloud-sync carries every company, not just the active one.
+  const backupDataObject = (): { [k: string]: string } => {
+    if (activeCompanyId) localStorage.setItem('co:' + activeCompanyId, JSON.stringify(liveDataObject())); // refresh active slot
+    const o: { [k: string]: string } = {};
+    const keys = [...BACKUP_KEYS, 'companies', 'activeCompanyId', ...Object.keys(localStorage).filter((k) => k.startsWith('co:'))];
+    keys.forEach((k) => { const v = localStorage.getItem(k); if (v !== null) o[k] = v; });
     return o;
   };
 
   // ---------- multi-company (workspaces) ----------
   const slotKey = (id: string) => 'co:' + id;
-  const snapshotInto = (id: string) => localStorage.setItem(slotKey(id), JSON.stringify(backupDataObject()));
+  const snapshotInto = (id: string) => localStorage.setItem(slotKey(id), JSON.stringify(liveDataObject()));
   // Load a company's snapshot into the live data keys (keys missing in the slot are cleared).
   const loadSlot = (id: string) => {
     let o: { [k: string]: string } = {};
@@ -835,7 +846,7 @@ function App() {
     if (!name.trim()) return;
     if (activeCompanyId) snapshotInto(activeCompanyId);
     const id = 'c-' + Date.now();
-    localStorage.setItem(slotKey(id), clone ? JSON.stringify(backupDataObject()) : '{}');
+    localStorage.setItem(slotKey(id), clone ? JSON.stringify(liveDataObject()) : '{}');
     const list = [...companies, { id, name: name.trim() }];
     localStorage.setItem('companies', JSON.stringify(list)); localStorage.setItem('activeCompanyId', id);
     loadSlot(id);
@@ -1866,7 +1877,7 @@ function App() {
               <button className={`theme-btn ${theme === 'dark' ? 'active' : ''}`} onClick={() => setTheme('dark')}>🌙 تیره</button>
             </div>
 
-            <div className="drawer-foot">نسخه ۱۴۰۵ · ۱.۰.۸۲</div>
+            <div className="drawer-foot">نسخه ۱۴۰۵ · ۱.۰.۸۳</div>
           </aside>
         </div>
       )}
