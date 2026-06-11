@@ -151,6 +151,8 @@ flowchart TD
       - ✓ Cost centers (مرکز هزینه): tag expenses, per-center expense report
       - ✓ Opening entry (سندِ افتتاحیه): per-account starting balances, auto-plugged to سرمایه to balance
       - ✓ Company name on printed financial statements (سربرگ)
+      - ✓ Fiscal-period filter (دوره‌ی مالی): pick a year → trial balance / P&L / balance sheet / ledger use
+            only that year's entries; printed header shows the period + «مبالغ به تومان».
       - ✓ Official sales invoice (فاکتورِ فروش): multi-item, discount + VAT, cash/bank/credit; auto-posts the
             sale journal (party-tagged for credit) and is printable + reprintable from the issued list
       - ✓ Purchase invoice (فاکتورِ خرید): same UI/mode toggle; posts inventory-or-expense + input VAT, supplier

@@ -279,9 +279,15 @@ export default function AccountingPanel({ state, onChange, onClose, confirm, inv
   const [partyLedger, setPartyLedger] = useState<string>('');
 
   // ---------- محاسباتِ گزارش ----------
+  // Fiscal-period filter: when a year is selected, all statements (trial balance / P&L / balance sheet /
+  // ledger) use only that year's entries. With the fiscal-close + opening-entry workflow, each year's
+  // opening entry carries forward prior balances, so the statements stay correct per period.
+  const [repYear, setRepYear] = useState('');
+  const entryYears = [...new Set(entries.map((e) => e.y))].sort((a, b) => b - a);
+  const repEntries = repYear ? entries.filter((e) => String(e.y) === repYear) : entries;
   const sums = accounts.map((a) => {
     let d = 0, c = 0;
-    entries.forEach((e) => e.lines.forEach((l) => { if (l.accountId === a.id) { d += l.debit; c += l.credit; } }));
+    repEntries.forEach((e) => e.lines.forEach((l) => { if (l.accountId === a.id) { d += l.debit; c += l.credit; } }));
     return { a, debit: d, credit: c, bal: isDebitNormal(a.type) ? d - c : c - d };
   });
   const grandDebit = sums.reduce((s, x) => s + x.debit, 0);
@@ -338,7 +344,7 @@ export default function AccountingPanel({ state, onChange, onClose, confirm, inv
     const acc = accById(ledgerAcc); if (!acc) return [];
     const rowsOut: { e: JournalEntry; debit: number; credit: number; running: number }[] = [];
     let run = 0;
-    entries.slice().sort((a, b) => (a.y * 10000 + a.m * 100 + a.d) - (b.y * 10000 + b.m * 100 + b.d))
+    repEntries.slice().sort((a, b) => (a.y * 10000 + a.m * 100 + a.d) - (b.y * 10000 + b.m * 100 + b.d))
       .forEach((e) => e.lines.forEach((l) => {
         if (l.accountId === ledgerAcc) { run += isDebitNormal(acc.type) ? (l.debit - l.credit) : (l.credit - l.debit); rowsOut.push({ e, debit: l.debit, credit: l.credit, running: run }); }
       }));
@@ -444,8 +450,18 @@ export default function AccountingPanel({ state, onChange, onClose, confirm, inv
           {/* ---------------- دفتر و تراز ---------------- */}
           {tab === 'reports' && (
             <>
+              {entryYears.length > 0 && (
+                <>
+                  <label className="field-label acc-noprint">دوره‌ی مالی</label>
+                  <select className="tool-text-input acc-noprint" value={repYear} onChange={(e) => setRepYear(e.target.value)}>
+                    <option value="">همه‌ی دوره‌ها</option>
+                    {entryYears.map((y) => <option key={y} value={String(y)}>سالِ {y}</option>)}
+                  </select>
+                </>
+              )}
               <div className="acc-print">
                 {orgName && <div className="acc-print-org">{orgName}</div>}
+                <div className="acc-print-period">{repYear ? `دوره‌ی مالیِ سالِ ${repYear}` : 'همه‌ی دوره‌ها'} · مبالغ به تومان</div>
                 <div className="acc-print-title">تراز آزمایشی</div>
                 <table className="acc-table">
                   <thead><tr><th>حساب</th><th>بدهکار</th><th>بستانکار</th><th>مانده</th></tr></thead>

@@ -2360,6 +2360,8 @@ body.dark .acc-preview { background: #16203a; border-color: #33415e; }
 .acc-open-name { flex: 1; font-size: 12.5px; color: #33415e; }
 .acc-open-row .tool-text-input { width: 120px; }
 .acc-print-org { font-size: 16px; font-weight: 800; text-align: center; color: #1c2c4a; margin-bottom: 6px; }
+.acc-print-period { text-align: center; font-size: 12px; color: #6b7894; margin-bottom: 8px; }
+body.dark .acc-print-period { color: #9aa6bd; }
 .acc-inv-items { display: flex; flex-direction: column; gap: 6px; }
 .acc-inv-item { display: grid; grid-template-columns: 1fr 56px 110px 26px; gap: 6px; align-items: center; }
 .acc-inv-item-head { font-size: 11px; color: #8893a8; font-weight: 700; }

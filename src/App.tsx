@@ -151,10 +151,10 @@ function resolveAcc(accs: AccLite[], defName: { [k in AccType]: string }, t: Acc
   return a.id;
 }
 
-const APP_VERSION = '1.0.78';
+const APP_VERSION = '1.0.79';
 const CHANGELOG: string[] = [
-  'ادمین روشِ حضور و غیاب را انتخاب می‌کند (کارت/بارکد، بیومتریکِ گوشی، دستگاهِ شبکه‌ای) — در «قوانین»',
-  'دسترسیِ حفاظتی: ورودِ کاربر در هر ترمینال با کارت یا چهره/اثرانگشت و رسیدن به دسترسی‌های از‌پیش‌تعریف‌شده',
+  'فیلترِ دوره‌ی مالی در گزارش‌های حسابداری: انتخابِ سال → تراز، سود و زیان، ترازنامه و دفترِ معینِ همان دوره',
+  'سربرگِ صورت‌های مالی شاملِ نامِ دوره و «مبالغ به تومان»',
 ];
 
 function App() {
@@ -1803,7 +1803,7 @@ function App() {
               <button className={`theme-btn ${theme === 'dark' ? 'active' : ''}`} onClick={() => setTheme('dark')}>🌙 تیره</button>
             </div>
 
-            <div className="drawer-foot">نسخه ۱۴۰۵ · ۱.۰.۷۸</div>
+            <div className="drawer-foot">نسخه ۱۴۰۵ · ۱.۰.۷۹</div>
           </aside>
         </div>
       )}
