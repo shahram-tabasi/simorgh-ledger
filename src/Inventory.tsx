@@ -7,6 +7,7 @@ import { getToday, getMonthNames } from './calendar';
 import { downloadCsv } from './csv';
 import { code39Bars, cleanBarcode, genBarcode } from './barcode';
 import CameraScanner from './Scanner';
+import { sendScan } from './relay';
 import type { AccType } from './Accounting';
 
 const fmt = (n: number): string => Math.round(n || 0).toLocaleString('en-US');
@@ -27,6 +28,48 @@ export interface InvTxn { id: string; itemId: string; kind: 'in' | 'out'; qty: n
 export interface InventoryState { items: InvItem[]; txns: InvTxn[]; groups?: ItemGroup[]; warehouses?: Warehouse[]; sections?: Section[]; }
 
 export function emptyInventory(): InventoryState { return { items: [], txns: [] }; }
+
+// Remote-scanner sender (phone side): join the desktop's channel, scan continuously, push each code
+// to the relay so it appears on the desktop's invoice/inventory screen over the shared network.
+function RemoteScanSender({ onClose }: { onClose: () => void }) {
+  const [channel, setChannel] = useState('');
+  const [active, setActive] = useState(false);
+  const [sent, setSent] = useState(0);
+  const [last, setLast] = useState('');
+  const [fail, setFail] = useState(false);
+  const onScan = async (code: string) => {
+    const ok = await sendScan(channel, code);
+    if (ok) { setSent((n) => n + 1); setLast(code); setFail(false); }
+    else setFail(true);
+  };
+  return (
+    <div className="modal" onClick={onClose}>
+      <div className="modal-box tool-panel inv-remote" onClick={(e) => e.stopPropagation()}>
+        <div className="tool-panel-head"><span /><h3>📡 گوشی به‌عنوانِ اسکنرِ بی‌سیم</h3><button className="close-modal" onClick={onClose}>✕</button></div>
+        <div className="tool-panel-body">
+          {!active ? (
+            <>
+              <div className="fund-help">روی رایانه، در فاکتور دکمه‌ی «📡 اسکنرِ همراه» را بزنید و کدِ ۶رقمیِ نمایش‌داده‌شده را اینجا وارد کنید. هر دو دستگاه باید به اینترنت/سرور وصل باشند.</div>
+              <label className="field-label">کدِ اتصال (۶ رقم)</label>
+              <input className="tool-text-input" type="text" inputMode="numeric" dir="ltr" placeholder="مثلاً 123456" value={channel} onChange={(e) => setChannel(e.target.value.replace(/[^0-9]/g, '').slice(0, 6))} />
+              <button className="loan-submit" disabled={channel.length !== 6} onClick={() => setActive(true)}>شروعِ اسکن</button>
+            </>
+          ) : (
+            <>
+              <div className="tool-result">
+                <div className="tool-result-row"><span>کانال</span><strong dir="ltr">{channel}</strong></div>
+                <div className="tool-result-row"><span>ارسال‌شده</span><strong>{sent}</strong></div>
+                <div className="tool-result-row closing"><span>آخرین بارکد</span><strong dir="ltr">{last || '—'}</strong></div>
+              </div>
+              {fail && <div className="tool-note">ارسال ناموفق بود — اتصال به سرور را بررسی کنید.</div>}
+              <CameraScanner continuous onClose={() => setActive(false)} onResult={onScan} />
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 // Inline SVG barcode (Code39) — renders the filled bars; used on-screen and for printable labels.
 function Barcode({ value, height = 48 }: { value: string; height?: number }) {
@@ -147,6 +190,7 @@ export default function InventoryPanel({ state, onChange, onClose, confirm, onPo
   // ---------- barcode scanning (hardware wedge + phone camera) ----------
   const [scan, setScan] = useState('');
   const [showCam, setShowCam] = useState<null | 'move' | 'item'>(null);
+  const [showRemote, setShowRemote] = useState(false);  // phone-as-wireless-scanner mode
   const [scanMsg, setScanMsg] = useState('');           // استعلام: last scan result (name/stock/price)
   // Handle a scanned/typed barcode in the movement tab: select the matching item and show its info.
   const onScanMove = (code: string) => {
@@ -253,6 +297,7 @@ export default function InventoryPanel({ state, onChange, onClose, confirm, onPo
               <div className="att-addgrid">
                 <input className="tool-text-input" type="text" dir="ltr" autoFocus placeholder="بارکد را بخوانید یا تایپ کنید…" value={scan} onChange={(e) => setScan(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && scan.trim()) onScanMove(scan.trim()); }} />
                 <button className="acc-addline" onClick={() => setShowCam('move')}>📷 دوربین</button>
+                <button className="acc-addline" onClick={() => setShowRemote(true)}>📡 اسکنرِ بی‌سیم</button>
               </div>
               {scanMsg && <div className="inv-scanmsg">{scanMsg}</div>}
               {warehouses.length > 0 && (
@@ -519,6 +564,7 @@ export default function InventoryPanel({ state, onChange, onClose, confirm, onPo
           }}
         />
       )}
+      {showRemote && <RemoteScanSender onClose={() => setShowRemote(false)} />}
     </div>
   );
 }

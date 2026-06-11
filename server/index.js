@@ -9,6 +9,7 @@ import dotenv from 'dotenv';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
+import attachScanRelay from './scanRelay.js';
 
 dotenv.config();
 const { Pool } = pkg;
@@ -73,6 +74,9 @@ async function init() {
 const app = express();
 app.use(cors());                       // احراز با توکن است؛ کوکی نداریم، پس CORS باز اشکالی ندارد
 app.use(express.json({ limit: '8mb' }));
+
+// Remote-scanner relay (phone as wireless barcode scanner) — in-memory, no DB needed.
+attachScanRelay(app);
 
 const normPhone = (p) => String(p || '').replace(/[^0-9+]/g, '');
 const sign = (u) => jwt.sign({ id: u.id, phone: u.phone }, JWT_SECRET, { expiresIn: '180d' });

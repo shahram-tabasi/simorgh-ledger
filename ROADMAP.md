@@ -168,8 +168,12 @@ flowchart TD
       location, partner code (کد همکار), company standard code; ✓ scan to look up stock/price (استعلام) and
       pick items for in/out — via hardware keyboard-wedge scanner OR the **phone camera** (ZXing, works in the
       Android app WebView; CAMERA permission requested natively in MainActivity).
-      ◻ next: scan into the sales invoice; ◻ phone-as-remote-scanner over shared Wi-Fi via the SaaS server
-      (pair a phone IP to a PC session so a scan on the phone appears on the desktop) — needs the server relay.
+      ✓ Scan into the sales invoice (typed/hardware + phone camera via shared `src/Scanner.tsx`).
+      ✓ Phone-as-wireless-scanner relay: in-memory server relay (`server/scanRelay.js`, no DB) — desktop
+        shows a 6-digit channel («📡 اسکنرِ همراه» on the invoice) and polls `/api/scan/:ch`; the phone joins
+        the channel («📡 اسکنرِ بی‌سیم» in inventory), scans continuously (ZXing continuous mode with 2s
+        dedupe) and pushes each code; scans appear as invoice lines on the desktop. Channels expire after
+        10 idle minutes; pairing = knowing the displayed code.
 - ◻ Attendance device matching: face / fingerprint / RFID-card readers
       - phase 1: device biometric unlock (WebAuthn / Capacitor biometric) for worker self check-in
       - phase 2: integrate external hardware (e.g. ZKTeco) via the SaaS server (push logs to /api)

@@ -1,10 +1,11 @@
 // حسابداریِ دوطرفه (Double-entry) برای simorgh-ledger
 // دفترِ روزنامه (اسناد) + تراز آزمایشی + دفترِ معین + صورتِ سود و زیان + چاپ/PDF
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { getToday, getMonthNames } from './calendar';
 import { downloadCsv } from './csv';
 import { cleanBarcode } from './barcode';
 import CameraScanner from './Scanner';
+import { genChannel, pollScans } from './relay';
 
 const fmt = (n: number): string => Math.round(n || 0).toLocaleString('en-US');
 const digits = (s: string): number => parseInt((s || '').replace(/[^0-9]/g, ''), 10) || 0;
@@ -900,6 +901,20 @@ function InvoicePanel({ today, vatRate, orgName, parties, invoices, partyName, m
   const [shown, setShown] = useState<Invoice | null>(null);   // invoice to print (just-saved or reprint)
   const [scan, setScan] = useState('');
   const [showCam, setShowCam] = useState(false);              // phone-camera scanner overlay
+  // Remote-scanner receive mode: show a 6-digit channel, poll the relay, feed scans into the invoice.
+  const [relayCh, setRelayCh] = useState<string | null>(null);
+  const relayCursor = useRef(0);
+  const onScanRef = useRef<(c: string) => void>(() => {});
+  useEffect(() => {
+    if (!relayCh) return;
+    relayCursor.current = 0;
+    const t = setInterval(async () => {
+      const r = await pollScans(relayCh, relayCursor.current);
+      relayCursor.current = r.last;
+      r.scans.forEach((s) => onScanRef.current(s.code));
+    }, 1500);
+    return () => clearInterval(t);
+  }, [relayCh]);
   const counterpartyLabel = mode === 'purchase' ? 'فروشنده' : 'خریدار';
 
   const setItem = (i: number, patch: Partial<Row>) => setItems((s) => s.map((x, k) => (k === i ? { ...x, ...patch } : x)));
@@ -924,6 +939,7 @@ function InvoicePanel({ today, vatRate, orgName, parties, invoices, partyName, m
       return [...s, line];
     });
   };
+  onScanRef.current = onScan;   // keep the relay poller feeding the latest scan handler
 
   const submit = () => {
     const cleanItems: InvoiceItem[] = items.filter((it) => it.name.trim() && digits(it.price) > 0).map((it) => ({ name: it.name.trim(), qty: digits(it.qty) || 1, price: digits(it.price), itemId: it.itemId, cost: it.cost }));
@@ -988,7 +1004,15 @@ function InvoicePanel({ today, vatRate, orgName, parties, invoices, partyName, m
             <div className="att-addgrid">
               <input className="tool-text-input" type="text" dir="ltr" placeholder="بارکدِ کالا را بخوانید…" value={scan} onChange={(e) => setScan(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && scan.trim()) onScan(scan.trim()); }} />
               <button className="acc-addline" onClick={() => setShowCam(true)}>📷 دوربین</button>
+              <button className={`acc-addline ${relayCh ? 'acc-relay-on' : ''}`} onClick={() => setRelayCh(relayCh ? null : genChannel())}>📡 اسکنرِ همراه</button>
             </div>
+            {relayCh && (
+              <div className="acc-relay-box">
+                <span>کدِ اتصال برای گوشی:</span>
+                <b dir="ltr" className="acc-relay-code">{relayCh}</b>
+                <span className="acc-relay-hint">در گوشی: انبار ← «📡 اسکنرِ بی‌سیم» ← این کد را وارد کنید. هر اسکن همین‌جا به فاکتور اضافه می‌شود.</span>
+              </div>
+            )}
             {mode === 'sale' && <div className="tool-note">با ثبتِ فاکتورِ فروش، موجودیِ این کالاها از انبار کم و بهای تمام‌شده در حسابداری ثبت می‌شود.</div>}
           </>
         )}
