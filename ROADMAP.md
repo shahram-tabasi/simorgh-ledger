@@ -156,6 +156,9 @@ flowchart TD
 - ◻ Windows desktop installer (.exe) via Electron + Windows CI  (deferred — not yet)
 - ✓ Inventory product groups (گروه کالا): definable hierarchical category tree (e.g. الکتریکال ›
       اندازه‌گیری/حفاظت/مصرفی/اداری), assigned on item entry; group filter + column in the stock report & CSV.
+- ✓ Multi-warehouse (چند انبار) + sections (بخش): define warehouses and their sections; each movement is
+      tagged with a warehouse (and optional section); stock is tracked per warehouse; report warehouse filter
+      and per-warehouse stock shown in the barcode scan inquiry.
 - ◑ Inventory barcodes: ✓ auto-generate + print Code39 label (pure JS, offline) per item; ✓ warehouse
       location, partner code (کد همکار), company standard code; ✓ scan to look up stock/price (استعلام) and
       pick items for in/out — via hardware keyboard-wedge scanner OR the **phone camera** (ZXing, works in the

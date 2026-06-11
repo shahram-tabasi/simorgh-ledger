@@ -17,8 +17,12 @@ const withSep = (s: string): string => { const d = digits(s); return d ? d.toLoc
 export interface InvItem { id: string; name: string; code?: string; unit?: string; buy?: number; sell?: number; barcode?: string; location?: string; partnerCode?: string; stdCode?: string; groupId?: string; }
 // Hierarchical product group (گروه کالا), e.g. الکتریکال › اندازه‌گیری. `parent` empty = top level.
 export interface ItemGroup { id: string; name: string; parent?: string; }
-export interface InvTxn { id: string; itemId: string; kind: 'in' | 'out'; qty: number; price: number; y: number; m: number; d: number; }
-export interface InventoryState { items: InvItem[]; txns: InvTxn[]; groups?: ItemGroup[]; }
+// A company/shop may have several warehouses (انبار), each split into sections (بخش).
+export interface Warehouse { id: string; name: string; }
+export interface Section { id: string; name: string; warehouseId: string; }
+// Each movement records which warehouse (and optional section) it happened in, so stock is per-warehouse.
+export interface InvTxn { id: string; itemId: string; kind: 'in' | 'out'; qty: number; price: number; y: number; m: number; d: number; warehouseId?: string; sectionId?: string; }
+export interface InventoryState { items: InvItem[]; txns: InvTxn[]; groups?: ItemGroup[]; warehouses?: Warehouse[]; sections?: Section[]; }
 
 export function emptyInventory(): InventoryState { return { items: [], txns: [] }; }
 
@@ -87,7 +91,25 @@ export default function InventoryPanel({ state, onChange, onClose, confirm, onPo
   const [tab, setTab] = useState<Tab>(items.length ? 'move' : 'items');
 
   const itemById = (id: string) => items.find((i) => i.id === id);
-  const stockOf = (id: string) => txns.reduce((s, t) => s + (t.itemId === id ? (t.kind === 'in' ? t.qty : -t.qty) : 0), 0);
+  // Stock for an item; pass a warehouse id to restrict to that warehouse (undefined = all warehouses).
+  // Legacy transactions without a warehouseId are treated as the unspecified ('') warehouse.
+  const stockOf = (id: string, wh?: string) => txns.reduce((s, t) => {
+    if (t.itemId !== id) return s;
+    if (wh !== undefined && (t.warehouseId || '') !== (wh || '')) return s;
+    return s + (t.kind === 'in' ? t.qty : -t.qty);
+  }, 0);
+
+  // ---------- warehouses (انبار) & sections (بخش) ----------
+  const warehouses = state.warehouses || [];
+  const sections = state.sections || [];
+  const whName = (id?: string) => warehouses.find((w) => w.id === id)?.name || (id ? id : 'انبارِ پیش‌فرض');
+  const sectionsOf = (whId: string) => sections.filter((s) => s.warehouseId === whId);
+  const [wName, setWName] = useState(''); const [secName, setSecName] = useState(''); const [secWh, setSecWh] = useState('');
+  const addWarehouse = () => { if (!wName.trim()) return; onChange({ ...state, warehouses: [...warehouses, { id: `wh-${Date.now()}`, name: wName.trim() }] }); setWName(''); };
+  const addSection = () => { if (!secName.trim() || !secWh) return; onChange({ ...state, sections: [...sections, { id: `sec-${Date.now()}`, name: secName.trim(), warehouseId: secWh }] }); setSecName(''); };
+  const whUsed = (id: string) => txns.some((t) => t.warehouseId === id) || sections.some((s) => s.warehouseId === id);
+  const delWarehouse = (id: string) => { if (whUsed(id)) { confirm('این انبار بخش یا گردش دارد و حذف نمی‌شود.', () => {}); return; } confirm('این انبار حذف شود؟', () => onChange({ ...state, warehouses: warehouses.filter((w) => w.id !== id) })); };
+  const delSection = (id: string) => { if (txns.some((t) => t.sectionId === id)) { confirm('این بخش گردش دارد و حذف نمی‌شود.', () => {}); return; } confirm('این بخش حذف شود؟', () => onChange({ ...state, sections: sections.filter((s) => s.id !== id) })); };
 
   const itemByBarcode = (bc: string) => { const c = cleanBarcode(bc); return items.find((i) => cleanBarcode(i.barcode || '') === c || cleanBarcode(i.code || '') === c || cleanBarcode(i.stdCode || '') === c); };
 
@@ -116,8 +138,9 @@ export default function InventoryPanel({ state, onChange, onClose, confirm, onPo
     if (groupHasChildren(id) || items.some((i) => i.groupId === id)) { confirm('این گروه زیرمجموعه یا کالا دارد و حذف نمی‌شود.', () => {}); return; }
     confirm('این گروهِ کالا حذف شود؟', () => onChange({ ...state, groups: groups.filter((g) => g.id !== id) }));
   };
-  // report filter by group (includes descendants)
+  // report filters: by group (includes descendants) and by warehouse
   const [filterGroup, setFilterGroup] = useState('');
+  const [filterWh, setFilterWh] = useState('');
   const isDescendant = (gid: string | undefined, ancestor: string): boolean => { let cur = gid; const seen = new Set<string>(); while (cur && !seen.has(cur)) { if (cur === ancestor) return true; seen.add(cur); cur = groupById(cur)?.parent; } return false; };
   const inFilter = (it: InvItem) => !filterGroup || isDescendant(it.groupId, filterGroup);
 
@@ -144,6 +167,8 @@ export default function InventoryPanel({ state, onChange, onClose, confirm, onPo
   const [mItem, setMItem] = useState<string>(items[0]?.id || '');
   const [mKind, setMKind] = useState<'in' | 'out'>('in');
   const [mQty, setMQty] = useState(''); const [mPrice, setMPrice] = useState('');
+  const [mWh, setMWh] = useState<string>(warehouses[0]?.id || '');   // انبارِ گردش
+  const [mSec, setMSec] = useState<string>('');                       // بخشِ گردش (اختیاری)
   // ---------- barcode scanning (hardware wedge + phone camera) ----------
   const [scan, setScan] = useState('');
   const [showCam, setShowCam] = useState<null | 'move' | 'item'>(null);
@@ -153,7 +178,8 @@ export default function InventoryPanel({ state, onChange, onClose, confirm, onPo
     const it = itemByBarcode(code); setScan('');
     if (!it) { setScanMsg(`بارکدِ «${code}» در انبار نیست. در تبِ «کالاها» ثبتش کنید.`); return; }
     setMItem(it.id);
-    setScanMsg(`${it.name} · موجودی: ${stockOf(it.id)} ${it.unit || ''} · فروش: ${fmt(it.sell || 0)} · جایگاه: ${it.location || '—'}`);
+    const whTxt = warehouses.length ? ` · در ${whName(mWh)}: ${stockOf(it.id, mWh)}` : '';
+    setScanMsg(`${it.name} · موجودیِ کل: ${stockOf(it.id)} ${it.unit || ''}${whTxt} · فروش: ${fmt(it.sell || 0)} · جایگاه: ${it.location || '—'}`);
   };
 
   // Build the accounting spec for a transaction (purchase or sale).
@@ -177,8 +203,9 @@ export default function InventoryPanel({ state, onChange, onClose, confirm, onPo
     const item = itemById(mItem); if (!item) return;
     const qty = digits(mQty); const price = digits(mPrice) || (mKind === 'in' ? item.buy : item.sell) || 0;
     if (qty <= 0) return;
-    if (mKind === 'out' && qty > stockOf(mItem)) { confirm(`موجودیِ کافی نیست (موجودی: ${stockOf(mItem)}).`, () => {}); return; }
-    const t: InvTxn = { id: `tx-${Date.now()}`, itemId: mItem, kind: mKind, qty, price, y: today.year, m: today.month, d: today.day };
+    // Stock check is per the selected warehouse.
+    if (mKind === 'out' && qty > stockOf(mItem, mWh)) { confirm(`موجودیِ کافی نیست (موجودیِ ${whName(mWh)}: ${stockOf(mItem, mWh)}).`, () => {}); return; }
+    const t: InvTxn = { id: `tx-${Date.now()}`, itemId: mItem, kind: mKind, qty, price, y: today.year, m: today.month, d: today.day, warehouseId: mWh || undefined, sectionId: mSec || undefined };
     onChange({ ...state, items, txns: [...txns, t] });
     // Auto-post to accounting (kept in sync via ref = inv-<txnId>).
     if (onPostJournal) onPostJournal(`inv-${t.id}`, { y: t.y, m: t.m, d: t.d }, `${mKind === 'in' ? 'خریدِ' : 'فروشِ'} ${item.name} (${qty} ${item.unit || ''})`, journalSpec(t));
@@ -224,9 +251,24 @@ export default function InventoryPanel({ state, onChange, onClose, confirm, onPo
                 <button className="acc-addline" onClick={() => setShowCam('move')}>📷 دوربین</button>
               </div>
               {scanMsg && <div className="inv-scanmsg">{scanMsg}</div>}
+              {warehouses.length > 0 && (
+                <div className="att-addgrid">
+                  <div><label className="field-label">انبار</label>
+                    <select className="tool-text-input" value={mWh} onChange={(e) => { setMWh(e.target.value); setMSec(''); }}>
+                      {warehouses.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
+                    </select>
+                  </div>
+                  <div><label className="field-label">بخش (اختیاری)</label>
+                    <select className="tool-text-input" value={mSec} onChange={(e) => setMSec(e.target.value)}>
+                      <option value="">— بدون بخش —</option>
+                      {sectionsOf(mWh).map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                    </select>
+                  </div>
+                </div>
+              )}
               <label className="field-label">کالا</label>
               <select className="tool-text-input" value={mItem} onChange={(e) => setMItem(e.target.value)}>
-                {items.map((i) => <option key={i.id} value={i.id}>{i.name} (موجودی: {stockOf(i.id)})</option>)}
+                {items.map((i) => <option key={i.id} value={i.id}>{i.name} (موجودی: {stockOf(i.id, warehouses.length ? mWh : undefined)})</option>)}
               </select>
               <div className="att-addgrid">
                 <input className="tool-text-input" type="text" inputMode="numeric" dir="ltr" placeholder="تعداد" value={mQty} onChange={(e) => setMQty(e.target.value.replace(/[^0-9]/g, ''))} />
@@ -241,7 +283,7 @@ export default function InventoryPanel({ state, onChange, onClose, confirm, onPo
                   <div key={t.id} className="loan-detail-row">
                     <div className="ld-info">
                       <span className="ld-amt">{it?.name || '—'} <span className="fm-shares">{t.kind === 'in' ? '+' : '−'}{t.qty}</span></span>
-                      <span className="ld-date">{dstr(t)} · {t.kind === 'in' ? 'خرید' : 'فروش'} · {fmt(t.qty * t.price)} تومان</span>
+                      <span className="ld-date">{dstr(t)} · {t.kind === 'in' ? 'خرید' : 'فروش'} · {fmt(t.qty * t.price)} تومان{t.warehouseId ? ` · ${whName(t.warehouseId)}` : ''}{t.sectionId ? ` (${sections.find((s) => s.id === t.sectionId)?.name || ''})` : ''}</span>
                     </div>
                     <button className="fm-notify" title="حذف" onClick={() => delTxn(t)}>🗑</button>
                   </div>
@@ -252,27 +294,41 @@ export default function InventoryPanel({ state, onChange, onClose, confirm, onPo
 
           {/* ---------------- stock report ---------------- */}
           {tab === 'report' && (() => {
+            const wh = filterWh || undefined;                     // undefined = all warehouses
+            const qOf = (id: string) => stockOf(id, wh);
             const shown = items.filter(inFilter);
-            const shownValue = shown.reduce((s, i) => s + stockOf(i.id) * (i.buy || 0), 0);
+            const shownValue = shown.reduce((s, i) => s + qOf(i.id) * (i.buy || 0), 0);
+            const whLabel = filterWh ? ` — ${whName(filterWh)}` : '';
             return (
             <>
-              {groups.length > 0 && (
-                <>
-                  <label className="field-label acc-noprint">فیلترِ گروهِ کالا</label>
-                  <select className="tool-text-input acc-noprint" value={filterGroup} onChange={(e) => setFilterGroup(e.target.value)}>
-                    <option value="">همه‌ی گروه‌ها</option>
-                    {groupTree.map((g) => <option key={g.id} value={g.id}>{groupPath(g.id)}</option>)}
-                  </select>
-                </>
+              {(groups.length > 0 || warehouses.length > 0) && (
+                <div className="att-addgrid acc-noprint">
+                  {warehouses.length > 0 && (
+                    <div><label className="field-label">انبار</label>
+                      <select className="tool-text-input" value={filterWh} onChange={(e) => setFilterWh(e.target.value)}>
+                        <option value="">همه‌ی انبارها</option>
+                        {warehouses.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
+                      </select>
+                    </div>
+                  )}
+                  {groups.length > 0 && (
+                    <div><label className="field-label">گروهِ کالا</label>
+                      <select className="tool-text-input" value={filterGroup} onChange={(e) => setFilterGroup(e.target.value)}>
+                        <option value="">همه‌ی گروه‌ها</option>
+                        {groupTree.map((g) => <option key={g.id} value={g.id}>{groupPath(g.id)}</option>)}
+                      </select>
+                    </div>
+                  )}
+                </div>
               )}
               <div className="acc-print">
-                <div className="acc-print-title">موجودیِ انبار{filterGroup ? ` — ${groupPath(filterGroup)}` : ''}</div>
+                <div className="acc-print-title">موجودیِ انبار{whLabel}{filterGroup ? ` — ${groupPath(filterGroup)}` : ''}</div>
                 <table className="acc-table">
                   <thead><tr><th>کالا</th><th>گروه</th><th>موجودی</th><th>قیمتِ خرید</th><th>ارزش</th></tr></thead>
                   <tbody>
                     {shown.length === 0 ? (
                       <tr><td colSpan={5} style={{ textAlign: 'center', opacity: .6 }}>کالایی نیست</td></tr>
-                    ) : shown.map((i) => { const q = stockOf(i.id); return (
+                    ) : shown.map((i) => { const q = qOf(i.id); return (
                       <tr key={i.id}><td>{i.name}{i.unit ? ` (${i.unit})` : ''}</td><td>{groupPath(i.groupId) || '—'}</td><td>{q}</td><td>{fmt(i.buy || 0)}</td><td>{fmt(q * (i.buy || 0))}</td></tr>
                     ); })}
                     <tr className="acc-total"><td>ارزشِ کل</td><td colSpan={3}></td><td>{fmt(shownValue)}</td></tr>
@@ -280,7 +336,7 @@ export default function InventoryPanel({ state, onChange, onClose, confirm, onPo
                 </table>
               </div>
               <button className="loan-submit acc-noprint" onClick={() => window.print()}>🖨️ چاپ / ذخیره‌ی PDF</button>
-              <button className="acc-addline acc-noprint" onClick={() => downloadCsv('inventory.csv', [['کالا', 'گروه', 'واحد', 'موجودی', 'قیمتِ خرید', 'ارزش'], ...shown.map((i) => [i.name, groupPath(i.groupId), i.unit || '', stockOf(i.id), i.buy || 0, stockOf(i.id) * (i.buy || 0)]), ['جمع', '', '', '', '', shownValue]])}>📤 خروجیِ اکسل (CSV)</button>
+              <button className="acc-addline acc-noprint" onClick={() => downloadCsv('inventory.csv', [['کالا', 'گروه', 'انبار', 'واحد', 'موجودی', 'قیمتِ خرید', 'ارزش'], ...shown.map((i) => [i.name, groupPath(i.groupId), filterWh ? whName(filterWh) : 'همه', i.unit || '', qOf(i.id), i.buy || 0, qOf(i.id) * (i.buy || 0)]), ['جمع', '', '', '', '', '', shownValue]])}>📤 خروجیِ اکسل (CSV)</button>
             </>
             );
           })()}
@@ -337,6 +393,40 @@ export default function InventoryPanel({ state, onChange, onClose, confirm, onPo
                     </div>
                     <button className="att-inlinebtn" title="چاپِ بارکد" onClick={() => setLabelItem(i)}>🏷</button>
                     <button className="fm-notify" title="حذف" onClick={() => delItem(i.id)}>🗑</button>
+                  </div>
+                ))}
+              </div>
+
+              {/* warehouses (انبار) & sections (بخش) management */}
+              <div className="loan-sched-head"><span>انبارها و بخش‌ها</span><span className="loan-sched-hint">{warehouses.length} انبار</span></div>
+              <div className="tool-note">یک شرکت/مغازه می‌تواند چند انبار داشته باشد و هر انبار چند بخش. هنگامِ ورود/خروجِ کالا، انبار (و بخش) انتخاب می‌شود و موجودی برای هر انبار جدا نگه‌داری می‌شود.</div>
+              <div className="att-addgrid">
+                <input className="tool-text-input" type="text" placeholder="نامِ انبار (مثلاً انبارِ مرکزی)" value={wName} onChange={(e) => setWName(e.target.value)} />
+                <button className="loan-submit" disabled={!wName.trim()} onClick={addWarehouse}>افزودنِ انبار</button>
+              </div>
+              {warehouses.length > 0 && (
+                <div className="att-addgrid">
+                  <input className="tool-text-input" type="text" placeholder="نامِ بخش (مثلاً قفسه‌ی A)" value={secName} onChange={(e) => setSecName(e.target.value)} />
+                  <select className="tool-text-input" value={secWh} onChange={(e) => setSecWh(e.target.value)}>
+                    <option value="">— انبارِ بخش —</option>
+                    {warehouses.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
+                  </select>
+                  <button className="loan-submit" disabled={!secName.trim() || !secWh} onClick={addSection}>افزودنِ بخش</button>
+                </div>
+              )}
+              <div className="loan-detail-list">
+                {warehouses.map((w) => (
+                  <div key={w.id}>
+                    <div className="loan-detail-row">
+                      <div className="ld-info"><span className="ld-amt">🏬 {w.name}</span><span className="ld-date">{sectionsOf(w.id).length} بخش</span></div>
+                      {!whUsed(w.id) && <button className="fm-notify" title="حذف" onClick={() => delWarehouse(w.id)}>🗑</button>}
+                    </div>
+                    {sectionsOf(w.id).map((s) => (
+                      <div key={s.id} className="loan-detail-row" style={{ paddingInlineStart: 24 }}>
+                        <div className="ld-info"><span className="ld-amt">— {s.name}</span></div>
+                        <button className="fm-notify" title="حذف" onClick={() => delSection(s.id)}>🗑</button>
+                      </div>
+                    ))}
                   </div>
                 ))}
               </div>

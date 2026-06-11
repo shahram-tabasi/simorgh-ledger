@@ -151,10 +151,10 @@ function resolveAcc(accs: AccLite[], defName: { [k in AccType]: string }, t: Acc
   return a.id;
 }
 
-const APP_VERSION = '1.0.67';
+const APP_VERSION = '1.0.68';
 const CHANGELOG: string[] = [
-  'گروهِ کالا در انبار: دسته‌بندیِ سلسله‌مراتبی (مثلاً الکتریکال › اندازه‌گیری/حفاظت/مصرفی/اداری) — قابلِ تعریف',
-  'انتخابِ گروه هنگامِ ورودِ کالا + فیلتر و نمایشِ گروه در گزارشِ موجودی و خروجیِ اکسل',
+  'چند انبار و چند بخش: تعریفِ انبارها و بخش‌های هر انبار؛ موجودی برای هر انبار جدا نگه‌داری می‌شود',
+  'انتخابِ انبار/بخش هنگامِ ورود/خروج + فیلترِ انبار در گزارشِ موجودی و استعلامِ موجودیِ هر انبار با اسکن',
 ];
 
 function App() {
@@ -1795,7 +1795,7 @@ function App() {
               <button className={`theme-btn ${theme === 'dark' ? 'active' : ''}`} onClick={() => setTheme('dark')}>🌙 تیره</button>
             </div>
 
-            <div className="drawer-foot">نسخه ۱۴۰۵ · ۱.۰.۶۷</div>
+            <div className="drawer-foot">نسخه ۱۴۰۵ · ۱.۰.۶۸</div>
           </aside>
         </div>
       )}
