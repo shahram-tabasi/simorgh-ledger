@@ -1,0 +1,16 @@
+{
+  "name": "اسکنرِ سیمرغ‌شاپ",
+  "short_name": "اسکنرِ سیمرغ",
+  "description": "گوشی را به بارکدخوانِ بی‌سیمِ صندوقِ فروشگاه تبدیل می‌کند.",
+  "lang": "fa",
+  "dir": "rtl",
+  "start_url": "./?scan",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0f1830",
+  "theme_color": "#13213f",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
