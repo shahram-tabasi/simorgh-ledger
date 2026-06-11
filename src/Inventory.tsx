@@ -3,6 +3,7 @@
 // items + stock in/out, live stock & value, printable report, and AUTOMATIC accounting:
 // every purchase/sale auto-posts a balanced journal entry (and is removed if the txn is deleted).
 import { useState, useEffect, useRef } from 'react';
+import { BrowserMultiFormatReader, type IScannerControls } from '@zxing/browser';
 import { getToday, getMonthNames } from './calendar';
 import { downloadCsv } from './csv';
 import { code39Bars, cleanBarcode, genBarcode } from './barcode';
@@ -31,30 +32,27 @@ function Barcode({ value, height = 48 }: { value: string; height?: number }) {
   );
 }
 
-// Camera-based barcode scanner (turns the phone into a scanner). Uses the native BarcodeDetector when
-// available (Android Chrome / Capacitor WebView); otherwise tells the user to use a hardware scanner.
+// Camera-based barcode scanner (turns the phone into a scanner). Uses ZXing, which decodes 1D/2D barcodes
+// from the camera in pure JS — so it works in the Android app WebView too, not only browsers with
+// BarcodeDetector. The mobile app requests CAMERA permission natively (see MainActivity).
 function CameraScanner({ onResult, onClose }: { onResult: (code: string) => void; onClose: () => void }) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const cbRef = useRef(onResult); cbRef.current = onResult;
   const [err, setErr] = useState('');
   useEffect(() => {
-    let stream: MediaStream | null = null; let raf = 0; let stopped = false;
-    const AnyWin = window as unknown as { BarcodeDetector?: new (o?: { formats?: string[] }) => { detect: (s: CanvasImageSource) => Promise<{ rawValue: string }[]> } };
+    const reader = new BrowserMultiFormatReader();
+    let controls: IScannerControls | null = null; let done = false;
     (async () => {
-      if (!AnyWin.BarcodeDetector) { setErr('این دستگاه از اسکنِ دوربینی پشتیبانی نمی‌کند. از اسکنرِ سخت‌افزاری (مثلِ صفحه‌کلید) یا واردکردنِ دستی استفاده کنید.'); return; }
       try {
-        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
-        if (videoRef.current) { videoRef.current.srcObject = stream; await videoRef.current.play(); }
-        const detector = new AnyWin.BarcodeDetector({ formats: ['code_39', 'code_128', 'ean_13', 'ean_8', 'qr_code', 'upc_a'] });
-        const tick = async () => {
-          if (stopped || !videoRef.current) return;
-          try { const codes = await detector.detect(videoRef.current); if (codes[0]?.rawValue) { onResult(codes[0].rawValue.trim()); return; } } catch { /* keep trying */ }
-          raf = requestAnimationFrame(tick);
-        };
-        raf = requestAnimationFrame(tick);
-      } catch { setErr('دسترسی به دوربین ممکن نشد. اجازه‌ی دوربین را بدهید یا از اسکنرِ سخت‌افزاری استفاده کنید.'); }
+        controls = await reader.decodeFromVideoDevice(undefined, videoRef.current!, (result, _e, ctrls) => {
+          if (result && !done) { done = true; ctrls.stop(); cbRef.current(result.getText().trim()); }
+        });
+      } catch {
+        setErr('دسترسی به دوربین ممکن نشد. اجازه‌ی دوربین را بدهید، یا از اسکنرِ سخت‌افزاری/واردکردنِ دستی استفاده کنید.');
+      }
     })();
-    return () => { stopped = true; cancelAnimationFrame(raf); if (stream) stream.getTracks().forEach((t) => t.stop()); };
-  }, [onResult]);
+    return () => { done = true; try { controls?.stop(); } catch { /* ignore */ } };
+  }, []);
   return (
     <div className="modal" onClick={onClose}>
       <div className="modal-box inv-cam" onClick={(e) => e.stopPropagation()}>

@@ -151,10 +151,10 @@ function resolveAcc(accs: AccLite[], defName: { [k in AccType]: string }, t: Acc
   return a.id;
 }
 
-const APP_VERSION = '1.0.65';
+const APP_VERSION = '1.0.66';
 const CHANGELOG: string[] = [
-  'بارکدِ انبار: ساخت و چاپِ خودکارِ بارکد برای هر کالا (لیبل قابلِ چاپ) + جایگاه/کدِ همکار/کدِ استانداردِ شرکت',
-  'بارکدخوان: اسکنرِ سخت‌افزاری (صفحه‌کلیدی) و اسکن با دوربینِ گوشی — استعلامِ موجودی/قیمت و انتخابِ کالا برای ورود/خروج',
+  'اسکنرِ دوربین در اپِ موبایل: با موتورِ ZXing روی WebViewِ اندروید هم کار می‌کند (نه فقط مرورگر)',
+  'دسترسیِ دوربین برای نسخه‌ی اندروید اضافه شد تا گوشی به‌جای بارکدخوانِ سخت‌افزاری استفاده شود',
 ];
 
 function App() {
@@ -1795,7 +1795,7 @@ function App() {
               <button className={`theme-btn ${theme === 'dark' ? 'active' : ''}`} onClick={() => setTheme('dark')}>🌙 تیره</button>
             </div>
 
-            <div className="drawer-foot">نسخه ۱۴۰۵ · ۱.۰.۶۵</div>
+            <div className="drawer-foot">نسخه ۱۴۰۵ · ۱.۰.۶۶</div>
           </aside>
         </div>
       )}

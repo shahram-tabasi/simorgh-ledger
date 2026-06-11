@@ -156,7 +156,8 @@ flowchart TD
 - ◻ Windows desktop installer (.exe) via Electron + Windows CI  (deferred — not yet)
 - ◑ Inventory barcodes: ✓ auto-generate + print Code39 label (pure JS, offline) per item; ✓ warehouse
       location, partner code (کد همکار), company standard code; ✓ scan to look up stock/price (استعلام) and
-      pick items for in/out — via hardware keyboard-wedge scanner OR the **phone camera** (BarcodeDetector).
+      pick items for in/out — via hardware keyboard-wedge scanner OR the **phone camera** (ZXing, works in the
+      Android app WebView; CAMERA permission requested natively in MainActivity).
       ◻ next: scan into the sales invoice; ◻ phone-as-remote-scanner over shared Wi-Fi via the SaaS server
       (pair a phone IP to a PC session so a scan on the phone appears on the desktop) — needs the server relay.
 - ◻ Attendance device matching: face / fingerprint / RFID-card readers
