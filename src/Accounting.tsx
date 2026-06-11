@@ -13,10 +13,15 @@ export type AccType = 'asset' | 'liability' | 'equity' | 'income' | 'expense';
 // Only the leaf levels (معین/تفصیلی) accept journal lines; group/total are headers for grouping & reports.
 export type AccLevel = 'group' | 'total' | 'sub' | 'detail';
 export interface Account { id: string; code: string; name: string; type: AccType; level?: AccLevel; parent?: string; }
-export interface EntryLine { accountId: string; debit: number; credit: number; }
+// A journal line may carry the 4th-level dimensions: party (طرف‌حساب/تفصیلی) and cost center (مرکز هزینه).
+export interface EntryLine { accountId: string; debit: number; credit: number; party?: string; center?: string; }
 // ref: شناسه‌ی منبعِ سند برای جلوگیری از ثبتِ تکراری وقتی از ماژول‌های دیگر (حقوق، صندوق، وام) خودکار ساخته می‌شود
 export interface JournalEntry { id: string; y: number; m: number; d: number; desc: string; lines: EntryLine[]; ref?: string; }
-export interface AccountingState { accounts: Account[]; entries: JournalEntry[]; vatRate?: number; }
+// Subsidiary ledger dimensions (تفصیلی): counterparties and cost centers.
+export interface Party { id: string; name: string; kind: 'customer' | 'supplier' | 'both'; }
+export interface CostCenter { id: string; name: string; }
+export const PARTY_KIND_LABEL: { [k in Party['kind']]: string } = { customer: 'مشتری', supplier: 'تأمین‌کننده', both: 'هر دو' };
+export interface AccountingState { accounts: Account[]; entries: JournalEntry[]; vatRate?: number; parties?: Party[]; centers?: CostCenter[]; }
 
 const TYPE_LABEL: { [k in AccType]: string } = { asset: 'دارایی', liability: 'بدهی', equity: 'سرمایه', income: 'درآمد', expense: 'هزینه' };
 export const LEVEL_LABEL: { [k in AccLevel]: string } = { group: 'گروه', total: 'کل', sub: 'معین', detail: 'تفصیلی' };
@@ -69,7 +74,7 @@ interface Props {
   confirm: (msg: string, onYes: () => void) => void;
 }
 
-type Tab = 'quick' | 'journal' | 'reports' | 'accounts';
+type Tab = 'quick' | 'journal' | 'reports' | 'parties' | 'accounts';
 
 export default function AccountingPanel({ state, onChange, onClose, confirm }: Props) {
   const accounts = state.accounts && state.accounts.length ? state.accounts : DEFAULT_ACCOUNTS;
@@ -104,11 +109,14 @@ export default function AccountingPanel({ state, onChange, onClose, confirm }: P
     return { acc, list: [...list, acc] };
   };
   // Post a balanced quick entry (used by the guided non-accountant operations).
-  const postQuick = (date: { y: number; m: number; d: number }, desc: string, spec: { name: string; type: AccType; debit?: number; credit?: number }[]) => {
+  const postQuick = (date: { y: number; m: number; d: number }, desc: string, spec: { name: string; type: AccType; debit?: number; credit?: number; party?: string; center?: string }[]) => {
     let list = accounts.slice();
     const lines: EntryLine[] = spec.filter((s) => (s.debit || 0) > 0 || (s.credit || 0) > 0).map((s) => {
       const r = resolveLocal(list, s.name, s.type); list = r.list;
-      return { accountId: r.acc.id, debit: Math.round(s.debit || 0), credit: Math.round(s.credit || 0) };
+      const line: EntryLine = { accountId: r.acc.id, debit: Math.round(s.debit || 0), credit: Math.round(s.credit || 0) };
+      if (s.party) line.party = s.party;
+      if (s.center) line.center = s.center;
+      return line;
     });
     const td = lines.reduce((t, l) => t + l.debit, 0); const tc = lines.reduce((t, l) => t + l.credit, 0);
     if (lines.length < 2 || Math.round(td) !== Math.round(tc) || td <= 0) { confirm('مبالغ نامعتبر است؛ سند ساخته نشد.', () => {}); return false; }
@@ -166,6 +174,25 @@ export default function AccountingPanel({ state, onChange, onClose, confirm }: P
     confirm('این حساب حذف شود؟', () => onChange({ ...state, accounts: accounts.filter((a) => a.id !== id) }));
   };
   const setVat = (v: number) => onChange({ ...state, vatRate: Math.max(0, Math.min(100, v)) });
+
+  // ---------- طرف‌حساب‌ها (تفصیلی) و مرکزِ هزینه ----------
+  const parties = state.parties || [];
+  const centers = state.centers || [];
+  const partyName = (id?: string) => parties.find((p) => p.id === id)?.name || '';
+  const centerName = (id?: string) => centers.find((c) => c.id === id)?.name || '';
+  const [pName, setPName] = useState(''); const [pKind, setPKind] = useState<Party['kind']>('customer');
+  const addParty = () => { if (!pName.trim()) return; onChange({ ...state, parties: [...parties, { id: `p-${Date.now()}`, name: pName.trim(), kind: pKind }] }); setPName(''); };
+  const partyUsed = (id: string) => entries.some((e) => e.lines.some((l) => l.party === id));
+  const delParty = (id: string) => { if (partyUsed(id)) { confirm('این طرف‌حساب در اسناد استفاده شده و حذف نمی‌شود.', () => {}); return; } confirm('این طرف‌حساب حذف شود؟', () => onChange({ ...state, parties: parties.filter((p) => p.id !== id) })); };
+  const [cName, setCName] = useState('');
+  const addCenter = () => { if (!cName.trim()) return; onChange({ ...state, centers: [...centers, { id: `c-${Date.now()}`, name: cName.trim() }] }); setCName(''); };
+  const centerUsed = (id: string) => entries.some((e) => e.lines.some((l) => l.center === id));
+  const delCenter = (id: string) => { if (centerUsed(id)) { confirm('این مرکزِ هزینه در اسناد استفاده شده و حذف نمی‌شود.', () => {}); return; } confirm('این مرکزِ هزینه حذف شود؟', () => onChange({ ...state, centers: centers.filter((c) => c.id !== id) })); };
+  // Net balance per party across all tagged lines (debit − credit): + = طلبِ ما (دریافتنی), − = بدهیِ ما (پرداختنی).
+  const partyBalance = (id: string) => { let b = 0; entries.forEach((e) => e.lines.forEach((l) => { if (l.party === id) b += l.debit - l.credit; })); return b; };
+  // Total expense tagged to a cost center.
+  const centerTotal = (id: string) => { let t = 0; entries.forEach((e) => e.lines.forEach((l) => { if (l.center === id) t += l.debit - l.credit; })); return t; };
+  const [partyLedger, setPartyLedger] = useState<string>('');
 
   // ---------- محاسباتِ گزارش ----------
   const sums = accounts.map((a) => {
@@ -251,11 +278,12 @@ export default function AccountingPanel({ state, onChange, onClose, confirm }: P
             <button type="button" className={`mini-toggle-btn ${tab === 'quick' ? 'active' : ''}`} onClick={() => setTab('quick')}>ثبتِ سریع</button>
             <button type="button" className={`mini-toggle-btn ${tab === 'journal' ? 'active' : ''}`} onClick={() => setTab('journal')}>اسناد</button>
             <button type="button" className={`mini-toggle-btn ${tab === 'reports' ? 'active' : ''}`} onClick={() => setTab('reports')}>دفتر و تراز</button>
+            <button type="button" className={`mini-toggle-btn ${tab === 'parties' ? 'active' : ''}`} onClick={() => setTab('parties')}>طرف‌حساب</button>
             <button type="button" className={`mini-toggle-btn ${tab === 'accounts' ? 'active' : ''}`} onClick={() => setTab('accounts')}>حساب‌ها</button>
           </div>
 
           {/* ---------------- ثبتِ سریع (راهنمای غیرحسابدار) ---------------- */}
-          {tab === 'quick' && <QuickEntry today={today} vatRate={vatRate} postQuick={postQuick} onDone={() => setTab('journal')} />}
+          {tab === 'quick' && <QuickEntry today={today} vatRate={vatRate} parties={parties} centers={centers} postQuick={postQuick} onDone={() => setTab('journal')} />}
 
           {/* ---------------- اسناد ---------------- */}
           {tab === 'journal' && !creating && (
@@ -271,7 +299,7 @@ export default function AccountingPanel({ state, onChange, onClose, confirm }: P
                       <div key={e.id} className="loan-detail-row acc-entry">
                         <div className="ld-info">
                           <span className="ld-amt">{e.desc} <span className="fm-shares">{fmt(sum)}</span></span>
-                          <span className="ld-date">{dateStr(e)} · {e.lines.map((l) => { const a = accById(l.accountId); return `${a ? a.name : '—'} ${l.debit ? 'بد ' + fmt(l.debit) : 'بس ' + fmt(l.credit)}`; }).join(' / ')}</span>
+                          <span className="ld-date">{dateStr(e)} · {e.lines.map((l) => { const a = accById(l.accountId); const tag = l.party ? `«${partyName(l.party)}»` : l.center ? `[${centerName(l.center)}]` : ''; return `${a ? a.name : '—'}${tag} ${l.debit ? 'بد ' + fmt(l.debit) : 'بس ' + fmt(l.credit)}`; }).join(' / ')}</span>
                         </div>
                         <button className="fm-notify" title="حذف" onClick={() => deleteEntry(e.id)}>🗑</button>
                       </div>
@@ -367,6 +395,31 @@ export default function AccountingPanel({ state, onChange, onClose, confirm }: P
                   </tbody>
                 </table>
 
+                {centers.length > 0 && (
+                  <>
+                    <div className="acc-print-title">هزینه به تفکیکِ مرکزِ هزینه</div>
+                    <table className="acc-table">
+                      <thead><tr><th>مرکزِ هزینه</th><th>جمعِ هزینه</th></tr></thead>
+                      <tbody>
+                        {centers.map((c) => <tr key={c.id}><td>{c.name}</td><td>{fmt(centerTotal(c.id))}</td></tr>)}
+                        <tr className="acc-total"><td>جمع</td><td>{fmt(centers.reduce((s, c) => s + centerTotal(c.id), 0))}</td></tr>
+                      </tbody>
+                    </table>
+                  </>
+                )}
+
+                {parties.length > 0 && (
+                  <>
+                    <div className="acc-print-title">مانده‌ی طرف‌حساب‌ها</div>
+                    <table className="acc-table">
+                      <thead><tr><th>طرف‌حساب</th><th>مانده</th><th>وضعیت</th></tr></thead>
+                      <tbody>
+                        {parties.map((p) => { const bal = partyBalance(p.id); return <tr key={p.id}><td>{p.name}</td><td>{fmt(Math.abs(bal))}</td><td>{bal === 0 ? 'تسویه' : bal > 0 ? 'طلبِ ما' : 'بدهیِ ما'}</td></tr>; })}
+                      </tbody>
+                    </table>
+                  </>
+                )}
+
                 <div className="acc-print-title">صورتِ سود و زیان</div>
                 <table className="acc-table">
                   <tbody>
@@ -410,6 +463,71 @@ export default function AccountingPanel({ state, onChange, onClose, confirm }: P
               <div className="tool-note acc-noprint">حساب‌های درآمد و هزینه صفر و سود/زیانِ دوره به «سود و زیانِ انباشته» منتقل می‌شود. برای لغو، سندِ اختتامیه را از تبِ «اسناد» حذف کنید.</div>
               <button className="loan-submit acc-noprint" onClick={printReport}>🖨️ چاپ / ذخیره‌ی PDF</button>
               <button className="acc-addline acc-noprint" onClick={() => downloadCsv('trial-balance.csv', [['حساب', 'بدهکار', 'بستانکار', 'مانده'], ...sums.map((x) => [`${x.a.code} ${x.a.name}`, x.debit, x.credit, x.bal]), ['جمع', grandDebit, grandCredit, '']])}>📤 خروجیِ اکسل (CSV)</button>
+            </>
+          )}
+
+          {/* ---------------- طرف‌حساب‌ها (تفصیلی) و مرکزِ هزینه ---------------- */}
+          {tab === 'parties' && (
+            <>
+              <div className="loan-sched-head"><span>افزودنِ طرف‌حساب</span></div>
+              <input className="tool-text-input" type="text" placeholder="نامِ مشتری / تأمین‌کننده" value={pName} onChange={(e) => setPName(e.target.value)} />
+              <div className="acc-type-pick">
+                {(['customer', 'supplier', 'both'] as Party['kind'][]).map((k) => (
+                  <button key={k} type="button" className={`fund-level-btn ${pKind === k ? 'active' : ''}`} onClick={() => setPKind(k)}>{PARTY_KIND_LABEL[k]}</button>
+                ))}
+              </div>
+              <button className="loan-submit" disabled={!pName.trim()} onClick={addParty}>افزودنِ طرف‌حساب</button>
+
+              <div className="loan-sched-head"><span>مانده‌ی طرف‌حساب‌ها</span><span className="loan-sched-hint">{parties.length}</span></div>
+              <div className="loan-detail-list">
+                {parties.length === 0 && <div className="tool-note">هنوز طرف‌حسابی ثبت نشده. در «ثبتِ سریع» هنگامِ فروش/خرید نسیه، طرف‌حساب را انتخاب کنید.</div>}
+                {parties.map((p) => { const bal = partyBalance(p.id); return (
+                  <div key={p.id} className="loan-detail-row">
+                    <div className="ld-info">
+                      <span className="ld-amt">{p.name} <span className="acc-lvl-tag">{PARTY_KIND_LABEL[p.kind]}</span></span>
+                      <span className="ld-date">{bal === 0 ? 'تسویه' : bal > 0 ? `طلبِ ما: ${fmt(bal)}` : `بدهیِ ما: ${fmt(-bal)}`}</span>
+                    </div>
+                    <div className="att-approw">
+                      <button className="att-inlinebtn" title="کارتِ حساب" onClick={() => setPartyLedger(partyLedger === p.id ? '' : p.id)}>کارت</button>
+                      {!partyUsed(p.id) && <button className="fm-notify" title="حذف" onClick={() => delParty(p.id)}>🗑</button>}
+                    </div>
+                  </div>
+                ); })}
+              </div>
+
+              {/* کارتِ حساب (per-party ledger) */}
+              {partyLedger && (
+                <div className="acc-print">
+                  <div className="acc-print-title">کارتِ حساب — {partyName(partyLedger)}</div>
+                  <table className="acc-table">
+                    <thead><tr><th>تاریخ</th><th>شرح</th><th>بدهکار</th><th>بستانکار</th><th>مانده</th></tr></thead>
+                    <tbody>
+                      {(() => {
+                        const rowsOut: { e: JournalEntry; d: number; c: number; run: number }[] = []; let run = 0;
+                        entries.slice().sort((a, b) => (a.y * 10000 + a.m * 100 + a.d) - (b.y * 10000 + b.m * 100 + b.d))
+                          .forEach((e) => e.lines.forEach((l) => { if (l.party === partyLedger) { run += l.debit - l.credit; rowsOut.push({ e, d: l.debit, c: l.credit, run }); } }));
+                        return rowsOut.length === 0
+                          ? <tr><td colSpan={5} style={{ textAlign: 'center', opacity: .6 }}>گردشی ندارد</td></tr>
+                          : rowsOut.map((r, i) => <tr key={i}><td>{dateStr(r.e)}</td><td>{r.e.desc}</td><td>{r.d ? fmt(r.d) : ''}</td><td>{r.c ? fmt(r.c) : ''}</td><td>{fmt(Math.abs(r.run))} {r.run >= 0 ? 'بد' : 'بس'}</td></tr>);
+                      })()}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              <div className="loan-sched-head"><span>مراکزِ هزینه</span><span className="loan-sched-hint">{centers.length}</span></div>
+              <div className="acc-addacc">
+                <input className="tool-text-input" type="text" placeholder="نامِ مرکزِ هزینه (مثلاً پروژه‌ی الف)" value={cName} onChange={(e) => setCName(e.target.value)} />
+                <button className="loan-submit" disabled={!cName.trim()} onClick={addCenter}>افزودن</button>
+              </div>
+              <div className="loan-detail-list">
+                {centers.map((c) => (
+                  <div key={c.id} className="loan-detail-row">
+                    <div className="ld-info"><span className="ld-amt">{c.name}</span><span className="ld-date">هزینه: {fmt(centerTotal(c.id))}</span></div>
+                    {!centerUsed(c.id) && <button className="fm-notify" title="حذف" onClick={() => delCenter(c.id)}>🗑</button>}
+                  </div>
+                ))}
+              </div>
             </>
           )}
 
@@ -474,16 +592,20 @@ const QUICK_OPS: { id: QuickOp; label: string; icon: string }[] = [
   { id: 'transfer', label: 'انتقالِ نقد/بانک', icon: '🏦' },
   { id: 'capital', label: 'آورده‌ی سرمایه', icon: '📈' },
 ];
-function QuickEntry({ today, vatRate, postQuick, onDone }: {
+function QuickEntry({ today, vatRate, parties, centers, postQuick, onDone }: {
   today: { year: number; month: number; day: number };
   vatRate: number;
-  postQuick: (date: { y: number; m: number; d: number }, desc: string, spec: { name: string; type: AccType; debit?: number; credit?: number }[]) => boolean;
+  parties: Party[];
+  centers: CostCenter[];
+  postQuick: (date: { y: number; m: number; d: number }, desc: string, spec: { name: string; type: AccType; debit?: number; credit?: number; party?: string; center?: string }[]) => boolean;
   onDone: () => void;
 }) {
   const [op, setOp] = useState<QuickOp>('sale');
   const [amount, setAmount] = useState('');
   const [channel, setChannel] = useState<'cash' | 'bank'>('cash');   // صندوق یا بانک
   const [onCredit, setOnCredit] = useState(false);                   // نسیه؟
+  const [selParty, setSelParty] = useState('');                      // طرف‌حساب (تفصیلی)
+  const [selCenter, setSelCenter] = useState('');                    // مرکزِ هزینه
   const [withVat, setWithVat] = useState(true);                      // شاملِ مالیات بر ارزش افزوده؟
   const [asInventory, setAsInventory] = useState(false);            // خرید به‌عنوانِ موجودیِ کالا یا هزینه
   const [desc, setDesc] = useState('');
@@ -492,8 +614,10 @@ function QuickEntry({ today, vatRate, postQuick, onDone }: {
   const amt = digits(amount);
   const vat = withVat ? Math.round(amt * vatRate / 100) : 0;
   const channelName = channel === 'cash' ? 'صندوق (نقد)' : 'بانک';
-  // Build the journal lines for the chosen operation.
-  const spec: { name: string; type: AccType; debit?: number; credit?: number }[] = (() => {
+  // Build the journal lines for the chosen operation, then tag the subsidiary dimensions:
+  // party (طرف‌حساب) on the receivable/payable line, cost center (مرکز هزینه) on the expense line.
+  const spec: { name: string; type: AccType; debit?: number; credit?: number; party?: string; center?: string }[] = (() => {
+    const raw = ((): { name: string; type: AccType; debit?: number; credit?: number }[] => {
     if (amt <= 0) return [];
     switch (op) {
       case 'sale':
@@ -525,6 +649,13 @@ function QuickEntry({ today, vatRate, postQuick, onDone }: {
       case 'capital':
         return [{ name: channelName, type: 'asset', debit: amt }, { name: 'سرمایه', type: 'equity', credit: amt }];
     }
+    })();
+    return raw.map((l) => {
+      const out: typeof l & { party?: string; center?: string } = { ...l };
+      if (selParty && (l.name === 'حساب‌های دریافتنی' || l.name === 'حساب‌های پرداختنی')) out.party = selParty;
+      if (selCenter && l.type === 'expense') out.center = selCenter;
+      return out;
+    });
   })();
   const submit = () => {
     const m0 = Math.min(11, Math.max(0, (digits(eM) || 1) - 1));
@@ -561,6 +692,26 @@ function QuickEntry({ today, vatRate, postQuick, onDone }: {
       )}
       {showVat && (
         <label className="fund-switch"><input type="checkbox" checked={withVat} onChange={(e) => setWithVat(e.target.checked)} /><span>شاملِ مالیات بر ارزش افزوده ({vatRate}٪){vat ? ` = ${fmt(vat)}` : ''}</span></label>
+      )}
+      {/* طرف‌حساب (تفصیلی) — برای فروش/خرید/دریافت/پرداختِ نسیه */}
+      {(op === 'sale' || op === 'purchase' || op === 'receive' || op === 'pay') && parties.length > 0 && (
+        <>
+          <label className="field-label">طرف‌حساب (اختیاری — برای نسیه)</label>
+          <select className="tool-text-input" value={selParty} onChange={(e) => setSelParty(e.target.value)}>
+            <option value="">— بدون طرف‌حساب —</option>
+            {parties.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+          </select>
+        </>
+      )}
+      {/* مرکزِ هزینه — برای خرید/پرداختِ هزینه‌ای */}
+      {(op === 'purchase' || op === 'pay') && centers.length > 0 && (
+        <>
+          <label className="field-label">مرکزِ هزینه (اختیاری)</label>
+          <select className="tool-text-input" value={selCenter} onChange={(e) => setSelCenter(e.target.value)}>
+            <option value="">— بدون مرکز —</option>
+            {centers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+        </>
       )}
 
       <label className="field-label">شرح (اختیاری)</label>

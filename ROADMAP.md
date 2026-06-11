@@ -143,7 +143,10 @@ flowchart TD
       - ✓ Multi-level grouped trial balance (گروه/کل/معین) with rolled-up subtotals
       - ✓ Fiscal-year close (سندِ اختتامیه): zero income/expense into retained earnings; reversible
       - ✓ VAT return (اظهارنامه): output VAT − input VAT = net payable/credit
-      - ◻ next: cost centers (مرکز هزینه), تفصیلی (4th level), opening entry for a new book, statutory reports
+      - ✓ Subsidiary ledger (تفصیلی): counterparties (مشتری/تأمین‌کننده) with per-party balance + کارت حساب,
+            tagged on credit sales/purchases via the guided quick-entry
+      - ✓ Cost centers (مرکز هزینه): tag expenses, per-center expense report
+      - ◻ next: opening entry for a new book, statutory printed financial statements, multi-book/period
 - ◻ Windows desktop installer (.exe) via Electron + Windows CI  (deferred — not yet)
 - ◻ Attendance device matching: face / fingerprint / RFID-card readers
       - phase 1: device biometric unlock (WebAuthn / Capacitor biometric) for worker self check-in
