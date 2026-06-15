@@ -282,12 +282,10 @@ function App() {
   const [reminderTime, setReminderTime] = useState<string>('09:00');
   const [selectedTransactionForReminder, setSelectedTransactionForReminder] = useState<{ dateKey: string; transactionId: string } | null>(null);
   const [notificationPermission, setNotificationPermission] = useState<boolean>(false);
-  const [showOnboarding, setShowOnboarding] = useState<boolean>(() => !localStorage.getItem('onboardedVersion'));
-  const [showWhatsNew, setShowWhatsNew] = useState<boolean>(() => {
-    const onboarded = localStorage.getItem('onboardedVersion');
-    return !!onboarded && localStorage.getItem('lastSeenVersion') !== APP_VERSION;
-  });
-  const [showWelcome, setShowWelcome] = useState<boolean>(() => !!localStorage.getItem('onboardedVersion'));
+  // نسخه‌ی حرفه‌ایِ ویندوزی: بدونِ ویزاردِ آموزشِ اول، اسپلشِ خوش‌آمد و پاپ‌آپِ تازه‌ها — مستقیم وارد محیطِ کار.
+  const [showOnboarding, setShowOnboarding] = useState<boolean>(false);
+  const [showWhatsNew, setShowWhatsNew] = useState<boolean>(false);
+  const [showWelcome, setShowWelcome] = useState<boolean>(false);
   const [showRightDrawer, setShowRightDrawer] = useState<boolean>(false);
   const [showLeftDrawer, setShowLeftDrawer] = useState<boolean>(false);
   const [showAboutModal, setShowAboutModal] = useState<boolean>(false);
