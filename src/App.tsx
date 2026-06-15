@@ -262,6 +262,12 @@ function App() {
     ? (orgInfo!.role === 'worker' && !!orgInfo!.perms?.includes('attendance_self') && !orgInfo!.perms?.includes('attendance'))
     : !!(access.enabled && activeUser && activeGroup && !activeGroup.perms.includes('attendance') && activeGroup.perms.includes('attendance_self'));
   const selfEmpId = orgActive ? orgInfo!.empId : (selfMode ? activeUser?.empId : undefined);
+  // یادآورِ شخصیِ هر کاربر: تقویم/یادآورها بر اساسِ هویتِ کاربرِ فعال جدا ذخیره می‌شوند.
+  // مدیر (بدونِ محدودیت) از کلیدِ پیش‌فرض استفاده می‌کند تا داده‌ی قبلی حفظ شود.
+  const calOwnerId = orgActive
+    ? `org:${orgInfo!.empId || localStorage.getItem('authPhone') || orgInfo!.org!.id}`
+    : (access.enabled && access.activeUserId ? `u:${access.activeUserId}` : '');
+  const calStorageKey = calOwnerId ? `calendarData::${calOwnerId}` : 'calendarData';
   const [fundStartReport, setFundStartReport] = useState<boolean>(false);
   const [theme, setTheme] = useState<'light' | 'dark'>(() => (localStorage.getItem('theme') as 'light' | 'dark') || 'light');
   const [prayerProvince, setPrayerProvince] = useState<string>(() => localStorage.getItem('prayerProvince') || 'تهران');
@@ -324,9 +330,10 @@ function App() {
     requestNotificationPermission();
   }, []);
 
+  // بارگذاری تقویم/یادآورهای کاربرِ فعال — با تعویضِ کاربر، یادآورهای شخصیِ او بارگذاری می‌شود.
   useEffect(() => {
-    const saved = localStorage.getItem('calendarData');
-    if (!saved) return;
+    const saved = localStorage.getItem(calStorageKey);
+    if (!saved) { setCalendarData({}); return; }
     const parsed = JSON.parse(saved) as { [key: string]: DayData };
     // مهاجرت کلیدهای قدیمیِ شمسی به کلید میلادیِ مشترک بین تقویم‌ها
     const migrated: { [key: string]: DayData } = {};
@@ -337,8 +344,8 @@ function App() {
       migrated[newKey] = value;
     });
     setCalendarData(migrated);
-    if (changed) localStorage.setItem('calendarData', JSON.stringify(migrated));
-  }, []);
+    if (changed) localStorage.setItem(calStorageKey, JSON.stringify(migrated));
+  }, [calStorageKey]);
 
   // اعمال و ذخیره‌ی پوسته (روشن/تیره)
   useEffect(() => {
@@ -408,7 +415,7 @@ function App() {
   };
 
   const saveData = (data: any) => {
-    localStorage.setItem('calendarData', JSON.stringify(data));
+    localStorage.setItem(calStorageKey, JSON.stringify(data));
     setCalendarData(data);
   };
 
@@ -1394,12 +1401,7 @@ function App() {
                 setShowDayModal(false);
                 setShowAddModal(true);
               }}>
-                + افزودن تراکنش
-              </button>
-              <button className="prayer-btn-modal" onClick={() => {
-                openPrayerTimes();
-              }}>
-                🕌 اوقات شرعی
+                + افزودن یادآور / کار
               </button>
             </div>
 
@@ -1602,9 +1604,6 @@ function App() {
                 {can('accounting') && <button className="dash-card dc-acc" onClick={() => go(() => setShowAccModal(true))}><span className="dc-ic">📒</span><span className="dc-t">حسابداری</span><span className="dc-s">دفترداریِ دوطرفه</span></button>}
                 {(can('attendance') || can('attendance_self')) && <button className="dash-card dc-att" onClick={() => go(() => setShowAttModal(true))}><span className="dc-ic">🕒</span><span className="dc-t">حضور و غیاب</span><span className="dc-s">کارکرد و فیشِ حقوقی</span></button>}
                 {can('inventory') && <button className="dash-card dc-inv" onClick={() => go(() => setShowInvModal(true))}><span className="dc-ic">📦</span><span className="dc-t">انبار</span><span className="dc-s">کالا و موجودی</span></button>}
-                {can('fund') && <button className="dash-card dc-fund" onClick={() => go(() => { setFundStartReport(false); setShowFundModal(true); })}><span className="dc-ic">💰</span><span className="dc-t">صندوق</span><span className="dc-s">قرض‌الحسنه‌ی گردشی</span></button>}
-                {can('loans') && <button className="dash-card dc-loan" onClick={() => go(() => setShowLoansModal(true))}><span className="dc-ic">🏦</span><span className="dc-t">وام‌ها</span><span className="dc-s">اقساط و گزارش</span></button>}
-                {can('tools') && <button className="dash-card dc-rep" onClick={() => go(() => openTool('report'))}><span className="dc-ic">📊</span><span className="dc-t">گزارش‌ها</span><span className="dc-s">مالیِ بازه‌ای</span></button>}
                 {(can('accounting') || can('inventory')) && <button className="dash-card dc-rep" onClick={() => go(() => setShowInsights(true))}><span className="dc-ic">📈</span><span className="dc-t">تحلیل و نمودار</span><span className="dc-s">درآمد، سود، انبار</span></button>}
                 {can('users') && <button className="dash-card dc-usr" onClick={() => go(() => setShowAccessModal(true))}><span className="dc-ic">👤</span><span className="dc-t">کاربران</span><span className="dc-s">گروه‌ها و دسترسی</span></button>}
                 {(can('users') || (!access.enabled && !orgActive)) && <button className="dash-card dc-pro" onClick={() => go(() => setShowCompany(true))}><span className="dc-ic">⭐</span><span className="dc-t">نسخه‌ی شرکتی</span><span className="dc-s">چندکاربره و ابری</span></button>}
@@ -1782,28 +1781,11 @@ function App() {
               </div>
               <button className="drawer-close" onClick={() => setShowRightDrawer(false)} aria-label="بستن">✕</button>
             </div>
-            {can('tools') && <>
-              <div className="drawer-section-label">گزارش‌ها</div>
-              <button className="drawer-item" onClick={() => openTool('report')}><span className="di-icon"><IconReport /></span> گزارش مالی بازه‌ای</button>
-              <button className="drawer-item" onClick={() => openTool('bom')}><span className="di-icon"><IconBom /></span> گزارش اول ماه (BOM)</button>
-            </>}
-            {(can('loans') || can('fund') || can('accounting') || can('attendance') || can('attendance_self') || can('inventory')) && <div className="drawer-section-label">مالی و عملیات</div>}
-            {can('loans') && <>
-              <button className="drawer-item" onClick={() => openTool('loan')}><span className="di-icon"><IconLoan /></span> وام جدید</button>
-              <button className="drawer-item" onClick={() => { setShowRightDrawer(false); setShowLoansModal(true); }}><span className="di-icon"><IconReport /></span> وام‌های من</button>
-            </>}
-            {can('fund') && <>
-              <button className="drawer-item" onClick={() => { setShowRightDrawer(false); setFundStartReport(false); setShowFundModal(true); }}><span className="di-icon"><IconUsers /></span> صندوق خانوادگی</button>
-              <button className="drawer-item" onClick={() => { setShowRightDrawer(false); setFundStartReport(true); setShowFundModal(true); }}><span className="di-icon"><IconReport /></span> گزارش صندوق</button>
-            </>}
+            {(can('accounting') || can('attendance') || can('attendance_self') || can('inventory')) && <div className="drawer-section-label">ماژول‌ها</div>}
             {can('accounting') && <button className="drawer-item" onClick={() => { setShowRightDrawer(false); setShowAccModal(true); }}><span className="di-icon"><IconBom /></span> حسابداری (دفترداریِ دوطرفه)</button>}
             {(can('attendance') || can('attendance_self')) && <button className="drawer-item" onClick={() => { setShowRightDrawer(false); setShowAttModal(true); }}><span className="di-icon"><IconToday /></span> حضور و غیاب</button>}
             {can('inventory') && <button className="drawer-item" onClick={() => { setShowRightDrawer(false); setShowInvModal(true); }}><span className="di-icon"><IconBom /></span> انبار</button>}
-            <div className="drawer-section-label">ابزارهای کاربردی</div>
-            <button className="drawer-item" onClick={() => openTool('convert')}><span className="di-icon"><IconConvert /></span> تبدیل تاریخ</button>
-            <button className="drawer-item" onClick={() => openTool('age')}><span className="di-icon"><IconAge /></span> محاسبه سن</button>
-            <button className="drawer-item" onClick={() => openTool('bio')}><span className="di-icon"><IconBio /></span> بیوریتم</button>
-            <button className="drawer-item" onClick={() => openTool('bmi')}><span className="di-icon"><IconBmi /></span> شاخص توده بدنی</button>
+            {(can('accounting') || can('inventory')) && <button className="drawer-item" onClick={() => { setShowRightDrawer(false); setShowInsights(true); }}><span className="di-icon"><IconReport /></span> داشبوردِ تحلیلی</button>}
             <div className="drawer-section-label">میان‌بر</div>
             <button className="drawer-item" onClick={() => { goToToday(); setShowRightDrawer(false); }}><span className="di-icon"><IconToday /></span> برو به امروز</button>
           </aside>
