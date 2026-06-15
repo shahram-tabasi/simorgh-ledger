@@ -618,8 +618,9 @@ function App() {
   // افزودن یا ویرایش تراکنش
   const addTransaction = async () => {
     if (!title.trim()) { notify('عنوان را وارد کنید'); return; }
-    const amt = parseFormattedNumber(amount);
-    if (isNaN(amt) || amt <= 0) { notify('مبلغ معتبر وارد کنید'); return; }
+    // یادآوری: مبلغ اختیاری است (خالی = بدونِ مبلغ)
+    const parsed = parseFormattedNumber(amount);
+    const amt = isNaN(parsed) || parsed < 0 ? 0 : parsed;
     if (!selectedDate) return;
 
     const existing = calendarData[selectedDate] || { transactions: [] };
@@ -654,7 +655,7 @@ function App() {
 
     // پرسش برای ثبت یادآوری (دیالوگ سفارشی)
     const dateForReminder = selectedDate;
-    askConfirm('آیا می‌خواهید برای این قسط یادآوری ثبت کنید؟', () => {
+    askConfirm('آیا می‌خواهید زمانِ یادآوری تنظیم کنید؟', () => {
       setSelectedTransactionForReminder({ dateKey: dateForReminder, transactionId: newTransaction.id });
       setReminderText(newTransaction.title);
       const [gy, gm, gd] = dateForReminder.split('-').map(Number);
@@ -1140,14 +1141,15 @@ function App() {
     }
 
     for (let d = 1; d <= daysInMonth; d++) {
-      const debt = getDayDebt(currentYear, currentMonth, d);
+      const dayItems = getDayTransactions(currentYear, currentMonth, d);
+      const reminderCount = dayItems.length;
       const dayIsToday = isToday(calendarSystem, currentYear, currentMonth, d);
       const isFriday = (startOffset + d - 1) % 7 === 6;
 
       days.push(
         <div
           key={d}
-          className={`day ${debt > 0 ? 'has-debt' : ''} ${dayIsToday ? 'today' : ''} ${isFriday ? 'friday' : ''}`}
+          className={`day ${reminderCount > 0 ? 'has-reminder' : ''} ${dayIsToday ? 'today' : ''} ${isFriday ? 'friday' : ''}`}
           onClick={() => openDayDetails(currentYear, currentMonth, d)}
           onMouseEnter={(e) => showDayPreview(e.currentTarget, d)}
           onMouseLeave={hideDayPreview}
@@ -1156,9 +1158,9 @@ function App() {
           onTouchMove={() => { clearLongPress(); hideDayPreview(); }}
         >
           <span className="day-num">{d}</span>
-          {debt > 0 && (
-            <span className="debt-badge" title={`${formatNumber(debt)} تومان`}>
-              {compactAmount(debt)}
+          {reminderCount > 0 && (
+            <span className="reminder-count" title={`${reminderCount} یادآوری`}>
+              {reminderCount > 1 ? `${reminderCount} یادآوری` : 'یادآوری'}
             </span>
           )}
         </div>
@@ -1291,50 +1293,23 @@ function App() {
         {renderDays()}
       </div>
 
-      {/* پیش‌نمایشِ بدهی‌های روز (هاور/نگه‌داشتن) */}
+      {/* پیش‌نمایشِ یادآوری‌های روز (هاور/نگه‌داشتن) */}
       {dayPreview && (() => {
         const items = getDayTransactions(currentYear, currentMonth, dayPreview.day);
-        const debt = getDayDebt(currentYear, currentMonth, dayPreview.day);
         return (
           <div className="day-preview" style={{ left: Math.min(Math.max(dayPreview.x, 128), window.innerWidth - 128), top: dayPreview.y }}>
             <div className="dp-title">{dayPreview.day} {months[currentMonth]}</div>
-            {items.map((t) => (
+            {items.length === 0 ? (
+              <div className="dp-row"><span className="dp-name">بدونِ یادآوری</span></div>
+            ) : items.map((t) => (
               <div key={t.id} className={`dp-row ${t.isPaid ? 'paid' : ''}`}>
                 <span className={`dp-dot ${t.isPaid ? 'paid' : 'debt'}`} />
                 <span className="dp-name">{t.title}</span>
-                <span className="dp-amount">{formatNumber(t.amount)}</span>
               </div>
             ))}
-            <div className="dp-foot">
-              <span>مانده بدهی</span>
-              <strong>{formatNumber(debt)} تومان</strong>
-            </div>
           </div>
         );
       })()}
-
-      {/* تراز مالیِ ماه */}
-      <div className="month-summary">
-        <div className="ms-title">ترازِ مالیِ {months[currentMonth]} {currentYear}</div>
-        <div className="ms-cols">
-          <div className="ms-col">
-            <span className="ms-dot debt" />
-            <span className="ms-label">مانده بدهی</span>
-            <strong className="ms-value debt">{formatNumber(getMonthRemaining())}</strong>
-          </div>
-          <div className="ms-col">
-            <span className="ms-dot paid" />
-            <span className="ms-label">تسویه‌شده</span>
-            <strong className="ms-value paid">{formatNumber(getMonthPaid())}</strong>
-          </div>
-          <div className="ms-col">
-            <span className="ms-dot total" />
-            <span className="ms-label">گردش ماه</span>
-            <strong className="ms-value total">{formatNumber(getMonthTotal())}</strong>
-          </div>
-        </div>
-        <div className="ms-unit">مبالغ به تومان</div>
-      </div>
 
       <footer className="app-footer">
         <div className="footer-content">
@@ -1389,11 +1364,6 @@ function App() {
             </div>
 
             <div className="day-modal-body">
-            <div className="day-debt-summary">
-              <span>مجموع بدهی این روز</span>
-              <strong>{formatNumber(selectedDayDebt)} تومان</strong>
-            </div>
-
             <div className="modal-buttons-row">
               <button className="add-trans-btn" onClick={() => {
                 setShowDayModal(false);
@@ -1405,20 +1375,19 @@ function App() {
 
             <div className="transactions-list-modal">
               {!selectedDayData?.transactions.length ? (
-                <div className="empty-trans">هیچ تراکنشی ثبت نشده است</div>
+                <div className="empty-trans">برای این روز یادآوری‌ای ثبت نشده است</div>
               ) : (
                 selectedDayData.transactions.map((t: Transaction) => (
                   <div key={t.id} className={`trans-item-modal ${t.isPaid ? 'paid' : ''}`}>
                     <div className="trans-info-modal">
                       <span className="trans-title-modal">{t.title}</span>
-                      <span className="trans-amount-modal">{formatNumber(t.amount)} تومان</span>
                       {t.reminderDateTime && <span className="reminder-badge">⏰</span>}
                     </div>
                     <div className="trans-actions-modal">
                       <button className="pay-tick-modal" onClick={() => togglePay(selectedDate, t.id)}>
-                        {t.isPaid ? '✓ پرداخت شده' : '○ پرداخت نشده'}
+                        {t.isPaid ? '✓ انجام شد' : '○ در انتظار'}
                       </button>
-                      <button className="edit-trans-modal" onClick={() => startEdit(t)} title="ویرایش مبلغ">
+                      <button className="edit-trans-modal" onClick={() => startEdit(t)} title="ویرایش">
                         ✏️
                       </button>
                       <button className="delete-trans-modal" onClick={() => deleteTrans(selectedDate, t.id)}>
@@ -1438,20 +1407,20 @@ function App() {
         <div className="modal" onClick={() => { setShowAddModal(false); setEditingTxId(null); }}>
           <div className="modal-box add-modal" onClick={e => e.stopPropagation()}>
             <div className="tool-panel-head">
-              <span className="tool-panel-icon"><IconLoan /></span>
-              <h3>{editingTxId ? 'ویرایش تراکنش' : 'افزودن تراکنش'}</h3>
+              <span className="tool-panel-icon"><IconToday /></span>
+              <h3>{editingTxId ? 'ویرایش یادآور' : 'افزودن یادآور / کار'}</h3>
               <button className="close-modal" onClick={() => { setShowAddModal(false); setEditingTxId(null); if (editingTxId) setShowDayModal(true); }}>✕</button>
             </div>
             <div className="add-modal-body">
             <input
               type="text"
-              placeholder="عنوان (مثال: قبوض آب و برق)"
+              placeholder="عنوان یادآور (مثال: جلسه با مدیر، تماس با مشتری)"
               value={title}
               onChange={e => setTitle(e.target.value)}
             />
             <input
               type="text"
-              placeholder="مبلغ (تومان)"
+              placeholder="مبلغ (اختیاری — برای یادآوریِ پرداخت)"
               value={amount}
               onChange={handleAmountChange}
               dir="ltr"
