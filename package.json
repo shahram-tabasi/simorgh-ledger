@@ -1,13 +1,25 @@
 {
   "name": "simorgh-ledger",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.85",
   "type": "module",
+  "main": "electron/main.mjs",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "electron": "electron .",
+    "dist:win": "npm run build && electron-builder --win nsis --publish never"
+  },
+  "build": {
+    "appId": "com.simorgh.ledger",
+    "productName": "Simorgh",
+    "asar": false,
+    "directories": { "output": "release" },
+    "files": ["dist/**/*", "electron/**/*", "package.json"],
+    "win": { "target": "nsis", "artifactName": "Simorgh-Setup-${version}.exe" },
+    "nsis": { "oneClick": false, "allowToChangeInstallationDirectory": true, "perMachine": false }
   },
   "dependencies": {
     "@capacitor/android": "^8.3.1",
@@ -36,6 +48,8 @@
     "eslint": "^10.2.1",
     "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-react-refresh": "^0.5.2",
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8",
     "globals": "^17.5.0",
     "typescript": "~6.0.2",
     "typescript-eslint": "^8.58.2",

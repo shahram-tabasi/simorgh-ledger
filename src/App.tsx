@@ -154,10 +154,10 @@ function resolveAcc(accs: AccLite[], defName: { [k in AccType]: string }, t: Acc
   return a.id;
 }
 
-const APP_VERSION = '1.0.84';
+const APP_VERSION = '1.0.85';
 const CHANGELOG: string[] = [
-  'داشبوردِ تحلیلی با نمودار: درآمد/هزینه‌ی ماهانه، سود، نقد، طلب/بدهی و ارزش و کالاهای انبار',
-  'نمودارها کاملاً آفلاین (SVG) و از اسنادِ حسابداری و موجودیِ انبار محاسبه می‌شوند',
+  'نسخه‌ی نصبیِ ویندوز (Electron): اپِ کاملِ سیمرغ روی ویندوز با دوربین/اسکنرِ فعال — ساختِ خودکار روی GitHub Actions',
+  'فایلِ نصبیِ .exe از بخشِ Actions → artifacts دانلود می‌شود',
 ];
 
 function App() {
@@ -1881,7 +1881,7 @@ function App() {
               <button className={`theme-btn ${theme === 'dark' ? 'active' : ''}`} onClick={() => setTheme('dark')}>🌙 تیره</button>
             </div>
 
-            <div className="drawer-foot">نسخه ۱۴۰۵ · ۱.۰.۸۴</div>
+            <div className="drawer-foot">نسخه ۱۴۰۵ · ۱.۰.۸۵</div>
           </aside>
         </div>
       )}
