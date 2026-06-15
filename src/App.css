@@ -54,6 +54,19 @@ body {
   .calendar, .weekdays { padding-left: 28px; padding-right: 28px; }
   .day-num { font-size: 18px; }
   .day { aspect-ratio: 1 / .82; }
+  /* ماژول‌های بزرگ (حضور و غیاب/حسابداری/انبار) مثلِ پنجره‌ی دسکتاپ، نه ستونِ باریکِ گوشی */
+  .modal-box.tool-panel {
+    max-width: 1120px;
+    width: 95vw;
+    max-height: 94vh;
+    border-radius: 12px;
+  }
+  .tool-panel-body { padding: 18px 24px 22px; }
+  /* نوارِ تب‌های ماژول‌ها روی دسکتاپ: پخش‌شده و خوانا */
+  .tool-panel-body > .mini-toggle.fund-tabs { flex-wrap: wrap; gap: 6px; }
+  /* محیطِ ساعت‌زنیِ کسری‌مانند: ساعتِ بزرگ و نمایشگرِ ترمینال */
+  .att-kiosk-clock { font-size: 88px; letter-spacing: 4px; margin: 18px 0 8px; }
+  .att-kiosk-msg { font-size: 20px; }
 }
 /* مانیتورهای پهن: تقویم را خیلی بزرگ نکن */
 @media (min-width: 1320px) {
