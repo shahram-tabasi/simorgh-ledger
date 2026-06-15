@@ -1236,6 +1236,18 @@ function App() {
         <button className="icon-btn" onClick={() => setShowLeftDrawer(true)} aria-label="درباره ما"><IconInfo /></button>
       </div>
 
+      {/* ریلِ آیکونیِ عمودیِ راست (سبکِ کسری) — میان‌برِ ماژول‌ها */}
+      <aside className="rail">
+        <button className="rail-btn" title="داشبورد" onClick={() => setShowDashboard(true)}><IconBom /></button>
+        <button className="rail-btn" title="تقویم و یادآوری" onClick={() => { setShowAccModal(false); setShowInvModal(false); setShowAttModal(false); }}><IconToday /></button>
+        {can('accounting') && <button className="rail-btn" title="حسابداری" onClick={() => setShowAccModal(true)}><IconLoan /></button>}
+        {can('inventory') && <button className="rail-btn" title="انبار" onClick={() => setShowInvModal(true)}><IconReport /></button>}
+        {(can('attendance') || can('attendance_self')) && <button className="rail-btn" title="حضور و غیاب" onClick={() => setShowAttModal(true)}><IconUsers /></button>}
+        {(can('accounting') || can('inventory')) && <button className="rail-btn" title="تحلیل و نمودار" onClick={() => setShowInsights(true)}><IconReport /></button>}
+        <div className="rail-spacer" />
+        <button className="rail-btn" title="امکانات" onClick={() => setShowRightDrawer(true)}><IconMenu /></button>
+      </aside>
+
       {/* بنر امروز با هر سه تقویم */}
       <div className="date-banner">
         <button className="today-pill" onClick={goToToday}>برو به امروز</button>

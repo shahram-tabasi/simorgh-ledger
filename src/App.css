@@ -45,6 +45,10 @@ body {
     padding: 14px 28px;
     box-shadow: 0 1px 0 rgba(20,33,61,.08);
   }
+  /* ریلِ آیکونیِ راست (سبکِ کسری) فقط روی دسکتاپ */
+  .rail { display: flex; }
+  .app { padding-right: 56px; }
+  .modal:has(.tool-panel) { right: 56px; }
   /* محتوای اصلی در ستونِ راحتِ دسکتاپ وسط‌چین، با سلول‌های بزرگ‌ترِ تقویم */
   .calendar-toggle, .calendar, .weekdays, .app-footer, .dashboard {
     max-width: 1080px;
@@ -65,15 +69,40 @@ body {
   .calendar-toggle, .calendar, .weekdays, .app-footer, .dashboard { max-width: 1180px; }
 }
 
-/* هدر */
+/* هدر — نوارِ سرمه‌ایِ سبکِ کسری */
 .header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   padding: 16px 20px;
-  background: #fff;
-  border-bottom: 1px solid #eee;
+  background: #122146;
+  border-bottom: none;
 }
+.header .icon-btn, .header .icon-btn svg, .header .brand-name { color: #eef2fb; }
+.header .icon-btn:hover { background: rgba(255,255,255,.10); }
+
+/* ریلِ آیکونیِ عمودیِ راست (سبکِ کسری) */
+.rail {
+  display: none;
+  position: fixed;
+  top: 0; right: 0; bottom: 0;
+  width: 56px;
+  background: #122146;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 64px 0 16px;
+  z-index: 1100;
+}
+.rail-btn {
+  width: 44px; height: 44px;
+  display: flex; align-items: center; justify-content: center;
+  background: none; border: none; cursor: pointer;
+  color: #aeb8d4; border-radius: 10px;
+}
+.rail-btn:hover { background: rgba(255,255,255,.10); color: #fff; }
+.rail-btn svg { width: 22px; height: 22px; }
+.rail-spacer { flex: 1; }
 
 .header h1 {
   font-size: 18px;
