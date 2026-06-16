@@ -155,6 +155,18 @@ function resolveAcc(accs: AccLite[], defName: { [k in AccType]: string }, t: Acc
 }
 
 const APP_VERSION = '1.0.85';
+
+const NAV_TITLES: Record<string, string> = {
+  dashboard: 'داشبورد',
+  calendar: 'تقویم و اوقات شرعی',
+  accounting: 'حسابداری',
+  inventory: 'کالاها و انبار',
+  tools: 'وام و اقساط',
+  attendance: 'حضور و غیاب',
+  reports: 'گزارش‌ها و تحلیل',
+  access: 'اشخاص و دسترسی',
+  settings: 'تنظیمات',
+};
 const CHANGELOG: string[] = [
   'نسخه‌ی نصبیِ ویندوز (Electron): اپِ کاملِ سیمرغ روی ویندوز با دوربین/اسکنرِ فعال — ساختِ خودکار روی GitHub Actions',
   'فایلِ نصبیِ .exe از بخشِ Actions → artifacts دانلود می‌شود',
@@ -175,6 +187,7 @@ function App() {
   const [showDayModal, setShowDayModal] = useState<boolean>(false);
   const [showAddModal, setShowAddModal] = useState<boolean>(false);
   const [showDashboard, setShowDashboard] = useState<boolean>(false);
+  const [activeNav, setActiveNav] = useState<string>('calendar');
   // Company-edition (multi-user SaaS) upgrade request form
   const [showCompany, setShowCompany] = useState<boolean>(false);
   const [coName, setCoName] = useState(''); const [coPhone, setCoPhone] = useState(''); const [coUsers, setCoUsers] = useState('5');
@@ -269,7 +282,7 @@ function App() {
     : (access.enabled && access.activeUserId ? `u:${access.activeUserId}` : '');
   const calStorageKey = calOwnerId ? `calendarData::${calOwnerId}` : 'calendarData';
   const [fundStartReport, setFundStartReport] = useState<boolean>(false);
-  const [theme, setTheme] = useState<'light' | 'dark'>(() => (localStorage.getItem('theme') as 'light' | 'dark') || 'light');
+  const [theme, setTheme] = useState<'light' | 'dark'>(() => (localStorage.getItem('theme') as 'light' | 'dark') || 'dark');
   const [prayerProvince, setPrayerProvince] = useState<string>(() => localStorage.getItem('prayerProvince') || 'تهران');
   const [prayerCity, setPrayerCity] = useState<string>(() => localStorage.getItem('prayerCity') || 'تهران');
   const [tempYear, setTempYear] = useState<number>(currentYear);
@@ -1227,26 +1240,58 @@ function App() {
         />
       )}
 
-      <div className="header">
-        <button className="icon-btn" onClick={() => setShowRightDrawer(true)} aria-label="امکانات"><IconMenu /></button>
-        <button className="brand" onClick={() => setShowDashboard(true)} aria-label="داشبورد">
-          <img className="brand-logo" src={logoUrl} alt="simorgh-ledger" />
-          <span className="brand-name">simorgh-ledger</span>
+      {/* سایدبارِ راستِ تمام‌قد (سبکِ داشبورد) */}
+      <aside className="sidebar">
+        <button className="sb-brand" onClick={() => { setActiveNav('calendar'); }}>
+          <img className="sb-logo" src={logoUrl} alt="Simorgh Ledger" />
+          <span className="sb-brand-text">
+            <strong>Simorgh Ledger</strong>
+            <small>دفتر حساب فروشگاه</small>
+          </span>
         </button>
+
+        <nav className="sb-nav">
+          {(() => {
+            const nav = (key: string, label: string, icon: React.ReactNode, action: () => void) => (
+              <button
+                className={`sb-item ${activeNav === key ? 'active' : ''}`}
+                onClick={() => { setActiveNav(key); action(); }}
+              >
+                <span className="sb-ic">{icon}</span>
+                <span className="sb-label">{label}</span>
+              </button>
+            );
+            return (
+              <>
+                {nav('dashboard', 'داشبورد', <IconBom />, () => setShowDashboard(true))}
+                {nav('calendar', 'تقویم و اوقات شرعی', <IconToday />, () => { setShowAccModal(false); setShowInvModal(false); setShowAttModal(false); })}
+                {can('accounting') && nav('accounting', 'حسابداری', <IconLoan />, () => setShowAccModal(true))}
+                {can('inventory') && nav('inventory', 'کالاها و انبار', <IconReport />, () => setShowInvModal(true))}
+                {nav('tools', 'وام و اقساط', <IconLoan />, () => setShowToolsModal(true))}
+                {(can('attendance') || can('attendance_self')) && nav('attendance', 'حضور و غیاب', <IconUsers />, () => setShowAttModal(true))}
+                {(can('accounting') || can('inventory')) && nav('reports', 'گزارش‌ها و تحلیل', <IconReport />, () => setShowInsights(true))}
+                {can('users') && nav('access', 'اشخاص و دسترسی', <IconUsers />, () => setShowAccessModal(true))}
+                {nav('settings', 'تنظیمات', <IconMenu />, () => setShowRightDrawer(true))}
+              </>
+            );
+          })()}
+        </nav>
+
+        <div className="sb-foot">
+          <button className="sb-foot-link" onClick={() => setShowLeftDrawer(true)}>درباره ما</button>
+          <div className="sb-version">نسخه {APP_VERSION}</div>
+          <div className="sb-copy">© سیمرغ فناوری هوشمند ایرانیان</div>
+        </div>
+      </aside>
+
+      {/* نوارِ بالای محتوا */}
+      <div className="header">
+        <button className="icon-btn header-burger" onClick={() => setShowRightDrawer(true)} aria-label="منو"><IconMenu /></button>
+        <span className="header-title">{NAV_TITLES[activeNav] || 'داشبورد'}</span>
+        <div className="header-spacer" />
+        <button className="icon-btn" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} aria-label="تغییر تم">{theme === 'dark' ? '☀️' : '🌙'}</button>
         <button className="icon-btn" onClick={() => setShowLeftDrawer(true)} aria-label="درباره ما"><IconInfo /></button>
       </div>
-
-      {/* ریلِ آیکونیِ عمودیِ راست (سبکِ کسری) — میان‌برِ ماژول‌ها */}
-      <aside className="rail">
-        <button className="rail-btn" title="داشبورد" onClick={() => setShowDashboard(true)}><IconBom /></button>
-        <button className="rail-btn" title="تقویم و یادآوری" onClick={() => { setShowAccModal(false); setShowInvModal(false); setShowAttModal(false); }}><IconToday /></button>
-        {can('accounting') && <button className="rail-btn" title="حسابداری" onClick={() => setShowAccModal(true)}><IconLoan /></button>}
-        {can('inventory') && <button className="rail-btn" title="انبار" onClick={() => setShowInvModal(true)}><IconReport /></button>}
-        {(can('attendance') || can('attendance_self')) && <button className="rail-btn" title="حضور و غیاب" onClick={() => setShowAttModal(true)}><IconUsers /></button>}
-        {(can('accounting') || can('inventory')) && <button className="rail-btn" title="تحلیل و نمودار" onClick={() => setShowInsights(true)}><IconReport /></button>}
-        <div className="rail-spacer" />
-        <button className="rail-btn" title="امکانات" onClick={() => setShowRightDrawer(true)}><IconMenu /></button>
-      </aside>
 
       {/* بنر امروز با هر سه تقویم */}
       <div className="date-banner">

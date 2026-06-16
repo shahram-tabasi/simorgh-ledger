@@ -45,10 +45,11 @@ body {
     padding: 14px 28px;
     box-shadow: 0 1px 0 rgba(20,33,61,.08);
   }
-  /* ریلِ آیکونیِ راست (سبکِ کسری) فقط روی دسکتاپ */
-  .rail { display: flex; }
-  .app { padding-right: 56px; }
-  .modal:has(.tool-panel) { right: 56px; }
+  /* سایدبارِ راستِ تمام‌قد فقط روی دسکتاپ */
+  .sidebar { display: flex; }
+  .header .header-burger { display: none; }
+  .app { padding-right: 232px; }
+  .modal { right: 232px; }
   /* محتوای اصلی در ستونِ راحتِ دسکتاپ وسط‌چین، با سلول‌های بزرگ‌ترِ تقویم */
   .calendar-toggle, .calendar, .weekdays, .app-footer, .dashboard {
     max-width: 1080px;
@@ -78,31 +79,50 @@ body {
   background: #122146;
   border-bottom: none;
 }
-.header .icon-btn, .header .icon-btn svg, .header .brand-name { color: #eef2fb; }
+.header .icon-btn, .header .icon-btn svg { color: #eef2fb; }
 .header .icon-btn:hover { background: rgba(255,255,255,.10); }
+.header-title { color: #eef2fb; font-weight: 700; font-size: 16px; }
+.header-spacer { flex: 1; }
 
-/* ریلِ آیکونیِ عمودیِ راست (سبکِ کسری) */
-.rail {
+/* سایدبارِ راستِ تمام‌قد (سبکِ داشبورد) */
+.sidebar {
   display: none;
   position: fixed;
   top: 0; right: 0; bottom: 0;
-  width: 56px;
-  background: #122146;
+  width: 232px;
+  background: #0f1830;
+  border-left: 1px solid rgba(255,255,255,.06);
   flex-direction: column;
-  align-items: center;
-  gap: 4px;
-  padding: 64px 0 16px;
   z-index: 1100;
+  overflow-y: auto;
 }
-.rail-btn {
-  width: 44px; height: 44px;
-  display: flex; align-items: center; justify-content: center;
+.sb-brand {
+  display: flex; align-items: center; gap: 10px;
+  padding: 18px 16px; background: none; border: none; cursor: pointer;
+  border-bottom: 1px solid rgba(255,255,255,.06);
+  width: 100%; text-align: right;
+}
+.sb-logo { width: 36px; height: 36px; object-fit: contain; }
+.sb-brand-text { display: flex; flex-direction: column; line-height: 1.3; }
+.sb-brand-text strong { color: #fff; font-size: 15px; }
+.sb-brand-text small { color: #8b97b5; font-size: 11px; }
+.sb-nav { display: flex; flex-direction: column; gap: 2px; padding: 12px 10px; flex: 1; }
+.sb-item {
+  display: flex; align-items: center; gap: 12px;
+  padding: 11px 14px; border-radius: 10px;
   background: none; border: none; cursor: pointer;
-  color: #aeb8d4; border-radius: 10px;
+  color: #b6c0db; font-size: 14px; font-family: inherit;
+  width: 100%; text-align: right;
 }
-.rail-btn:hover { background: rgba(255,255,255,.10); color: #fff; }
-.rail-btn svg { width: 22px; height: 22px; }
-.rail-spacer { flex: 1; }
+.sb-item .sb-ic { display: flex; }
+.sb-item .sb-ic svg { width: 20px; height: 20px; }
+.sb-item:hover { background: rgba(255,255,255,.06); color: #fff; }
+.sb-item.active { background: #3b5bdb; color: #fff; box-shadow: 0 4px 12px rgba(59,91,219,.35); }
+.sb-foot { padding: 14px 16px; border-top: 1px solid rgba(255,255,255,.06); }
+.sb-foot-link { background: none; border: none; color: #8b97b5; font-size: 12px; cursor: pointer; padding: 0 0 8px; font-family: inherit; }
+.sb-foot-link:hover { color: #cfd6e6; }
+.sb-version { color: #6f7da0; font-size: 12px; }
+.sb-copy { color: #5a688c; font-size: 11px; margin-top: 2px; }
 
 .header h1 {
   font-size: 18px;
@@ -1887,10 +1907,10 @@ body.dark .footer-text-en, body.dark .footer-copyright { color: #6c7790; }
   padding-bottom: calc(24px + env(safe-area-inset-bottom));
 }
 @media (min-width: 560px) {
-  /* روی ویندوز هم ماژول‌ها تمامِ محیط را می‌گیرند (صفحه‌ی جدید)، نه پنجره‌ی شناور */
+  /* ماژول‌ها داخلِ ناحیه‌ی محتوا (کنارِ سایدبار) باز می‌شوند، نه تمام‌صفحه */
   .modal-box.tool-panel {
-    width: 100vw;
-    max-width: 100vw;
+    width: 100%;
+    max-width: 100%;
     height: 100vh;
     height: 100dvh;
     max-height: 100dvh;
